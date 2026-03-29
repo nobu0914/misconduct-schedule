@@ -2,13 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Nav() {
   const pathname = usePathname();
+  const [hasNewEvents, setHasNewEvents] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((data) => setHasNewEvents(data.hasNew ?? false))
+      .catch(() => {});
+  }, []);
 
   const links = [
-    { href: "/", label: "ゲームスケジュール" },
-    { href: "/rental", label: "レンタル情報" },
+    { href: "/", label: "ゲームスケジュール", badge: false },
+    { href: "/rental", label: "レンタル情報", badge: false },
+    { href: "/events", label: "イベント情報", badge: hasNewEvents },
   ];
 
   return (
@@ -28,17 +38,20 @@ export default function Nav() {
         </div>
 
         <nav className="flex gap-1">
-          {links.map(({ href, label }) => (
+          {links.map(({ href, label, badge }) => (
             <Link
               key={href}
               href={href}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 pathname === href
                   ? "bg-blue-600 text-white"
                   : "text-gray-400 hover:text-white hover:bg-gray-800"
               }`}
             >
               {label}
+              {badge && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-gray-900" />
+              )}
             </Link>
           ))}
         </nav>
