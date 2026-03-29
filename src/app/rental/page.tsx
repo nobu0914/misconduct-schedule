@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { RentalEntry } from "../api/rental/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
@@ -27,15 +28,31 @@ function isToday(dateStr: string): boolean {
 
 const MONTH_ORDER = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
-export default function RentalPage() {
+function RentalContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [entries, setEntries] = useState<RentalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
-  const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
-  const [wednesdayOnly, setWednesdayOnly] = useState(false);
-  const [officialOnly, setOfficialOnly] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => searchParams.get("month") ?? "ALL");
+  const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
+  const [wednesdayOnly, setWednesdayOnly] = useState<boolean>(() => searchParams.get("wed") === "1");
+  const [officialOnly, setOfficialOnly] = useState<boolean>(() => searchParams.get("official") === "1");
+
+  // Sync state → URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedMonth !== "ALL") params.set("month", selectedMonth);
+    if (!showUpcomingOnly) params.set("upcoming", "0");
+    if (wednesdayOnly) params.set("wed", "1");
+    if (officialOnly) params.set("official", "1");
+    const qs = params.toString();
+    router.replace(qs ? `/rental?${qs}` : "/rental", { scroll: false });
+  }, [selectedMonth, showUpcomingOnly, wednesdayOnly, officialOnly, router]);
 
   const refresh = useCallback(async () => {
     const data = await fetch("/api/rental").then((r) => r.json());
@@ -73,7 +90,6 @@ export default function RentalPage() {
     });
   }, [entries, selectedMonth, showUpcomingOnly, wednesdayOnly, officialOnly]);
 
-  // 月ごとにグループ化
   const grouped = useMemo(() => {
     const map = new Map<string, RentalEntry[]>();
     for (const e of filtered) {
@@ -85,16 +101,23 @@ export default function RentalPage() {
     );
   }, [filtered]);
 
+  function handleShare() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
+
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
           <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
         </div>
       )}
 
-      {/* Notice */}
       <div className="max-w-5xl mx-auto px-4 pt-3">
         <p className="text-xs text-gray-500">ホッケー関係のレンタル情報だけを自動表示しています</p>
       </div>
@@ -116,9 +139,7 @@ export default function RentalPage() {
           <button
             onClick={() => setShowUpcomingOnly(!showUpcomingOnly)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              showUpcomingOnly
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 border border-gray-700"
+              showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
             今後のみ
@@ -127,9 +148,7 @@ export default function RentalPage() {
           <button
             onClick={() => setWednesdayOnly(!wednesdayOnly)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              wednesdayOnly
-                ? "bg-green-600 text-white"
-                : "bg-gray-800 text-gray-400 border border-gray-700"
+              wednesdayOnly ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
             水曜練習会のみ
@@ -138,15 +157,38 @@ export default function RentalPage() {
           <button
             onClick={() => setOfficialOnly(!officialOnly)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              officialOnly
-                ? "bg-orange-500 text-white"
-                : "bg-gray-800 text-gray-400 border border-gray-700"
+              officialOnly ? "bg-orange-500 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
             公式のみ
           </button>
 
-          <span className="ml-auto text-sm text-gray-400">{filtered.length} 件</span>
+          <span className="text-sm text-gray-400">{filtered.length} 件</span>
+
+          {/* Share button */}
+          <button
+            onClick={handleShare}
+            title="この検索条件のURLをコピー"
+            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
+            }`}
+          >
+            {copied ? (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                コピー済み
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                共有
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -171,7 +213,6 @@ export default function RentalPage() {
 
         {grouped.map(([month, monthEntries]) => (
           <div key={month} className="mb-8">
-            {/* Month header */}
             <div className="flex items-center gap-3 mb-3">
               <h2 className="text-lg font-bold text-white">{month}</h2>
               <div className="flex-1 h-px bg-gray-800" />
@@ -190,7 +231,6 @@ export default function RentalPage() {
               </a>
             </div>
 
-            {/* Entries */}
             <div className="space-y-2">
               {monthEntries.map((entry, i) => {
                 const today = isToday(entry.date);
@@ -202,22 +242,15 @@ export default function RentalPage() {
                     }`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-
-                      {/* 1行目(モバイル): 日付 + 時間 + リンク */}
                       <div className="flex items-center gap-3">
-                        {/* Date */}
                         <div className={`text-sm font-medium flex-shrink-0 ${today ? "text-blue-400" : "text-gray-300"}`}>
                           {formatDate(entry.date)}
                           {today && <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">TODAY</span>}
                         </div>
-
-                        {/* Time */}
                         <div className="text-blue-400 font-mono font-semibold flex-shrink-0">
                           {entry.timeStart}
                           <span className="text-gray-500 text-sm"> ~ {entry.timeEnd}</span>
                         </div>
-
-                        {/* モバイルのみ: リンクアイコン右寄せ */}
                         <a
                           href={entry.sourceUrl}
                           target="_blank"
@@ -233,7 +266,6 @@ export default function RentalPage() {
                         </a>
                       </div>
 
-                      {/* 2行目(モバイル) / 中央(デスクトップ): ラベル */}
                       <div className="flex-1 flex items-center gap-2 text-white min-w-0">
                         <span className="font-medium truncate">{entry.label}</span>
                         {entry.isOfficial && (
@@ -241,7 +273,6 @@ export default function RentalPage() {
                         )}
                       </div>
 
-                      {/* デスクトップのみ: リンクアイコン */}
                       <a
                         href={entry.sourceUrl}
                         target="_blank"
@@ -264,5 +295,13 @@ export default function RentalPage() {
         ))}
       </main>
     </div>
+  );
+}
+
+export default function RentalPage() {
+  return (
+    <Suspense>
+      <RentalContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Match } from "./api/schedule/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
@@ -53,15 +54,42 @@ function isUpcoming(dateStr: string): boolean {
   return d >= today;
 }
 
-export default function SchedulePage() {
+const DIVISION_ORDER = [
+  "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "35&Over",
+];
+
+function ScheduleContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
-  const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
+  // Init filter state from URL params
+  const [selectedDivisions, setSelectedDivisions] = useState<string[]>(() => {
+    const d = searchParams.get("div");
+    return d ? d.split(",").filter(Boolean) : [];
+  });
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => searchParams.get("month") ?? "ALL");
+  const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
+  const [searchQuery, setSearchQuery] = useState<string>(() => searchParams.get("q") ?? "");
+
   const [divisionOpen, setDivisionOpen] = useState(false);
   const divisionRef = useRef<HTMLDivElement>(null);
+
+  // Sync filter state → URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedDivisions.length > 0) params.set("div", selectedDivisions.join(","));
+    if (selectedMonth !== "ALL") params.set("month", selectedMonth);
+    if (!showUpcomingOnly) params.set("upcoming", "0");
+    if (searchQuery) params.set("q", searchQuery);
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }, [selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery, router]);
 
   const refresh = useCallback(async () => {
     const data = await fetch("/api/schedule").then((r) => r.json());
@@ -79,9 +107,6 @@ export default function SchedulePage() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-  const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
-  const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetch("/api/schedule")
@@ -97,18 +122,6 @@ export default function SchedulePage() {
       });
   }, []);
 
-  const DIVISION_ORDER = [
-    "Platinum",
-    "Gold",
-    "Silver",
-    "Bronze",
-    "Brass",
-    "Copper",
-    "Iron",
-    "Women Gold",
-    "35&Over",
-  ];
-
   const divisions = useMemo(() => {
     const set = new Set(matches.map((m) => m.division).filter(Boolean));
     return Array.from(set).sort(
@@ -123,8 +136,7 @@ export default function SchedulePage() {
 
   const filtered = useMemo(() => {
     return matches.filter((m) => {
-      if (selectedDivisions.length > 0 && !selectedDivisions.includes(m.division))
-        return false;
+      if (selectedDivisions.length > 0 && !selectedDivisions.includes(m.division)) return false;
       if (selectedMonth !== "ALL" && m.month !== selectedMonth) return false;
       if (showUpcomingOnly && !isUpcoming(m.date)) return false;
       if (searchQuery) {
@@ -133,14 +145,12 @@ export default function SchedulePage() {
           !m.awayTeam.toLowerCase().includes(q) &&
           !m.homeTeam.toLowerCase().includes(q) &&
           !m.division.toLowerCase().includes(q)
-        )
-          return false;
+        ) return false;
       }
       return true;
     });
   }, [matches, selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery]);
 
-  // 日付ごとにグループ化
   const grouped = useMemo(() => {
     const map = new Map<string, Match[]>();
     for (const m of filtered) {
@@ -150,6 +160,13 @@ export default function SchedulePage() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
+  function handleShare() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
@@ -158,6 +175,7 @@ export default function SchedulePage() {
           <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
         </div>
       )}
+
       {/* Filters */}
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
         {/* Search */}
@@ -179,22 +197,18 @@ export default function SchedulePage() {
           >
             <option value="ALL">全月</option>
             {months.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
+              <option key={m} value={m}>{m}</option>
             ))}
           </select>
 
-          {/* Division filter - カスタムドロップダウン複数選択 */}
+          {/* Division filter */}
           <div className="relative" ref={divisionRef}>
             <button
               onClick={() => setDivisionOpen((o) => !o)}
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 flex items-center gap-2 min-w-[140px]"
             >
               <span className="flex-1 text-left">
-                {selectedDivisions.length === 0
-                  ? "全ディビジョン"
-                  : `${selectedDivisions.length}件選択中`}
+                {selectedDivisions.length === 0 ? "全ディビジョン" : `${selectedDivisions.length}件選択中`}
               </span>
               <svg className={`w-4 h-4 text-gray-400 transition-transform ${divisionOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -240,17 +254,38 @@ export default function SchedulePage() {
           <button
             onClick={() => setShowUpcomingOnly(!showUpcomingOnly)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              showUpcomingOnly
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 border border-gray-700"
+              showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
             今後の試合のみ
           </button>
 
-          <span className="ml-auto text-sm text-gray-400">
-            {filtered.length} 試合
-          </span>
+          <span className="text-sm text-gray-400">{filtered.length} 試合</span>
+
+          {/* Share button */}
+          <button
+            onClick={handleShare}
+            title="この検索条件のURLをコピー"
+            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
+            }`}
+          >
+            {copied ? (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                コピー済み
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                共有
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -281,43 +316,29 @@ export default function SchedulePage() {
 
           return (
             <div key={date} className="mb-6">
-              {/* Date header */}
-              <div
-                className={`flex items-center gap-3 mb-3 ${today ? "text-blue-400" : "text-gray-300"}`}
-              >
+              <div className={`flex items-center gap-3 mb-3 ${today ? "text-blue-400" : "text-gray-300"}`}>
                 <h2 className="text-lg font-bold">{display}</h2>
                 {today && (
-                  <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
-                    TODAY
-                  </span>
+                  <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">TODAY</span>
                 )}
                 <div className="flex-1 h-px bg-gray-800" />
-                <span className="text-sm text-gray-500">
-                  {dateMatches.length}試合
-                </span>
+                <span className="text-sm text-gray-500">{dateMatches.length}試合</span>
               </div>
 
-              {/* Match cards */}
               <div className="space-y-2">
                 {dateMatches.map((match, i) => (
                   <div
                     key={`${date}-${i}`}
                     className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors"
                   >
-                    {/* モバイル: 2行レイアウト / デスクトップ: 1行レイアウト */}
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-
-                      {/* 1行目(モバイル) / 左端(デスクトップ): 時間 + [モバイル時のみ] Division・リンク */}
                       <div className="flex items-center gap-3">
-                        {/* Time */}
                         <div className="text-blue-400 font-mono font-semibold">
                           {match.timeStart}
                           {match.timeEnd && (
                             <span className="text-gray-500 text-sm"> ~ {match.timeEnd}</span>
                           )}
                         </div>
-
-                        {/* モバイルのみ右寄せで Division・リンク */}
                         <div className="flex items-center gap-2 ml-auto sm:hidden">
                           {match.division && (
                             <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
@@ -339,18 +360,12 @@ export default function SchedulePage() {
                         </div>
                       </div>
 
-                      {/* 2行目(モバイル) / 中央(デスクトップ): チーム名 */}
                       <div className="flex-1 flex items-center gap-2 min-w-0">
-                        <span className="text-white font-medium truncate">
-                          {match.awayTeam || "─"}
-                        </span>
+                        <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
                         <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
-                        <span className="text-white font-medium truncate">
-                          {match.homeTeam || "─"}
-                        </span>
+                        <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
                       </div>
 
-                      {/* デスクトップのみ: Division・リンク */}
                       <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
                         {match.division && (
                           <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
@@ -370,7 +385,6 @@ export default function SchedulePage() {
                           </svg>
                         </a>
                       </div>
-
                     </div>
                   </div>
                 ))}
@@ -380,5 +394,13 @@ export default function SchedulePage() {
         })}
       </main>
     </div>
+  );
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense>
+      <ScheduleContent />
+    </Suspense>
   );
 }
