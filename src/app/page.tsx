@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import type { Match } from "./api/schedule/route";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -60,6 +62,13 @@ export default function SchedulePage() {
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
   const [divisionOpen, setDivisionOpen] = useState(false);
   const divisionRef = useRef<HTMLDivElement>(null);
+
+  const refresh = useCallback(async () => {
+    const data = await fetch("/api/schedule").then((r) => r.json());
+    setMatches(data.matches ?? []);
+    setLastUpdated(data.lastUpdated ?? "");
+  }, []);
+  const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -143,6 +152,7 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
           <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>

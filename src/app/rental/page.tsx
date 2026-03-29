@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import type { RentalEntry } from "../api/rental/route";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("/").map(Number);
@@ -34,6 +36,13 @@ export default function RentalPage() {
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
   const [wednesdayOnly, setWednesdayOnly] = useState(false);
   const [officialOnly, setOfficialOnly] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const data = await fetch("/api/rental").then((r) => r.json());
+    setEntries(data.entries ?? []);
+    setLastUpdated(data.lastUpdated ?? "");
+  }, []);
+  const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
   useEffect(() => {
     fetch("/api/rental")
@@ -78,6 +87,7 @@ export default function RentalPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
           <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
@@ -224,8 +234,8 @@ export default function RentalPage() {
                       </div>
 
                       {/* 2行目(モバイル) / 中央(デスクトップ): ラベル */}
-                      <div className="flex-1 flex items-center gap-2 text-white text-sm min-w-0">
-                        <span className="truncate">{entry.label}</span>
+                      <div className="flex-1 flex items-center gap-2 text-white min-w-0">
+                        <span className="font-medium truncate">{entry.label}</span>
                         {entry.isOfficial && (
                           <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">公式</span>
                         )}
