@@ -22,8 +22,8 @@ export default function Nav() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">MHL Schedule</h1>
-            <p className="text-xs text-gray-400">Misconduct Hockey League 53rd Season</p>
+            <h1 className="text-xl font-bold text-white">MHL / CXC API</h1>
+            <p className="text-xs text-gray-400">公式サイトの情報を自動表示している非公式ツールです。</p>
           </div>
         </div>
 

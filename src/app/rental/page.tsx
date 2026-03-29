@@ -32,6 +32,7 @@ export default function RentalPage() {
   const [lastUpdated, setLastUpdated] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
+  const [wednesdayOnly, setWednesdayOnly] = useState(false);
 
   useEffect(() => {
     fetch("/api/rental")
@@ -56,9 +57,10 @@ export default function RentalPage() {
     return entries.filter((e) => {
       if (selectedMonth !== "ALL" && e.month !== selectedMonth) return false;
       if (showUpcomingOnly && !isUpcoming(e.date)) return false;
+      if (wednesdayOnly && !e.label.includes("水曜練習会")) return false;
       return true;
     });
-  }, [entries, selectedMonth, showUpcomingOnly]);
+  }, [entries, selectedMonth, showUpcomingOnly, wednesdayOnly]);
 
   // 月ごとにグループ化
   const grouped = useMemo(() => {
@@ -103,6 +105,17 @@ export default function RentalPage() {
             }`}
           >
             今後のみ
+          </button>
+
+          <button
+            onClick={() => setWednesdayOnly(!wednesdayOnly)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              wednesdayOnly
+                ? "bg-green-600 text-white"
+                : "bg-gray-800 text-gray-400 border border-gray-700"
+            }`}
+          >
+            水曜練習会のみ
           </button>
 
           <span className="ml-auto text-sm text-gray-400">{filtered.length} 件</span>
