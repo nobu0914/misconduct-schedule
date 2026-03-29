@@ -33,6 +33,7 @@ export default function RentalPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
   const [wednesdayOnly, setWednesdayOnly] = useState(false);
+  const [officialOnly, setOfficialOnly] = useState(false);
 
   useEffect(() => {
     fetch("/api/rental")
@@ -58,9 +59,10 @@ export default function RentalPage() {
       if (selectedMonth !== "ALL" && e.month !== selectedMonth) return false;
       if (showUpcomingOnly && !isUpcoming(e.date)) return false;
       if (wednesdayOnly && !e.label.includes("水曜練習会")) return false;
+      if (officialOnly && !e.isOfficial) return false;
       return true;
     });
-  }, [entries, selectedMonth, showUpcomingOnly, wednesdayOnly]);
+  }, [entries, selectedMonth, showUpcomingOnly, wednesdayOnly, officialOnly]);
 
   // 月ごとにグループ化
   const grouped = useMemo(() => {
@@ -116,6 +118,17 @@ export default function RentalPage() {
             }`}
           >
             水曜練習会のみ
+          </button>
+
+          <button
+            onClick={() => setOfficialOnly(!officialOnly)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              officialOnly
+                ? "bg-orange-500 text-white"
+                : "bg-gray-800 text-gray-400 border border-gray-700"
+            }`}
+          >
+            公式のみ
           </button>
 
           <span className="ml-auto text-sm text-gray-400">{filtered.length} 件</span>
@@ -187,8 +200,11 @@ export default function RentalPage() {
                       </div>
 
                       {/* Label */}
-                      <div className="flex-1 text-white text-sm">
-                        {entry.label}
+                      <div className="flex-1 flex items-center gap-2 text-white text-sm">
+                        <span>{entry.label}</span>
+                        {entry.isOfficial && (
+                          <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">公式</span>
+                        )}
                       </div>
                     </div>
                   </div>

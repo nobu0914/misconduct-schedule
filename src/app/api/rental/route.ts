@@ -10,6 +10,7 @@ export interface RentalEntry {
   label: string;
   month: string;
   sourceUrl: string;
+  isOfficial: boolean; // MHLプログラム枠（青）
 }
 
 interface RentalData {
@@ -29,13 +30,13 @@ const RENT_URLS: { month: string; year: number; monthNum: number; url: string }[
   { month: "9月", year: 2026, monthNum: 9, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202609.htm" },
 ];
 
-// CSSから background:yellow なクラス名を抽出
-function extractYellowClasses(css: string): Set<string> {
+// CSSから特定背景色のクラス名を抽出
+function extractClassesByBackground(css: string, color: string): Set<string> {
   const set = new Set<string>();
   const re = /\.(xl\d+)[^{]*\{([^}]*)\}/g;
   let m;
   while ((m = re.exec(css)) !== null) {
-    if (m[2].includes("background:yellow")) {
+    if (m[2].includes(`background:${color}`)) {
       set.add(m[1]);
     }
   }
@@ -69,9 +70,11 @@ async function fetchAndParseRental(
     const buffer = await res.arrayBuffer();
     const text = iconv.decode(Buffer.from(buffer), "shift_jis");
 
-    // CSS内から黄色クラスを抽出
+    // CSSから黄色（インラインホッケー等）と青（MHL公式）のクラスを抽出
     const styleMatch = text.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-    const yellowClasses = styleMatch ? extractYellowClasses(styleMatch[1]) : new Set<string>();
+    const css = styleMatch ? styleMatch[1] : "";
+    const yellowClasses = extractClassesByBackground(css, "yellow");
+    const blueClasses = extractClassesByBackground(css, "blue");
 
     const $ = cheerio.load(text);
 
@@ -85,13 +88,14 @@ async function fetchAndParseRental(
 
       const weekdayCell = $(tds[1]).text().replace(/\u00a0/g, " ").trim();
 
-      // colspan を考慮して列位置を追跡しながら黄色セルを収集
       let colPos = 0;
       tds.each((_: number, td: any) => {
         const colspan = parseInt($(td).attr("colspan") || "1", 10);
         const cls = ($(td).attr("class") || "").trim();
+        const isYellow = yellowClasses.has(cls);
+        const isBlue = blueClasses.has(cls);
 
-        if (colPos >= 2 && yellowClasses.has(cls)) {
+        if (colPos >= 2 && (isYellow || isBlue)) {
           const cellText = $(td).text().replace(/\u00a0/g, " ").trim();
           if (cellText) {
             const timeStart = colToTime(colPos);
@@ -104,6 +108,7 @@ async function fetchAndParseRental(
               label: cellText,
               month,
               sourceUrl: url,
+              isOfficial: isBlue,
             });
           }
         }
