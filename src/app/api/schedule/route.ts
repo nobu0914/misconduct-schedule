@@ -80,13 +80,13 @@ async function fetchAndParseSchedule(
     const $ = cheerio.load(text);
     let currentDate = "";
 
-    $("tr").each((_: number, row: cheerio.Element) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    $("tr").each((_: number, row: any) => {
       const tds = $(row).find("td");
       if (tds.length === 0) return;
 
-      const cells = tds
-        .map((_: number, td: cheerio.Element) => cleanText($(td).text()))
-        .get() as string[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cells = tds.map((_: number, td: any) => cleanText($(td).text())).get() as string[];
 
       // 日付ヘッダー行: いずれかのセルが "YYYY/M/D" パターンを含む
       const dateCell = cells.find((c) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(c));
