@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "MHL Schedule - Misconduct Hockey League",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className="bg-gray-950 text-white min-h-screen">{children}</body>
+      <body className="bg-gray-950 text-white min-h-screen">
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }
