@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import type { Match } from "./api/schedule/route";
 
 const DIVISION_COLORS: Record<string, string> = {
@@ -58,6 +58,18 @@ export default function SchedulePage() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
+  const [divisionOpen, setDivisionOpen] = useState(false);
+  const divisionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (divisionRef.current && !divisionRef.current.contains(e.target as Node)) {
+        setDivisionOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -192,28 +204,55 @@ export default function SchedulePage() {
             ))}
           </select>
 
-          {/* Division filter - 複数選択トグル */}
-          <div className="flex flex-wrap gap-1.5">
-            {divisions.map((d) => {
-              const active = selectedDivisions.includes(d);
-              return (
+          {/* Division filter - カスタムドロップダウン複数選択 */}
+          <div className="relative" ref={divisionRef}>
+            <button
+              onClick={() => setDivisionOpen((o) => !o)}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 flex items-center gap-2 min-w-[140px]"
+            >
+              <span className="flex-1 text-left">
+                {selectedDivisions.length === 0
+                  ? "全ディビジョン"
+                  : `${selectedDivisions.length}件選択中`}
+              </span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${divisionOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {divisionOpen && (
+              <div className="absolute z-20 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[160px] py-1">
                 <button
-                  key={d}
-                  onClick={() =>
-                    setSelectedDivisions((prev) =>
-                      active ? prev.filter((x) => x !== d) : [...prev, d]
-                    )
-                  }
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                    active
-                      ? `${getDivisionColor(d)} text-white border-transparent`
-                      : "bg-transparent text-gray-400 border-gray-600 hover:border-gray-400"
-                  }`}
+                  onClick={() => { setSelectedDivisions([]); setDivisionOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
                 >
-                  {d}
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selectedDivisions.length === 0 ? "bg-blue-600 border-blue-600" : "border-gray-500"}`}>
+                    {selectedDivisions.length === 0 && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                  </span>
+                  全ディビジョン
                 </button>
-              );
-            })}
+                <div className="h-px bg-gray-700 mx-2 my-1" />
+                {divisions.map((d) => {
+                  const checked = selectedDivisions.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      onClick={() =>
+                        setSelectedDivisions((prev) =>
+                          checked ? prev.filter((x) => x !== d) : [...prev, d]
+                        )
+                      }
+                      className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${checked ? "bg-blue-600 border-blue-600" : "border-gray-500"}`}>
+                        {checked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                      </span>
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Upcoming toggle */}
