@@ -151,7 +151,7 @@ function RentalContent() {
               wednesdayOnly ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
-            水曜練習会のみ
+            水曜練のみ
           </button>
 
           <button

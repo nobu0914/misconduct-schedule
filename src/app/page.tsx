@@ -257,7 +257,7 @@ function ScheduleContent() {
               showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
-            今後の試合のみ
+            今後のみ
           </button>
 
           <span className="text-sm text-gray-400">{filtered.length} 試合</span>
