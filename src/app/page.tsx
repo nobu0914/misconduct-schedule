@@ -76,9 +76,23 @@ export default function SchedulePage() {
       });
   }, []);
 
+  const DIVISION_ORDER = [
+    "Platinum",
+    "Gold",
+    "Silver",
+    "Bronze",
+    "Brass",
+    "Copper",
+    "Iron",
+    "Women Gold",
+    "35&Over",
+  ];
+
   const divisions = useMemo(() => {
     const set = new Set(matches.map((m) => m.division).filter(Boolean));
-    return Array.from(set).sort();
+    return Array.from(set).sort(
+      (a, b) => DIVISION_ORDER.indexOf(a) - DIVISION_ORDER.indexOf(b)
+    );
   }, [matches]);
 
   const months = useMemo(() => {
