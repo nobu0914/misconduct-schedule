@@ -84,6 +84,11 @@ export default function RentalPage() {
         </div>
       )}
 
+      {/* Notice */}
+      <div className="max-w-5xl mx-auto px-4 pt-3">
+        <p className="text-xs text-gray-500">ホッケー関係のレンタル情報だけを自動表示しています</p>
+      </div>
+
       {/* Filters */}
       <div className="max-w-5xl mx-auto px-4 py-4">
         <div className="flex flex-wrap gap-2 items-center">
