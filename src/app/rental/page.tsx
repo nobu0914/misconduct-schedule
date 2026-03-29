@@ -191,34 +191,53 @@ export default function RentalPage() {
                       today ? "border-blue-700" : "border-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                      {/* Date */}
-                      <div className={`text-sm font-medium flex-shrink-0 ${today ? "text-blue-400" : "text-gray-300"}`}>
-                        {formatDate(entry.date)}
-                        {today && <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">TODAY</span>}
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+
+                      {/* 1行目(モバイル): 日付 + 時間 + リンク */}
+                      <div className="flex items-center gap-3">
+                        {/* Date */}
+                        <div className={`text-sm font-medium flex-shrink-0 ${today ? "text-blue-400" : "text-gray-300"}`}>
+                          {formatDate(entry.date)}
+                          {today && <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">TODAY</span>}
+                        </div>
+
+                        {/* Time */}
+                        <div className="text-blue-400 font-mono font-semibold flex-shrink-0">
+                          {entry.timeStart}
+                          <span className="text-gray-500 text-sm"> ~ {entry.timeEnd}</span>
+                        </div>
+
+                        {/* モバイルのみ: リンクアイコン右寄せ */}
+                        <a
+                          href={entry.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="ソースページを開く"
+                          className="ml-auto text-gray-500 hover:text-blue-400 transition-colors sm:hidden"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
                       </div>
 
-                      {/* Time */}
-                      <div className="text-blue-400 font-mono font-semibold flex-shrink-0">
-                        {entry.timeStart}
-                        <span className="text-gray-500 text-sm"> ~ {entry.timeEnd}</span>
-                      </div>
-
-                      {/* Label */}
-                      <div className="flex-1 flex items-center gap-2 text-white text-sm">
-                        <span>{entry.label}</span>
+                      {/* 2行目(モバイル) / 中央(デスクトップ): ラベル */}
+                      <div className="flex-1 flex items-center gap-2 text-white text-sm min-w-0">
+                        <span className="truncate">{entry.label}</span>
                         {entry.isOfficial && (
                           <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">公式</span>
                         )}
                       </div>
 
-                      {/* Source link */}
+                      {/* デスクトップのみ: リンクアイコン */}
                       <a
                         href={entry.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="ソースページを開く"
-                        className="text-gray-500 hover:text-blue-400 transition-colors flex-shrink-0"
+                        className="hidden sm:block text-gray-500 hover:text-blue-400 transition-colors flex-shrink-0"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
