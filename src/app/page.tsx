@@ -57,7 +57,7 @@ export default function SchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  const [selectedDivision, setSelectedDivision] = useState<string>("ALL");
+  const [selectedDivisions, setSelectedDivisions] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,7 +102,7 @@ export default function SchedulePage() {
 
   const filtered = useMemo(() => {
     return matches.filter((m) => {
-      if (selectedDivision !== "ALL" && m.division !== selectedDivision)
+      if (selectedDivisions.length > 0 && !selectedDivisions.includes(m.division))
         return false;
       if (selectedMonth !== "ALL" && m.month !== selectedMonth) return false;
       if (showUpcomingOnly && !isUpcoming(m.date)) return false;
@@ -117,7 +117,7 @@ export default function SchedulePage() {
       }
       return true;
     });
-  }, [matches, selectedDivision, selectedMonth, showUpcomingOnly, searchQuery]);
+  }, [matches, selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery]);
 
   // 日付ごとにグループ化
   const grouped = useMemo(() => {
@@ -192,19 +192,29 @@ export default function SchedulePage() {
             ))}
           </select>
 
-          {/* Division filter */}
-          <select
-            value={selectedDivision}
-            onChange={(e) => setSelectedDivision(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-          >
-            <option value="ALL">全ディビジョン</option>
-            {divisions.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+          {/* Division filter - 複数選択トグル */}
+          <div className="flex flex-wrap gap-1.5">
+            {divisions.map((d) => {
+              const active = selectedDivisions.includes(d);
+              return (
+                <button
+                  key={d}
+                  onClick={() =>
+                    setSelectedDivisions((prev) =>
+                      active ? prev.filter((x) => x !== d) : [...prev, d]
+                    )
+                  }
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                    active
+                      ? `${getDivisionColor(d)} text-white border-transparent`
+                      : "bg-transparent text-gray-400 border-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Upcoming toggle */}
           <button
