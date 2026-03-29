@@ -146,7 +146,7 @@ function RentalContent() {
           </button>
 
           <button
-            onClick={() => setWednesdayOnly(!wednesdayOnly)}
+            onClick={() => { setWednesdayOnly(!wednesdayOnly); setOfficialOnly(false); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               wednesdayOnly ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -155,7 +155,7 @@ function RentalContent() {
           </button>
 
           <button
-            onClick={() => setOfficialOnly(!officialOnly)}
+            onClick={() => { setOfficialOnly(!officialOnly); setWednesdayOnly(false); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               officialOnly ? "bg-orange-500 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
