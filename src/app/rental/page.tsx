@@ -213,6 +213,23 @@ function RentalContent() {
           <div className="text-center py-20 text-gray-500">該当する情報がありません</div>
         )}
 
+        {wednesdayOnly && (
+          <a
+            href="https://www.notion.so/2289672111d980c9b174d54766adc3d5"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 bg-green-900/40 border border-green-700 rounded-xl px-4 py-3 mb-4 hover:bg-green-900/60 transition-colors group"
+          >
+            <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-green-300 text-sm font-medium flex-1">水曜練習会とは？</span>
+            <svg className="w-4 h-4 text-green-500 group-hover:text-green-300 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        )}
+
         {grouped.map(([date, dateEntries]) => {
           const today = isToday(date);
           return (
