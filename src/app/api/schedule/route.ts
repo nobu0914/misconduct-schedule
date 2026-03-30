@@ -80,16 +80,30 @@ async function fetchAndParseSchedule(
     const $ = cheerio.load(text);
     let currentDate = "";
 
+    // colspanを展開して論理列配列を返す
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function expandCells(row: any): string[] {
+      const result: string[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $(row).find("td").each((_: number, td: any) => {
+        const text = cleanText($(td).text());
+        const colspan = parseInt($(td).attr("colspan") || "1", 10);
+        for (let i = 0; i < colspan; i++) result.push(text);
+      });
+      return result;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     $("tr").each((_: number, row: any) => {
       const tds = $(row).find("td");
       if (tds.length === 0) return;
 
+      // colspan展開前のテキスト配列（日付検出用）
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cells = tds.map((_: number, td: any) => cleanText($(td).text())).get() as string[];
+      const rawCells = tds.map((_: number, td: any) => cleanText($(td).text())).get() as string[];
 
       // 日付ヘッダー行: いずれかのセルが "YYYY/M/D" パターンを含む
-      const dateCell = cells.find((c) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(c));
+      const dateCell = rawCells.find((c) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(c));
       if (dateCell) {
         const m = dateCell.match(/(\d{4}\/\d{1,2}\/\d{1,2})/);
         if (m) currentDate = m[1];
@@ -98,20 +112,23 @@ async function fetchAndParseSchedule(
 
       if (!currentDate) return;
 
-      // 試合行: 10列 & col[0]が数字 & col[6]が"vs"
+      // colspanを展開した論理列で試合行を判定
+      // ビジター枠(colspan=3)があっても論理10列になる
+      const cells = expandCells(row);
+
+      // 試合行: 論理10列以上 & col[0]が数字 & col[1]が時刻
       if (cells.length < 10) return;
       if (!/^\d+$/.test(cells[0])) return;
-      if (cells[6] !== "vs") return;
 
       const timeStart = cells[1];
       const timeEnd = cells[3];
       if (!/^\d{1,2}:\d{2}$/.test(timeStart)) return;
 
-      // Away: name(col4) + sub(col5) → "Team SONIC (A)"
-      const awaySub = cells[5] ? `(${cells[5]})` : "";
+      // col[6]="vs"なら通常試合、それ以外(ビジター等)はサブ情報なしとして扱う
+      const isNormal = cells[6] === "vs";
+      const awaySub = isNormal && cells[5] ? `(${cells[5]})` : "";
       const awayTeam = [cells[4], awaySub].filter(Boolean).join(" ");
-      // Home: name(col8) + sub(col7) → "日体大DREAMS WG (B)"
-      const homeSub = cells[7] ? `(${cells[7]})` : "";
+      const homeSub = isNormal && cells[7] ? `(${cells[7]})` : "";
       const homeTeam = [cells[8], homeSub].filter(Boolean).join(" ");
       const division = cells[9];
 
