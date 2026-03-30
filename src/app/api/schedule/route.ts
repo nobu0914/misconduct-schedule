@@ -161,11 +161,13 @@ export async function GET(): Promise<NextResponse<ScheduleData>> {
     })
   );
 
-  allMatches.sort((a, b) => {
-    const d = a.date.localeCompare(b.date);
-    if (d !== 0) return d;
-    return a.timeStart.localeCompare(b.timeStart);
-  });
+  function dateToMs(date: string, time: string): number {
+    const [y, m, d] = date.split("/").map(Number);
+    const [h, min] = time.split(":").map(Number);
+    return new Date(y, m - 1, d, h, min).getTime();
+  }
+
+  allMatches.sort((a, b) => dateToMs(a.date, a.timeStart) - dateToMs(b.date, b.timeStart));
 
   return NextResponse.json({
     matches: allMatches,

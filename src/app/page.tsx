@@ -157,7 +157,11 @@ function ScheduleContent() {
       if (!map.has(m.date)) map.set(m.date, []);
       map.get(m.date)!.push(m);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      const [ay, am, ad] = a.split("/").map(Number);
+      const [by, bm, bd] = b.split("/").map(Number);
+      return new Date(ay, am - 1, ad).getTime() - new Date(by, bm - 1, bd).getTime();
+    });
   }, [filtered]);
 
   function handleShare() {
