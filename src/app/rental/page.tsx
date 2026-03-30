@@ -93,12 +93,14 @@ function RentalContent() {
   const grouped = useMemo(() => {
     const map = new Map<string, RentalEntry[]>();
     for (const e of filtered) {
-      if (!map.has(e.month)) map.set(e.month, []);
-      map.get(e.month)!.push(e);
+      if (!map.has(e.date)) map.set(e.date, []);
+      map.get(e.date)!.push(e);
     }
-    return Array.from(map.entries()).sort(
-      ([a], [b]) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b)
-    );
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      const [ay, am, ad] = a.split("/").map(Number);
+      const [by, bm, bd] = b.split("/").map(Number);
+      return new Date(ay, am - 1, ad).getTime() - new Date(by, bm - 1, bd).getTime();
+    });
   }, [filtered]);
 
   function handleShare() {
@@ -163,13 +165,11 @@ function RentalContent() {
             公式のみ
           </button>
 
-          <span className="text-sm text-gray-400">{filtered.length} 件</span>
-
           {/* Share button */}
           <button
             onClick={handleShare}
             title="この検索条件のURLをコピー"
-            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
             }`}
           >
@@ -189,6 +189,8 @@ function RentalContent() {
               </>
             )}
           </button>
+
+          <span className="ml-auto text-sm text-gray-400">{filtered.length} 件</span>
         </div>
       </div>
 
@@ -211,42 +213,29 @@ function RentalContent() {
           <div className="text-center py-20 text-gray-500">該当する情報がありません</div>
         )}
 
-        {grouped.map(([month, monthEntries]) => (
-          <div key={month} className="mb-8">
-            <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-lg font-bold text-white">{month}</h2>
-              <div className="flex-1 h-px bg-gray-800" />
-              <span className="text-sm text-gray-500">{monthEntries.length}件</span>
-              <a
-                href={monthEntries[0].sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="ソースページを開く"
-                className="text-gray-500 hover:text-blue-400 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            </div>
+        {grouped.map(([date, dateEntries]) => {
+          const today = isToday(date);
+          return (
+            <div key={date} className="mb-6">
+              {/* Date header */}
+              <div className={`flex items-center gap-3 mb-3 ${today ? "text-blue-400" : "text-gray-300"}`}>
+                <h2 className="text-lg font-bold">{formatDate(date)}</h2>
+                {today && (
+                  <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">TODAY</span>
+                )}
+                <div className="flex-1 h-px bg-gray-800" />
+                <span className="text-sm text-gray-500">{dateEntries.length}件</span>
+              </div>
 
-            <div className="space-y-2">
-              {monthEntries.map((entry, i) => {
-                const today = isToday(entry.date);
-                return (
+              <div className="space-y-2">
+                {dateEntries.map((entry, i) => (
                   <div
-                    key={`${entry.date}-${i}`}
-                    className={`bg-gray-900 border rounded-xl p-4 transition-colors ${
-                      today ? "border-blue-700" : "border-gray-800 hover:border-gray-600"
-                    }`}
+                    key={`${date}-${i}`}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors"
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                      {/* 時間 */}
                       <div className="flex items-center gap-3">
-                        <div className={`text-sm font-medium flex-shrink-0 ${today ? "text-blue-400" : "text-gray-300"}`}>
-                          {formatDate(entry.date)}
-                          {today && <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">TODAY</span>}
-                        </div>
                         <div className="text-blue-400 font-mono font-semibold flex-shrink-0">
                           {entry.timeStart}
                           <span className="text-gray-500 text-sm"> ~ {entry.timeEnd}</span>
@@ -266,6 +255,7 @@ function RentalContent() {
                         </a>
                       </div>
 
+                      {/* ラベル */}
                       <div className="flex-1 flex items-center gap-2 text-white min-w-0">
                         <span className="font-medium truncate">{entry.label}</span>
                         {entry.isOfficial && (
@@ -288,11 +278,11 @@ function RentalContent() {
                       </a>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </main>
     </div>
   );

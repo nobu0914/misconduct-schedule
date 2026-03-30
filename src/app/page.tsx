@@ -260,13 +260,11 @@ function ScheduleContent() {
             今後のみ
           </button>
 
-          <span className="text-sm text-gray-400">{filtered.length} 試合</span>
-
           {/* Share button */}
           <button
             onClick={handleShare}
             title="この検索条件のURLをコピー"
-            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
             }`}
           >
@@ -286,6 +284,8 @@ function ScheduleContent() {
               </>
             )}
           </button>
+
+          <span className="ml-auto text-sm text-gray-400">{filtered.length} 試合</span>
         </div>
       </div>
 
