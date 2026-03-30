@@ -132,11 +132,13 @@ export async function GET(): Promise<NextResponse<RentalData>> {
     })
   );
 
-  allEntries.sort((a, b) => {
-    const d = a.date.localeCompare(b.date);
-    if (d !== 0) return d;
-    return a.timeStart.localeCompare(b.timeStart);
-  });
+  function dateTimeToMs(date: string, time: string): number {
+    const [y, m, d] = date.split("/").map(Number);
+    const [h, min] = time.split(":").map(Number);
+    return new Date(y, m - 1, d, h, min).getTime();
+  }
+
+  allEntries.sort((a, b) => dateTimeToMs(a.date, a.timeStart) - dateTimeToMs(b.date, b.timeStart));
 
   return NextResponse.json({
     entries: allEntries,
