@@ -45,7 +45,7 @@ export default function Nav() {
             </svg>
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white">MHL / CXC API <span className="text-xs font-normal text-gray-500">Ver.1-260331-2033</span></h1>
+            <h1 className="text-xl font-bold text-white">MHL / CXC API <span className="text-xs font-normal text-gray-500">Ver.1-260331-2046</span></h1>
             <p className="text-xs text-gray-400">公式サイトの情報を自動表示している非公式ツールです。</p>
           </div>
 
@@ -71,7 +71,7 @@ export default function Nav() {
             {menuOpen && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden z-50">
                 <a
-                  href="https://misconduct.co.jp"
+                  href="https://mhlcxc.rinnavi.com/"
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setMenuOpen(false)}
