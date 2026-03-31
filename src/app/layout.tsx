@@ -5,7 +5,10 @@ import SwipeNavigation from "@/components/SwipeNavigation";
 
 export const metadata: Metadata = {
   title: "MHL Schedule - Misconduct Hockey League",
-  description: "Misconduct Hockey League 試合スケジュール",
+  description: "AIでホッケー情報を集めるサイト Rinnavi",
+  openGraph: {
+    description: "AIでホッケー情報を集めるサイト Rinnavi",
+  },
 };
 
 export default function RootLayout({
