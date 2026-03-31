@@ -4,7 +4,7 @@ import Nav from "@/components/Nav";
 import SwipeNavigation from "@/components/SwipeNavigation";
 
 export const metadata: Metadata = {
-  title: "MHL Schedule - Misconduct Hockey League",
+  title: "Rinnavi - MHL / CxC",
   description: "AIでホッケー情報を集めるサイト Rinnavi",
   openGraph: {
     description: "AIでホッケー情報を集めるサイト Rinnavi",
