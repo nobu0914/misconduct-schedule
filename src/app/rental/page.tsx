@@ -38,6 +38,7 @@ function RentalContent() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => searchParams.get("month") ?? "ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
@@ -216,20 +217,48 @@ function RentalContent() {
         )}
 
         {wednesdayOnly && (
-          <a
-            href="https://www.notion.so/2289672111d980c9b174d54766adc3d5"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 bg-green-900/40 border border-green-700 rounded-xl px-4 py-3 mb-4 hover:bg-green-900/60 transition-colors group"
-          >
-            <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-green-300 text-sm font-medium flex-1">水曜練習会とは？</span>
-            <svg className="w-4 h-4 text-green-500 group-hover:text-green-300 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
+          <div className="mb-4 bg-green-900/30 border border-green-700 rounded-xl overflow-hidden">
+            {/* ヘッダー行 */}
+            <button
+              onClick={() => setAboutOpen((o) => !o)}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-900/50 transition-colors"
+            >
+              <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-green-300 text-sm font-medium flex-1 text-left">水曜練習会とは？</span>
+              <svg className={`w-4 h-4 text-green-500 transition-transform flex-shrink-0 ${aboutOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* 展開コンテンツ */}
+            {aboutOpen && (
+              <div className="px-4 pb-4 border-t border-green-800/50">
+                <div className="pt-3 space-y-3 text-sm text-gray-300 leading-relaxed">
+                  <p className="text-base font-bold text-white">🏒 インラインホッケー水曜練習会</p>
+                  <p>埼玉県戸田市にある屋内ホッケー施設「CxC（ミスク）」にて、隔週水曜日に練習会を開催しています。</p>
+                  <p>当日は、元日本代表・高山さんによる基礎練習を中心としたメニューとなります。<span className="text-gray-400">※ゲームはありませんがゲームを想定したメニューはあります。</span></p>
+                  <p>事前の<strong className="text-white">参加表明は不要</strong>、途中参加・退席も自由ですので、ぜひお気軽にご参加ください！</p>
+
+                  <div className="bg-gray-800/60 rounded-lg p-3 space-y-1.5 text-xs">
+                    <p className="text-green-400 font-semibold mb-2">概要</p>
+                    <p>📍 場所：
+                      <a href="https://maps.app.goo.gl/UosdbC9nMpwCdpLM8" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline ml-1">
+                        CxC（ミスク）戸田（埼玉県戸田市）
+                      </a>
+                    </p>
+                    <p>🕗 時間：20:00〜22:00</p>
+                    <p>💴 参加費：大人 2,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
+                    <p>🎯 対象：初心者〜ブロンズ・ブラス級程度の大人プレーヤー</p>
+                    <p className="text-gray-400">✨ 上級者の場合、周囲のレベルに合わせてプレーいただける方</p>
+                  </div>
+
+                  <p className="text-gray-400 text-xs">ご不明点があればお気軽にお声かけください！皆さまのご参加をお待ちしております✨</p>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {grouped.map(([date, dateEntries]) => {
