@@ -134,7 +134,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
             <>
               {/* 参加状況 */}
               <section>
-                <h3 className="text-sm font-semibold text-gray-300 mb-3">参加状況（無記名）</h3>
+                <h3 className="text-sm font-semibold text-gray-300 mb-1">参加状況（無記名）</h3>
+                <p className="text-xs text-gray-500 mb-3">参加表明は必須ではありません。ご自由にどうぞ。</p>
 
                 {/* 投票ボタン */}
                 <div className="flex gap-2 mb-4">
