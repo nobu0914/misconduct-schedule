@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import type { Attendance } from "@/lib/voteConstants";
 
-const kv = new Redis({
-  url: process.env.STORAGE_KV_REST_API_URL ?? process.env.KV_REST_API_URL ?? "",
-  token: process.env.STORAGE_KV_REST_API_TOKEN ?? process.env.KV_REST_API_TOKEN ?? "",
-});
+const kv = Redis.fromEnv();
 
 interface VoterRecord {
   attendance: Attendance;
