@@ -95,6 +95,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
     );
   }
 
+  const [aboutOpen, setAboutOpen] = useState(false);
+
   const totalAttend = result ? result.attend.yes + result.attend.maybe + result.attend.no : 0;
   const hasVoted = !!result?.myVote && !editMode;
 
@@ -132,6 +134,46 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
             </div>
           ) : (
             <>
+              {/* 水曜練習とは？ */}
+              <div className="bg-green-900/30 border border-green-700 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setAboutOpen((o) => !o)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-900/50 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-green-300 text-sm font-medium flex-1 text-left">水曜練習会とは？</span>
+                  <svg className={`w-4 h-4 text-green-500 transition-transform flex-shrink-0 ${aboutOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {aboutOpen && (
+                  <div className="px-4 pb-4 border-t border-green-800/50">
+                    <div className="pt-3 space-y-3 text-sm text-gray-300 leading-relaxed">
+                      <img src="/wednesday-practice.jpg" alt="水曜練習会の様子" className="w-full rounded-lg object-cover max-h-48" />
+                      <p className="text-base font-bold text-white">🏒 インラインホッケー水曜練習会</p>
+                      <p>埼玉県戸田市にある屋内ホッケー施設「CxC（ミスク）」にて、隔週水曜日に練習会を開催しています。</p>
+                      <p>当日は、元日本代表・高山さんによる基礎練習を中心としたメニューとなります。</p>
+                      <p>事前の<strong className="text-white">参加表明は不要</strong>、途中参加・退席も自由ですので、ぜひお気軽にご参加ください！</p>
+                      <div className="bg-gray-800/60 rounded-lg p-3 space-y-1.5 text-xs">
+                        <p className="text-green-400 font-semibold mb-2">概要</p>
+                        <p>📍 場所：
+                          <a href="https://maps.app.goo.gl/UosdbC9nMpwCdpLM8" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline ml-1">
+                            CxC（ミスク）戸田（埼玉県戸田市）
+                          </a>
+                        </p>
+                        <p>🕗 時間：20:00〜22:00</p>
+                        <p>💴 参加費：大人 2,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
+                        <p>🎯 対象：初心者〜ブロンズ・ブラス級程度の大人プレーヤー</p>
+                        <p className="text-gray-400">✨ 上級者の場合、周囲のレベルに合わせてプレーいただける方</p>
+                      </div>
+                      <p className="text-gray-400 text-xs">ご不明点があればお気軽にお声かけください！皆さまのご参加をお待ちしております✨</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* 参加状況 */}
               <section>
                 <h3 className="text-sm font-semibold text-gray-300 mb-1">参加状況（無記名）</h3>

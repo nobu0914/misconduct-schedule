@@ -236,6 +236,7 @@ function RentalContent() {
             {aboutOpen && (
               <div className="px-4 pb-4 border-t border-green-800/50">
                 <div className="pt-3 space-y-3 text-sm text-gray-300 leading-relaxed">
+                  <img src="/wednesday-practice.jpg" alt="水曜練習会の様子" className="w-full rounded-lg object-cover max-h-48" />
                   <p className="text-base font-bold text-white">🏒 インラインホッケー水曜練習会</p>
                   <p>埼玉県戸田市にある屋内ホッケー施設「CxC（ミスク）」にて、隔週水曜日に練習会を開催しています。</p>
                   <p>当日は、元日本代表・高山さんによる基礎練習を中心としたメニューとなります。</p>
