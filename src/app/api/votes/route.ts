@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import { kv } from "@vercel/kv";
 import type { Attendance } from "@/lib/voteConstants";
-
-function getKv() {
-  return new Redis({
-    url: process.env.KV_REST_API_URL ?? "",
-    token: process.env.KV_REST_API_TOKEN ?? "",
-  });
-}
 
 interface VoterRecord {
   attendance: Attendance;
@@ -32,7 +25,6 @@ export async function GET(req: NextRequest): Promise<NextResponse<VoteResult>> {
   const voterId = req.nextUrl.searchParams.get("voterId") ?? "";
 
   try {
-    const kv = getKv();
     const [raw, myVoteRaw] = await Promise.all([
       kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(dateKey(date)),
       voterId ? kv.get<VoterRecord>(voterKey(date, voterId)) : Promise.resolve(null),
@@ -65,39 +57,41 @@ export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> 
     return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null }, { status: 400 });
   }
 
-  const kv = getKv();
-  const key = dateKey(date);
-  const vKey = voterKey(date, voterId);
+  try {
+    const key = dateKey(date);
+    const vKey = voterKey(date, voterId);
 
-  // 以前の投票を取得（変更の場合は差し引く）
-  const [existing, prev] = await Promise.all([
-    kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(key),
-    kv.get<VoterRecord>(vKey),
-  ]);
+    const [existing, prev] = await Promise.all([
+      kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(key),
+      kv.get<VoterRecord>(vKey),
+    ]);
 
-  const attend = existing?.attend ?? { yes: 0, maybe: 0, no: 0 };
-  const menuCounts: Record<string, number> = existing?.menu ?? {};
+    const attend = existing?.attend ?? { yes: 0, maybe: 0, no: 0 };
+    const menuCounts: Record<string, number> = existing?.menu ?? {};
 
-  // 以前の投票を削除
-  if (prev) {
-    attend[prev.attendance] = Math.max(0, (attend[prev.attendance] ?? 0) - 1);
-    for (const item of prev.menu) {
-      menuCounts[item] = Math.max(0, (menuCounts[item] ?? 0) - 1);
+    if (prev) {
+      attend[prev.attendance] = Math.max(0, (attend[prev.attendance] ?? 0) - 1);
+      for (const item of prev.menu) {
+        menuCounts[item] = Math.max(0, (menuCounts[item] ?? 0) - 1);
+      }
     }
+
+    attend[attendance] = (attend[attendance] ?? 0) + 1;
+    for (const item of menu) {
+      menuCounts[item] = (menuCounts[item] ?? 0) + 1;
+    }
+
+    const newRecord: VoterRecord = { attendance, menu };
+
+    await Promise.all([
+      kv.set(key, { attend, menu: menuCounts }),
+      kv.set(vKey, newRecord),
+    ]);
+
+    return NextResponse.json({ attend, menu: menuCounts, myVote: newRecord });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("votes POST error:", msg);
+    return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null, error: msg }, { status: 500 });
   }
-
-  // 新しい投票を加算
-  attend[attendance] = (attend[attendance] ?? 0) + 1;
-  for (const item of menu) {
-    menuCounts[item] = (menuCounts[item] ?? 0) + 1;
-  }
-
-  const newRecord: VoterRecord = { attendance, menu };
-
-  await Promise.all([
-    kv.set(key, { attend, menu: menuCounts }),
-    kv.set(vKey, newRecord),
-  ]);
-
-  return NextResponse.json({ attend, menu: menuCounts, myVote: newRecord });
 }
