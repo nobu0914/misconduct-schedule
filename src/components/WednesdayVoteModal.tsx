@@ -100,7 +100,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
       {/* Modal */}
       <div className="relative w-full sm:max-w-md bg-gray-900 rounded-t-2xl sm:rounded-2xl border border-gray-700 shadow-2xl max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-5 py-4 flex items-center justify-between rounded-t-2xl sm:rounded-t-2xl">
+        <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 px-5 py-4 flex items-center justify-between rounded-t-2xl sm:rounded-t-2xl" style={{isolation: "isolate"}}>
           <div>
             <div className="text-xs text-green-400 font-medium mb-0.5">水曜練習会</div>
             <div className="text-white font-bold">{dateLabel}</div>
