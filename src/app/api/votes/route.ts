@@ -29,16 +29,21 @@ export async function GET(req: NextRequest): Promise<NextResponse<VoteResult>> {
   const date = req.nextUrl.searchParams.get("date") ?? "";
   const voterId = req.nextUrl.searchParams.get("voterId") ?? "";
 
-  const [raw, myVoteRaw] = await Promise.all([
-    kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(dateKey(date)),
-    voterId ? kv.get<VoterRecord>(voterKey(date, voterId)) : Promise.resolve(null),
-  ]);
+  try {
+    const [raw, myVoteRaw] = await Promise.all([
+      kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(dateKey(date)),
+      voterId ? kv.get<VoterRecord>(voterKey(date, voterId)) : Promise.resolve(null),
+    ]);
 
-  return NextResponse.json({
-    attend: raw?.attend ?? { yes: 0, maybe: 0, no: 0 },
-    menu: raw?.menu ?? {},
-    myVote: myVoteRaw ?? null,
-  });
+    return NextResponse.json({
+      attend: raw?.attend ?? { yes: 0, maybe: 0, no: 0 },
+      menu: raw?.menu ?? {},
+      myVote: myVoteRaw ?? null,
+    });
+  } catch (e) {
+    console.error("votes GET error:", e);
+    return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> {

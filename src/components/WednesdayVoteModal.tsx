@@ -35,6 +35,7 @@ const ATTEND_OPTIONS: { value: Attendance; label: string; color: string; activeC
 export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) {
   const [result, setResult] = useState<VoteResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
@@ -44,14 +45,20 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   const voterId = getVoterId();
 
   const fetchVotes = useCallback(async () => {
-    const res = await fetch(`/api/votes?date=${encodeURIComponent(date)}&voterId=${voterId}`);
-    const data: VoteResult = await res.json();
-    setResult(data);
-    if (data.myVote) {
-      setSelectedAttend(data.myVote.attendance);
-      setSelectedMenu(data.myVote.menu);
+    try {
+      const res = await fetch(`/api/votes?date=${encodeURIComponent(date)}&voterId=${voterId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: VoteResult = await res.json();
+      setResult(data);
+      if (data.myVote) {
+        setSelectedAttend(data.myVote.attendance);
+        setSelectedMenu(data.myVote.menu);
+      }
+    } catch {
+      setFetchError(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [date, voterId]);
 
   useEffect(() => {
@@ -108,6 +115,10 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
+            </div>
+          ) : fetchError ? (
+            <div className="text-center py-10 text-red-400 text-sm">
+              データの取得に失敗しました。<br />しばらくしてから再度お試しください。
             </div>
           ) : (
             <>
