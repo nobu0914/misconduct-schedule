@@ -238,7 +238,7 @@ function RentalContent() {
                 <div className="pt-3 space-y-3 text-sm text-gray-300 leading-relaxed">
                   <p className="text-base font-bold text-white">🏒 インラインホッケー水曜練習会</p>
                   <p>埼玉県戸田市にある屋内ホッケー施設「CxC（ミスク）」にて、隔週水曜日に練習会を開催しています。</p>
-                  <p>当日は、元日本代表・高山さんによる基礎練習を中心としたメニューとなります。<span className="text-gray-400">※ゲームはありませんがゲームを想定したメニューはあります。</span></p>
+                  <p>当日は、元日本代表・高山さんによる基礎練習を中心としたメニューとなります。</p>
                   <p>事前の<strong className="text-white">参加表明は不要</strong>、途中参加・退席も自由ですので、ぜひお気軽にご参加ください！</p>
 
                   <div className="bg-gray-800/60 rounded-lg p-3 space-y-1.5 text-xs">
