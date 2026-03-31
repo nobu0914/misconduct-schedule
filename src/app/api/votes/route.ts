@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import type { Attendance } from "@/lib/voteConstants";
 
-const kv = new Redis({
-  url: process.env.KV_REST_API_URL!,
-  token: process.env.KV_REST_API_TOKEN!,
-});
+function getKv() {
+  return new Redis({
+    url: process.env.KV_REST_API_URL ?? "",
+    token: process.env.KV_REST_API_TOKEN ?? "",
+  });
+}
 
 interface VoterRecord {
   attendance: Attendance;
@@ -30,6 +32,7 @@ export async function GET(req: NextRequest): Promise<NextResponse<VoteResult>> {
   const voterId = req.nextUrl.searchParams.get("voterId") ?? "";
 
   try {
+    const kv = getKv();
     const [raw, myVoteRaw] = await Promise.all([
       kv.get<{ attend: { yes: number; maybe: number; no: number }; menu: Record<string, number> }>(dateKey(date)),
       voterId ? kv.get<VoterRecord>(voterKey(date, voterId)) : Promise.resolve(null),
@@ -41,8 +44,12 @@ export async function GET(req: NextRequest): Promise<NextResponse<VoteResult>> {
       myVote: myVoteRaw ?? null,
     });
   } catch (e) {
-    console.error("votes GET error:", e);
-    return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null }, { status: 500 });
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("votes GET error:", msg);
+    return NextResponse.json(
+      { attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null, error: msg },
+      { status: 500 }
+    );
   }
 }
 
@@ -58,6 +65,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> 
     return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null }, { status: 400 });
   }
 
+  const kv = getKv();
   const key = dateKey(date);
   const vKey = voterKey(date, voterId);
 

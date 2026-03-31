@@ -47,14 +47,15 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   const fetchVotes = useCallback(async () => {
     try {
       const res = await fetch(`/api/votes?date=${encodeURIComponent(date)}&voterId=${voterId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: VoteResult = await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult(data);
       if (data.myVote) {
         setSelectedAttend(data.myVote.attendance);
         setSelectedMenu(data.myVote.menu);
       }
-    } catch {
+    } catch (e) {
+      console.error("fetchVotes error:", e);
       setFetchError(true);
     } finally {
       setLoading(false);
