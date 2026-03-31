@@ -37,20 +37,20 @@ export default function Nav() {
           </div>
         </div>
 
-        <nav className="flex gap-1">
+        <nav className="flex">
           {links.map(({ href, label, badge }) => (
             <Link
               key={href}
               href={href}
-              className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`relative flex-1 text-center py-2 text-sm font-medium transition-colors border-b-2 ${
                 pathname === href
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  ? "border-blue-500 text-white"
+                  : "border-transparent text-gray-400 hover:text-white hover:border-gray-600"
               }`}
             >
               {label}
               {badge && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-gray-900" />
+                <span className="absolute top-1 right-3 w-2 h-2 bg-red-500 rounded-full" />
               )}
             </Link>
           ))}
