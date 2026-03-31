@@ -66,6 +66,15 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
     fetchVotes();
   }, [fetchVotes]);
 
+  // モーダルが開いている間は背景のスクロールを無効化
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   async function handleSubmit() {
     if (!selectedAttend) return;
     setSubmitting(true);
