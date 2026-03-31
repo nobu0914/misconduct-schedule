@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { RentalEntry } from "../api/rental/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
+import WednesdayVoteModal from "@/components/WednesdayVoteModal";
 
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("/").map(Number);
@@ -42,6 +43,7 @@ function RentalContent() {
   const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
   const [wednesdayOnly, setWednesdayOnly] = useState<boolean>(() => searchParams.get("wed") === "1");
   const [officialOnly, setOfficialOnly] = useState<boolean>(() => searchParams.get("official") === "1");
+  const [voteModal, setVoteModal] = useState<{ date: string; dateLabel: string } | null>(null);
 
   // Sync state → URL
   useEffect(() => {
@@ -245,10 +247,13 @@ function RentalContent() {
               </div>
 
               <div className="space-y-2">
-                {dateEntries.map((entry, i) => (
+                {dateEntries.map((entry, i) => {
+                  const isWed = entry.label.includes("水曜練習会");
+                  return (
                   <div
                     key={`${date}-${i}`}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors"
+                    onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : undefined}
+                    className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : "hover:border-gray-600"}`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                       {/* 時間 */}
@@ -295,12 +300,21 @@ function RentalContent() {
                       </a>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
         })}
       </main>
+
+      {voteModal && (
+        <WednesdayVoteModal
+          date={voteModal.date}
+          dateLabel={voteModal.dateLabel}
+          onClose={() => setVoteModal(null)}
+        />
+      )}
     </div>
   );
 }
