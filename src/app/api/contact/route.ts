@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     await resend.emails.send({
       from: "MHL/CXC お問い合わせ <onboarding@resend.dev>",
-      to: "kijiatora.regi4@gmail.com",
+      to: "kijiatora.regi@gmail.com",
       subject: `【お問い合わせ】${name} 様より`,
       text: [
         `お名前: ${name}`,
