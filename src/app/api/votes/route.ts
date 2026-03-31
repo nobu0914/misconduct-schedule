@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
 import type { Attendance } from "@/lib/voteConstants";
+
+const kv = Redis.fromEnv();
 
 interface VoterRecord {
   attendance: Attendance;
