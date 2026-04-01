@@ -49,6 +49,8 @@ interface ParseResult {
   status: number;
   rowCount: number;
   colspan2Cells: string[];
+  sectionLog: string[];
+  playersByTeamDebug: Record<string, { jersey: number; points: number }[]>;
   standings: TeamStanding[];
   error?: string;
 }
@@ -63,6 +65,8 @@ async function fetchAndParseStandings(
     status: 0,
     rowCount: 0,
     colspan2Cells: [],
+    sectionLog: [],
+    playersByTeamDebug: {},
     standings: [],
   };
 
@@ -113,16 +117,19 @@ async function fetchAndParseStandings(
       // チームセクション: W・L・GP を含むヘッダー
       if (texts.includes("W") && texts.includes("L") && texts.includes("GP")) {
         section = "team";
+        if (debugMode) result.sectionLog.push(`row${result.rowCount}→team: [${texts.join(",")}]`);
         return;
       }
       // ゴーリーセクション: Save% または SOG を含むヘッダー
       if (texts.includes("Save%") || texts.includes("SOG")) {
         section = "goalie";
+        if (debugMode) result.sectionLog.push(`row${result.rowCount}→goalie: [${texts.join(",")}]`);
         return;
       }
-      // プレイヤーセクション: G・A・P・PIM を含むがSave%を含まないヘッダー
-      if (texts.includes("PIM") && texts.includes("G") && texts.includes("A") && !texts.includes("Save%")) {
+      // プレイヤーセクション: PIM を含むがSave%・SOGを含まないヘッダー
+      if (texts.includes("PIM") && !texts.includes("Save%") && !texts.includes("SOG")) {
         section = "player";
+        if (debugMode) result.sectionLog.push(`row${result.rowCount}→player: [${texts.join(",")}]`);
         return;
       }
 
@@ -193,13 +200,16 @@ async function fetchAndParseStandings(
       }
     });
 
+    // デバッグ用にプレイヤーデータを記録
+    if (debugMode) result.playersByTeamDebug = playersByTeam;
+
     // 各チームの topScorers を設定（チーム内得点順上位3名・大文字小文字を無視して照合）
     for (const standing of result.standings) {
       const key = Object.keys(playersByTeam).find(
         (k) => k.toLowerCase() === standing.team.toLowerCase()
       );
       standing.topScorers = key
-        ? playersByTeam[key]
+        ? [...playersByTeam[key]]
             .sort((a, b) => b.points - a.points)
             .slice(0, 3)
             .map((p) => p.jersey)
@@ -231,6 +241,8 @@ export async function GET(req: Request): Promise<NextResponse> {
         httpStatus: r.status,
         rowCount: r.rowCount,
         colspan2Cells: r.colspan2Cells,
+        sectionLog: r.sectionLog,
+        playersByTeam: r.playersByTeamDebug,
         found: r.standings.length,
         error: r.error,
       })),

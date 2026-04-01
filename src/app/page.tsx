@@ -223,22 +223,19 @@ function ScheduleContent() {
           <>
             <div className="text-center">
               <span className="text-2xl font-bold text-white">{s.rank}</span>
-              <span className="text-gray-400 text-sm ml-1">位</span>
+              <span className="text-gray-400 text-sm">位</span>
+              <span className="text-gray-500 text-xs ml-1">（{s.gp}試合）</span>
             </div>
-            <div className="space-y-1 text-sm text-center">
-              <div className="text-gray-300">{s.gp} <span className="text-gray-500">試合</span></div>
-              <div className="text-gray-300">
-                <span className="text-green-400">{s.wins}勝</span>
-                <span className="text-red-400 ml-1">{s.losses}負</span>
-                <span className="text-gray-400 ml-1">{s.ties}引</span>
-              </div>
-              <div>
-                <span className="text-blue-400 font-semibold">{s.points}</span>
-                <span className="text-gray-500 text-xs ml-1">pt</span>
-              </div>
+            <div className="flex justify-center items-center gap-2 text-sm">
+              <span className="text-green-400">{s.wins}勝</span>
+              <span className="text-red-400">{s.losses}負</span>
+              <span className="text-gray-400">{s.ties}引</span>
+              <span className="text-gray-600">|</span>
+              <span className="text-blue-400 font-semibold">{s.points}</span>
+              <span className="text-gray-500 text-xs">pt</span>
             </div>
             {s.topScorers.length > 0 && (
-              <div className="mt-1 pt-3 border-t border-gray-800">
+              <div className="pt-3 border-t border-gray-800">
                 <p className="text-xs text-gray-500 mb-1.5 text-center">得点上位</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {s.topScorers.map((n, i) => (
