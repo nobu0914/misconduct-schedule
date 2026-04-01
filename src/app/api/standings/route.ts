@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 
+// キャッシュを無効化して常に最新データを返す
+export const dynamic = "force-dynamic";
+
 export interface TeamStanding {
   rank: number;
   team: string;
@@ -50,8 +53,6 @@ async function fetchAndParseStandings(
     const text = iconv.decode(Buffer.from(buffer), "shift_jis");
     const $ = cheerio.load(text);
 
-    let inTeamSection = false;
-
     $("tr").each((_, row) => {
       const tds = $(row).find("td");
       if (tds.length === 0) return;
@@ -64,37 +65,22 @@ async function fetchAndParseStandings(
         });
       });
 
-      const texts = cellData.map((c) => c.text);
-
-      // チームスタンディングのヘッダー行（GP と P 列が存在する）
-      if (texts.includes("GP") && texts.includes("P")) {
-        inTeamSection = true;
-        return;
-      }
-
-      // ゴーリー・プレイヤーセクション開始で終了
-      if (texts.some((t) => t === "Save%" || t === "SOG" || t === "Saves")) {
-        inTeamSection = false;
-        return;
-      }
-
-      if (!inTeamSection) return;
-
-      // colspan=2 のセルをチーム名として検出
+      // colspan=2 のセルを探す（チーム名セル）
+      // 非空・非ヘッダー・非数値であること
       const teamCellIdx = cellData.findIndex(
         (c) =>
           c.colspan === 2 &&
           c.text !== "" &&
           c.text !== "Team" &&
-          !/^[\d\-\+]+$/.test(c.text)
+          !/^[\d\s\-\+]+$/.test(c.text)
       );
       if (teamCellIdx === -1) return;
 
-      // チーム名セルより前の正の整数を順位として取得
+      // チーム名セルより前のセルから順位（整数）を探す
       let rank = 0;
       for (let i = 0; i < teamCellIdx; i++) {
         const n = parseInt(cellData[i].text, 10);
-        if (!isNaN(n) && n > 0) {
+        if (!isNaN(n) && n > 0 && String(n) === cellData[i].text) {
           rank = n;
           break;
         }
@@ -102,8 +88,11 @@ async function fetchAndParseStandings(
       if (rank === 0) return;
 
       const teamName = cellData[teamCellIdx].text;
-      const gp = parseInt(cellData[teamCellIdx + 1]?.text ?? "0", 10);
-      const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "0", 10);
+      const gp = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
+      const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
+
+      // GP が数値でない場合は不正な行として除外
+      if (isNaN(gp)) return;
 
       standings.push({ rank, team: teamName, divisionLabel, points, gp });
     });
@@ -119,13 +108,13 @@ export async function GET(): Promise<NextResponse<StandingsData>> {
 
   await Promise.all(
     STANDINGS_URLS.map(async ({ label, url }) => {
-      const standings = await fetchAndParseStandings(label, url);
-      allStandings.push(...standings);
+      const s = await fetchAndParseStandings(label, url);
+      allStandings.push(...s);
     })
   );
 
-  return NextResponse.json({
-    standings: allStandings,
-    lastUpdated: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    { standings: allStandings, lastUpdated: new Date().toISOString() },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
