@@ -104,9 +104,14 @@ function ScheduleContent() {
     if (!scheduleName) return undefined;
     // 完全一致
     if (standings[scheduleName]) return standings[scheduleName];
-    // 括弧内のサブ情報を除いた名前で照合（例: "SAKURA (A)" → "SAKURA"）
+    // 括弧内のサブ情報を除いた名前で照合（例: "Dark Sales (B)" → "Dark Sales"）
     const baseName = scheduleName.replace(/\s*\(.*?\)\s*/g, "").trim();
     if (baseName !== scheduleName && standings[baseName]) return standings[baseName];
+    // 大文字小文字を無視して照合（例: "Dark Sales" vs "Dark sales"）
+    const baseNameLower = baseName.toLowerCase();
+    for (const val of Object.values(standings)) {
+      if (val.team.toLowerCase() === baseNameLower) return val;
+    }
     return undefined;
   }
 
