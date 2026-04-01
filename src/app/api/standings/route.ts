@@ -15,39 +15,22 @@ interface StandingsData {
   lastUpdated: string;
 }
 
+// standings ページのリンクを直接参照
+// MHL が新シーズンのファイルに差し替えたら URL を更新すること
+const STANDINGS_URLS: { label: string; url: string }[] = [
+  { label: "Gold",     url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-gold.htm" },
+  { label: "Silver",   url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-silver.htm" },
+  { label: "Bronze-A", url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-bronze-a.htm" },
+  { label: "Bronze-B", url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-bronze-b.htm" },
+  { label: "Kid's",    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-kids.htm" },
+];
+
 function cleanText(text: string): string {
   return text
     .replace(/\u00a0/g, " ")
     .replace(/\u3000/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-async function fetchStandingsLinks(): Promise<{ label: string; url: string }[]> {
-  try {
-    const res = await fetch("https://misconduct.co.jp/standings/", {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-
-    const text = await res.text();
-    const $ = cheerio.load(text);
-    const links: { label: string; url: string }[] = [];
-
-    $("a[href*='wp-content/uploads']").each((_, el) => {
-      const href = $(el).attr("href") ?? "";
-      if (href.toLowerCase().endsWith(".htm") || href.toLowerCase().endsWith(".html")) {
-        const label = cleanText($(el).text());
-        if (label) links.push({ label, url: href });
-      }
-    });
-
-    return links;
-  } catch (e) {
-    console.error("Failed to fetch standings links:", e);
-    return [];
-  }
 }
 
 async function fetchAndParseStandings(
@@ -83,13 +66,13 @@ async function fetchAndParseStandings(
 
       const texts = cellData.map((c) => c.text);
 
-      // チームスタンディングのヘッダー行を検出（GP と P 列が存在する）
+      // チームスタンディングのヘッダー行（GP と P 列が存在する）
       if (texts.includes("GP") && texts.includes("P")) {
         inTeamSection = true;
         return;
       }
 
-      // ゴーリーセクション開始で終了
+      // ゴーリー・プレイヤーセクション開始で終了
       if (texts.some((t) => t === "Save%" || t === "SOG" || t === "Saves")) {
         inTeamSection = false;
         return;
@@ -97,7 +80,7 @@ async function fetchAndParseStandings(
 
       if (!inTeamSection) return;
 
-      // colspan=2 のセルをチーム名セルとして検出
+      // colspan=2 のセルをチーム名として検出
       const teamCellIdx = cellData.findIndex(
         (c) =>
           c.colspan === 2 &&
@@ -107,7 +90,7 @@ async function fetchAndParseStandings(
       );
       if (teamCellIdx === -1) return;
 
-      // チーム名セルより前の数値セルを順位として取得
+      // チーム名セルより前の正の整数を順位として取得
       let rank = 0;
       for (let i = 0; i < teamCellIdx; i++) {
         const n = parseInt(cellData[i].text, 10);
@@ -119,17 +102,10 @@ async function fetchAndParseStandings(
       if (rank === 0) return;
 
       const teamName = cellData[teamCellIdx].text;
-      // colspan=2 なので次のセルは実際の次のtd要素
       const gp = parseInt(cellData[teamCellIdx + 1]?.text ?? "0", 10);
       const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "0", 10);
 
-      standings.push({
-        rank,
-        team: teamName,
-        divisionLabel,
-        points,
-        gp,
-      });
+      standings.push({ rank, team: teamName, divisionLabel, points, gp });
     });
   } catch (e) {
     console.error(`Failed to parse standings for ${divisionLabel} (${url}):`, e);
@@ -139,12 +115,10 @@ async function fetchAndParseStandings(
 }
 
 export async function GET(): Promise<NextResponse<StandingsData>> {
-  const links = await fetchStandingsLinks();
-
   const allStandings: TeamStanding[] = [];
 
   await Promise.all(
-    links.map(async ({ label, url }) => {
+    STANDINGS_URLS.map(async ({ label, url }) => {
       const standings = await fetchAndParseStandings(label, url);
       allStandings.push(...standings);
     })
