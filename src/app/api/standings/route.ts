@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 259200; // 3日（72時間）
 
 export interface TeamStanding {
   rank: number;
@@ -65,7 +65,7 @@ async function fetchAndParseStandings(
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 0 },
+      next: { revalidate: 259200 },
     });
     result.status = res.status;
     if (!res.ok) return result;
@@ -181,13 +181,11 @@ export async function GET(req: Request): Promise<NextResponse> {
         })),
         standings: allStandings,
         lastUpdated: new Date().toISOString(),
-      },
-      { headers: { "Cache-Control": "no-store" } }
+      }
     );
   }
 
   return NextResponse.json(
-    { standings: allStandings, lastUpdated: new Date().toISOString() } satisfies StandingsData,
-    { headers: { "Cache-Control": "no-store" } }
+    { standings: allStandings, lastUpdated: new Date().toISOString() } satisfies StandingsData
   );
 }
