@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Match } from "./api/schedule/route";
+import type { TeamStanding } from "./api/standings/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
@@ -63,6 +64,7 @@ function ScheduleContent() {
   const searchParams = useSearchParams();
 
   const [matches, setMatches] = useState<Match[]>([]);
+  const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -91,10 +93,20 @@ function ScheduleContent() {
     router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }, [selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery, router]);
 
+  function buildStandingsMap(list: TeamStanding[]): Record<string, TeamStanding> {
+    const map: Record<string, TeamStanding> = {};
+    for (const s of list) map[s.team] = s;
+    return map;
+  }
+
   const refresh = useCallback(async () => {
-    const data = await fetch("/api/schedule").then((r) => r.json());
-    setMatches(data.matches ?? []);
-    setLastUpdated(data.lastUpdated ?? "");
+    const [schedData, stData] = await Promise.all([
+      fetch("/api/schedule").then((r) => r.json()),
+      fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
+    ]);
+    setMatches(schedData.matches ?? []);
+    setLastUpdated(schedData.lastUpdated ?? "");
+    setStandings(buildStandingsMap(stData.standings ?? []));
   }, []);
   const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
@@ -109,11 +121,14 @@ function ScheduleContent() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/schedule")
-      .then((r) => r.json())
-      .then((data) => {
-        setMatches(data.matches ?? []);
-        setLastUpdated(data.lastUpdated ?? "");
+    Promise.all([
+      fetch("/api/schedule").then((r) => r.json()),
+      fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
+    ])
+      .then(([schedData, stData]) => {
+        setMatches(schedData.matches ?? []);
+        setLastUpdated(schedData.lastUpdated ?? "");
+        setStandings(buildStandingsMap(stData.standings ?? []));
         setLoading(false);
       })
       .catch(() => {
@@ -365,9 +380,19 @@ function ScheduleContent() {
                       </div>
 
                       <div className="flex-1 flex items-center gap-2 min-w-0">
-                        <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
+                          {standings[match.awayTeam] && (
+                            <span className="text-xs text-gray-400">{standings[match.awayTeam].rank}位 / {standings[match.awayTeam].points}pt</span>
+                          )}
+                        </div>
                         <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
-                        <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
+                          {standings[match.homeTeam] && (
+                            <span className="text-xs text-gray-400">{standings[match.homeTeam].rank}位 / {standings[match.homeTeam].points}pt</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
