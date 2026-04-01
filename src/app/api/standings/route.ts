@@ -64,7 +64,12 @@ async function fetchAndParseStandings(
     if (!res.ok) return result;
 
     const buffer = await res.arrayBuffer();
-    const text = iconv.decode(Buffer.from(buffer), "shift_jis");
+    const raw = iconv.decode(Buffer.from(buffer), "shift_jis");
+
+    // MHTML 形式（Excel HTML エクスポート）の場合、<html>...</html> 部分のみ抽出
+    const htmlMatch = raw.match(/<html[\s\S]*?<\/html>/i);
+    const text = htmlMatch ? htmlMatch[0] : raw;
+
     const $ = cheerio.load(text);
 
     $("tr").each((_, row) => {
