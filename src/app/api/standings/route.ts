@@ -10,6 +10,9 @@ export interface TeamStanding {
   divisionLabel: string;
   points: number;
   gp: number;
+  wins: number;
+  losses: number;
+  ties: number;
 }
 
 interface StandingsData {
@@ -144,11 +147,20 @@ async function fetchAndParseStandings(
       if (rank === 0) return;
 
       const teamName = cellData[teamCellIdx].text;
-      const gp = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
+      const gp     = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
       const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
+      const wins   = parseInt(cellData[teamCellIdx + 3]?.text ?? "", 10);
+      const losses = parseInt(cellData[teamCellIdx + 4]?.text ?? "", 10);
+      const ties   = parseInt(cellData[teamCellIdx + 5]?.text ?? "", 10);
       if (isNaN(gp)) return;
 
-      result.standings.push({ rank, team: teamName, divisionLabel, points, gp });
+      result.standings.push({
+        rank, team: teamName, divisionLabel,
+        points, gp,
+        wins:   isNaN(wins)   ? 0 : wins,
+        losses: isNaN(losses) ? 0 : losses,
+        ties:   isNaN(ties)   ? 0 : ties,
+      });
     });
   } catch (e) {
     result.error = String(e);

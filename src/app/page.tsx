@@ -393,12 +393,12 @@ function ScheduleContent() {
                       <div className="flex-1 flex items-center gap-2 min-w-0">
                         <div className="flex flex-col min-w-0">
                           <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
-                          {(() => { const s = findStanding(match.awayTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 / {s.points}pt</span> : null; })()}
+                          {(() => { const s = findStanding(match.awayTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 {s.wins}勝{s.losses}負{s.ties}引 {s.points}pt</span> : null; })()}
                         </div>
                         <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
                         <div className="flex flex-col min-w-0">
                           <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
-                          {(() => { const s = findStanding(match.homeTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 / {s.points}pt</span> : null; })()}
+                          {(() => { const s = findStanding(match.homeTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 {s.wins}勝{s.losses}負{s.ties}引 {s.points}pt</span> : null; })()}
                         </div>
                       </div>
 
