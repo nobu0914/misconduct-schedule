@@ -79,6 +79,8 @@ async function fetchAndParseStandings(
 
     const $ = cheerio.load(text);
 
+    let inTeamSection = false;
+
     $("tr").each((_, row) => {
       result.rowCount++;
       const tds = $(row).find("td");
@@ -92,13 +94,23 @@ async function fetchAndParseStandings(
         });
       });
 
-      // デバッグ: colspan=2 のセルをすべて記録
-      if (debugMode) {
-        cellData
-          .filter((c) => c.colspan === 2)
-          .forEach((c) => result.colspan2Cells.push(`[${divisionLabel}] "${c.text}"`));
+      const texts = cellData.map((c) => c.text);
+
+      // チームスタンディングのヘッダー行: W（勝）と L（敗）を含む
+      if (texts.includes("W") && texts.includes("L") && texts.includes("GP")) {
+        inTeamSection = true;
+        return;
       }
 
+      // ゴーリー・プレイヤーセクションに入ったら終了 (PIM や Save% が目印)
+      if (texts.includes("Save%") || texts.includes("PIM")) {
+        inTeamSection = false;
+        return;
+      }
+
+      if (!inTeamSection) return;
+
+      // colspan=2 のセルをチーム名として検出（非空・非ヘッダー・非数値）
       const teamCellIdx = cellData.findIndex(
         (c) =>
           c.colspan === 2 &&
@@ -108,6 +120,12 @@ async function fetchAndParseStandings(
       );
       if (teamCellIdx === -1) return;
 
+      // デバッグ: 検出されたチーム名候補を記録
+      if (debugMode) {
+        result.colspan2Cells.push(`[${divisionLabel}] "${cellData[teamCellIdx].text}"`);
+      }
+
+      // チーム名セルより前のセルから順位（整数）を探す
       let rank = 0;
       for (let i = 0; i < teamCellIdx; i++) {
         const n = parseInt(cellData[i].text, 10);
