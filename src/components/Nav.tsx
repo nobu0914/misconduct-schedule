@@ -45,7 +45,7 @@ export default function Nav() {
             </svg>
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white">MHL / CXC API <span className="text-xs font-normal text-gray-500">Ver.1-260331-2100</span></h1>
+            <h1 className="text-xl font-bold text-white">MHL / CXC <span className="text-xs font-normal text-gray-500">Ver.1-260331-2100</span></h1>
             <p className="text-xs text-gray-400">公式サイトの情報を自動表示している非公式ツールです。</p>
           </div>
 
