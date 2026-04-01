@@ -99,6 +99,17 @@ function ScheduleContent() {
     return map;
   }
 
+  // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合
+  function findStanding(scheduleName: string): TeamStanding | undefined {
+    if (!scheduleName) return undefined;
+    // 完全一致
+    if (standings[scheduleName]) return standings[scheduleName];
+    // 括弧内のサブ情報を除いた名前で照合（例: "SAKURA (A)" → "SAKURA"）
+    const baseName = scheduleName.replace(/\s*\(.*?\)\s*/g, "").trim();
+    if (baseName !== scheduleName && standings[baseName]) return standings[baseName];
+    return undefined;
+  }
+
   const refresh = useCallback(async () => {
     const [schedData, stData] = await Promise.all([
       fetch("/api/schedule").then((r) => r.json()),
@@ -382,16 +393,12 @@ function ScheduleContent() {
                       <div className="flex-1 flex items-center gap-2 min-w-0">
                         <div className="flex flex-col min-w-0">
                           <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
-                          {standings[match.awayTeam] && (
-                            <span className="text-xs text-gray-400">{standings[match.awayTeam].rank}位 / {standings[match.awayTeam].points}pt</span>
-                          )}
+                          {(() => { const s = findStanding(match.awayTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 / {s.points}pt</span> : null; })()}
                         </div>
                         <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
                         <div className="flex flex-col min-w-0">
                           <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
-                          {standings[match.homeTeam] && (
-                            <span className="text-xs text-gray-400">{standings[match.homeTeam].rank}位 / {standings[match.homeTeam].points}pt</span>
-                          )}
+                          {(() => { const s = findStanding(match.homeTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 / {s.points}pt</span> : null; })()}
                         </div>
                       </div>
 
