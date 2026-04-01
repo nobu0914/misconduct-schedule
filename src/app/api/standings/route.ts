@@ -17,12 +17,19 @@ interface StandingsData {
   lastUpdated: string;
 }
 
+// 第53シーズン DIVISION RESULT ページに掲載の standings ファイル
+// 未公開ディビジョン（404）は自動スキップされる
+const BASE = "https://misconduct.co.jp/wordpress/wp-content/uploads/";
 const STANDINGS_URLS: { label: string; url: string }[] = [
-  { label: "Gold",     url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-gold.htm" },
-  { label: "Silver",   url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-silver.htm" },
-  { label: "Bronze-A", url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-bronze-a.htm" },
-  { label: "Bronze-B", url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-bronze-b.htm" },
-  { label: "Kid's",    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-kids.htm" },
+  { label: "Platinum",   url: `${BASE}53rd_standings_platinum.htm` },
+  { label: "Gold",       url: `${BASE}53rd_standings_gold.htm` },
+  { label: "Silver",     url: `${BASE}53rd_standings_silver.htm` },
+  { label: "Bronze",     url: `${BASE}53rd_standings_bronze.htm` },
+  { label: "Brass",      url: `${BASE}53rd_standings_brass.htm` },
+  { label: "Copper",     url: `${BASE}53rd_standings_copper.htm` },
+  { label: "Iron",       url: `${BASE}53rd_standings_iron.htm` },
+  { label: "Women Gold", url: `${BASE}53rd_standings_wg.htm` },
+  { label: "35&Over",    url: `${BASE}53rd_standings_35over.htm` },
 ];
 
 function cleanText(text: string): string {
