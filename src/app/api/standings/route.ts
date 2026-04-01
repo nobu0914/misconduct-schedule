@@ -178,22 +178,23 @@ async function fetchAndParseStandings(
       }
 
       // ─── プレイヤーセクション解析 ───
-      // 行構造（raw td）: [0]Rank [1]Name [2]# [3]Team [4]GP [5]G [6]A [7]P [8]PIM
-      // Name・Team は colspan=2 の場合もあるが raw td インデックスは同じ
+      // ヘッダー: [空, -, Name, #, Team, GP, G, A, P, PIM]
+      // データ行: [空, rank, Name, #, Team, GP, G, A, P, PIM]
       if (section === "player") {
-        if (cellData.length < 4) return;
+        if (cellData.length < 5) return;
 
-        const rank = parseInt(cellData[0].text, 10);
-        if (isNaN(rank) || rank <= 0 || String(rank) !== cellData[0].text) return;
+        // rank は index 1（index 0 は空セル）
+        const rank = parseInt(cellData[1].text, 10);
+        if (isNaN(rank) || rank <= 0 || String(rank) !== cellData[1].text) return;
 
-        const jersey = parseInt(cellData[2].text, 10);
+        const jersey = parseInt(cellData[3].text, 10);
         if (isNaN(jersey) || jersey <= 0) return;
 
-        const teamName = cleanText(cellData[3].text);
+        const teamName = cleanText(cellData[4].text);
         if (!teamName || teamName === "Team") return;
 
-        // P列（得点）: [0]Rank [1]Name [2]# [3]Team [4]GP [5]G [6]A [7]P [8]PIM
-        const pts = parseInt(cellData[7]?.text ?? "", 10);
+        // P列（得点）: [0]空 [1]Rank [2]Name [3]# [4]Team [5]GP [6]G [7]A [8]P [9]PIM
+        const pts = parseInt(cellData[8]?.text ?? "", 10);
 
         if (!playersByTeam[teamName]) playersByTeam[teamName] = [];
         playersByTeam[teamName].push({ jersey, points: isNaN(pts) ? 0 : pts });
