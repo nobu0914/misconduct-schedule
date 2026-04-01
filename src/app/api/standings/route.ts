@@ -64,11 +64,18 @@ async function fetchAndParseStandings(
     if (!res.ok) return result;
 
     const buffer = await res.arrayBuffer();
-    const raw = iconv.decode(Buffer.from(buffer), "shift_jis");
+    const buf = Buffer.from(buffer);
 
-    // MHTML 形式（Excel HTML エクスポート）の場合、<html>...</html> 部分のみ抽出
-    const htmlMatch = raw.match(/<html[\s\S]*?<\/html>/i);
-    const text = htmlMatch ? htmlMatch[0] : raw;
+    // BOM を検出してエンコーディングを自動判定
+    // Excel HTML は UTF-16 LE (FF FE) で保存されることが多い
+    let text: string;
+    if (buf[0] === 0xff && buf[1] === 0xfe) {
+      text = iconv.decode(buf, "utf-16le");
+    } else if (buf[0] === 0xfe && buf[1] === 0xff) {
+      text = iconv.decode(buf, "utf-16be");
+    } else {
+      text = iconv.decode(buf, "shift_jis");
+    }
 
     const $ = cheerio.load(text);
 
