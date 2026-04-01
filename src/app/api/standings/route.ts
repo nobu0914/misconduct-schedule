@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 
-// キャッシュを無効化して常に最新データを返す
 export const dynamic = "force-dynamic";
 
 export interface TeamStanding {
@@ -18,8 +17,6 @@ interface StandingsData {
   lastUpdated: string;
 }
 
-// standings ページのリンクを直接参照
-// MHL が新シーズンのファイルに差し替えたら URL を更新すること
 const STANDINGS_URLS: { label: string; url: string }[] = [
   { label: "Gold",     url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-gold.htm" },
   { label: "Silver",   url: "https://misconduct.co.jp/wordpress/wp-content/uploads/2025-3rd-silver.htm" },
@@ -36,24 +33,42 @@ function cleanText(text: string): string {
     .trim();
 }
 
+interface ParseResult {
+  label: string;
+  status: number;
+  rowCount: number;
+  colspan2Cells: string[];
+  standings: TeamStanding[];
+  error?: string;
+}
+
 async function fetchAndParseStandings(
   divisionLabel: string,
-  url: string
-): Promise<TeamStanding[]> {
-  const standings: TeamStanding[] = [];
+  url: string,
+  debugMode: boolean
+): Promise<ParseResult> {
+  const result: ParseResult = {
+    label: divisionLabel,
+    status: 0,
+    rowCount: 0,
+    colspan2Cells: [],
+    standings: [],
+  };
 
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      cache: "no-store",
+      next: { revalidate: 0 },
     });
-    if (!res.ok) return standings;
+    result.status = res.status;
+    if (!res.ok) return result;
 
     const buffer = await res.arrayBuffer();
     const text = iconv.decode(Buffer.from(buffer), "shift_jis");
     const $ = cheerio.load(text);
 
     $("tr").each((_, row) => {
+      result.rowCount++;
       const tds = $(row).find("td");
       if (tds.length === 0) return;
 
@@ -65,8 +80,13 @@ async function fetchAndParseStandings(
         });
       });
 
-      // colspan=2 のセルを探す（チーム名セル）
-      // 非空・非ヘッダー・非数値であること
+      // デバッグ: colspan=2 のセルをすべて記録
+      if (debugMode) {
+        cellData
+          .filter((c) => c.colspan === 2)
+          .forEach((c) => result.colspan2Cells.push(`[${divisionLabel}] "${c.text}"`));
+      }
+
       const teamCellIdx = cellData.findIndex(
         (c) =>
           c.colspan === 2 &&
@@ -76,7 +96,6 @@ async function fetchAndParseStandings(
       );
       if (teamCellIdx === -1) return;
 
-      // チーム名セルより前のセルから順位（整数）を探す
       let rank = 0;
       for (let i = 0; i < teamCellIdx; i++) {
         const n = parseInt(cellData[i].text, 10);
@@ -90,31 +109,48 @@ async function fetchAndParseStandings(
       const teamName = cellData[teamCellIdx].text;
       const gp = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
       const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
-
-      // GP が数値でない場合は不正な行として除外
       if (isNaN(gp)) return;
 
-      standings.push({ rank, team: teamName, divisionLabel, points, gp });
+      result.standings.push({ rank, team: teamName, divisionLabel, points, gp });
     });
   } catch (e) {
-    console.error(`Failed to parse standings for ${divisionLabel} (${url}):`, e);
+    result.error = String(e);
   }
 
-  return standings;
+  return result;
 }
 
-export async function GET(): Promise<NextResponse<StandingsData>> {
-  const allStandings: TeamStanding[] = [];
+export async function GET(req: Request): Promise<NextResponse> {
+  const debugMode = new URL(req.url).searchParams.has("debug");
 
-  await Promise.all(
-    STANDINGS_URLS.map(async ({ label, url }) => {
-      const s = await fetchAndParseStandings(label, url);
-      allStandings.push(...s);
-    })
+  const results = await Promise.all(
+    STANDINGS_URLS.map(({ label, url }) =>
+      fetchAndParseStandings(label, url, debugMode)
+    )
   );
 
+  const allStandings = results.flatMap((r) => r.standings);
+
+  if (debugMode) {
+    return NextResponse.json(
+      {
+        debug: results.map((r) => ({
+          label: r.label,
+          httpStatus: r.status,
+          rowCount: r.rowCount,
+          colspan2Cells: r.colspan2Cells,
+          found: r.standings.length,
+          error: r.error,
+        })),
+        standings: allStandings,
+        lastUpdated: new Date().toISOString(),
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   return NextResponse.json(
-    { standings: allStandings, lastUpdated: new Date().toISOString() },
+    { standings: allStandings, lastUpdated: new Date().toISOString() } satisfies StandingsData,
     { headers: { "Cache-Control": "no-store" } }
   );
 }
