@@ -66,9 +66,11 @@ function ScheduleContent() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
   const [loading, setLoading] = useState(true);
+  const [standingsLoading, setStandingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   // Init filter state from URL params
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>(() => {
@@ -123,6 +125,7 @@ function ScheduleContent() {
     setMatches(schedData.matches ?? []);
     setLastUpdated(schedData.lastUpdated ?? "");
     setStandings(buildStandingsMap(stData.standings ?? []));
+    setStandingsLoading(false);
   }, []);
   const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
@@ -146,10 +149,12 @@ function ScheduleContent() {
         setLastUpdated(schedData.lastUpdated ?? "");
         setStandings(buildStandingsMap(stData.standings ?? []));
         setLoading(false);
+        setStandingsLoading(false);
       })
       .catch(() => {
         setError("データの取得に失敗しました");
         setLoading(false);
+        setStandingsLoading(false);
       });
   }, []);
 
@@ -202,9 +207,95 @@ function ScheduleContent() {
     });
   }
 
+  // 比較モーダル用ヘルパー
+  function TeamCompareCol({ name }: { name: string }) {
+    const s = findStanding(name);
+    return (
+      <div className="flex-1 flex flex-col gap-3 p-4 min-w-0">
+        <p className="text-white font-semibold text-sm truncate">{name || "─"}</p>
+        {standingsLoading ? (
+          <div className="space-y-2">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i} className="h-4 bg-gray-700 rounded animate-pulse" />
+            ))}
+          </div>
+        ) : s ? (
+          <>
+            <div className="text-center">
+              <span className="text-2xl font-bold text-white">{s.rank}</span>
+              <span className="text-gray-400 text-sm ml-1">位</span>
+            </div>
+            <div className="space-y-1 text-sm text-center">
+              <div className="text-gray-300">{s.gp} <span className="text-gray-500">試合</span></div>
+              <div className="text-gray-300">
+                <span className="text-green-400">{s.wins}勝</span>
+                <span className="text-red-400 ml-1">{s.losses}負</span>
+                <span className="text-gray-400 ml-1">{s.ties}引</span>
+              </div>
+              <div>
+                <span className="text-blue-400 font-semibold">{s.points}</span>
+                <span className="text-gray-500 text-xs ml-1">pt</span>
+              </div>
+            </div>
+            {s.topScorers.length > 0 && (
+              <div className="mt-1 pt-3 border-t border-gray-800">
+                <p className="text-xs text-gray-500 mb-1.5 text-center">得点上位</p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {s.topScorers.map((n, i) => (
+                    <span key={i} className="bg-gray-700 text-gray-200 text-xs px-2 py-0.5 rounded font-mono">
+                      #{n}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-gray-600 text-xs text-center">データなし</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
+
+      {/* 比較モーダル */}
+      {selectedMatch && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setSelectedMatch(null)} />
+          <div className="relative w-full sm:max-w-lg bg-gray-900 rounded-t-2xl sm:rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+              <div className="flex items-center gap-2">
+                {selectedMatch.division && (
+                  <span className={`${getDivisionColor(selectedMatch.division)} text-white text-xs px-2 py-0.5 rounded-full font-medium`}>
+                    {selectedMatch.division}
+                  </span>
+                )}
+                <span className="text-gray-400 text-xs">
+                  {formatDate(selectedMatch.date).display}&nbsp;{selectedMatch.timeStart}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedMatch(null)}
+                className="text-gray-400 hover:text-white transition-colors p-1"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* 比較エリア */}
+            <div className="flex divide-x divide-gray-800">
+              <TeamCompareCol name={selectedMatch.awayTeam} />
+              <div className="flex items-center justify-center px-2 text-gray-600 text-xs font-bold self-stretch">vs</div>
+              <TeamCompareCol name={selectedMatch.homeTeam} />
+            </div>
+          </div>
+        </div>
+      )}
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
           <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
@@ -364,7 +455,8 @@ function ScheduleContent() {
                 {dateMatches.map((match, i) => (
                   <div
                     key={`${date}-${i}`}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors"
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors cursor-pointer active:bg-gray-800"
+                    onClick={() => setSelectedMatch(match)}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                       <div className="flex items-center gap-3">

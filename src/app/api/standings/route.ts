@@ -13,6 +13,7 @@ export interface TeamStanding {
   wins: number;
   losses: number;
   ties: number;
+  topScorers: number[]; // 得点上位3名の背番号
 }
 
 interface StandingsData {
@@ -76,8 +77,6 @@ async function fetchAndParseStandings(
     const buffer = await res.arrayBuffer();
     const buf = Buffer.from(buffer);
 
-    // BOM を検出してエンコーディングを自動判定
-    // Excel HTML は UTF-16 LE (FF FE) で保存されることが多い
     let text: string;
     if (buf[0] === 0xff && buf[1] === 0xfe) {
       text = iconv.decode(buf, "utf-16le");
@@ -89,7 +88,12 @@ async function fetchAndParseStandings(
 
     const $ = cheerio.load(text);
 
-    let inTeamSection = false;
+    // セクションフラグ
+    type Section = "none" | "team" | "goalie" | "player";
+    let section: Section = "none";
+
+    // チームごとの得点上位背番号（プレイヤーセクションで収集）
+    const playersByTeam: Record<string, number[]> = {};
 
     $("tr").each((_, row) => {
       result.rowCount++;
@@ -103,65 +107,99 @@ async function fetchAndParseStandings(
           colspan: parseInt($(td).attr("colspan") ?? "1", 10),
         });
       });
-
       const texts = cellData.map((c) => c.text);
 
-      // チームスタンディングのヘッダー行: W（勝）と L（敗）を含む
+      // ─── セクション判定 ───
+      // チームセクション: W・L・GP を含むヘッダー
       if (texts.includes("W") && texts.includes("L") && texts.includes("GP")) {
-        inTeamSection = true;
+        section = "team";
+        return;
+      }
+      // ゴーリーセクション: Save% または SOG を含むヘッダー
+      if (texts.includes("Save%") || texts.includes("SOG")) {
+        section = "goalie";
+        return;
+      }
+      // プレイヤーセクション: G・A・P・PIM を含むがSave%を含まないヘッダー
+      if (texts.includes("PIM") && texts.includes("G") && texts.includes("A") && !texts.includes("Save%")) {
+        section = "player";
         return;
       }
 
-      // ゴーリー・プレイヤーセクションに入ったら終了 (PIM や Save% が目印)
-      if (texts.includes("Save%") || texts.includes("PIM")) {
-        inTeamSection = false;
+      // ─── チームセクション解析 ───
+      if (section === "team") {
+        const teamCellIdx = cellData.findIndex(
+          (c) =>
+            c.colspan === 2 &&
+            c.text !== "" &&
+            c.text !== "Team" &&
+            !/^[\d\s\-\+]+$/.test(c.text)
+        );
+        if (teamCellIdx === -1) return;
+
+        if (debugMode) {
+          result.colspan2Cells.push(`[${divisionLabel}] "${cellData[teamCellIdx].text}"`);
+        }
+
+        let rank = 0;
+        for (let i = 0; i < teamCellIdx; i++) {
+          const n = parseInt(cellData[i].text, 10);
+          if (!isNaN(n) && n > 0 && String(n) === cellData[i].text) {
+            rank = n;
+            break;
+          }
+        }
+        if (rank === 0) return;
+
+        const teamName = cellData[teamCellIdx].text;
+        const gp     = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
+        const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
+        const wins   = parseInt(cellData[teamCellIdx + 3]?.text ?? "", 10);
+        const losses = parseInt(cellData[teamCellIdx + 4]?.text ?? "", 10);
+        const ties   = parseInt(cellData[teamCellIdx + 5]?.text ?? "", 10);
+        if (isNaN(gp)) return;
+
+        result.standings.push({
+          rank, team: teamName, divisionLabel,
+          points, gp,
+          wins:   isNaN(wins)   ? 0 : wins,
+          losses: isNaN(losses) ? 0 : losses,
+          ties:   isNaN(ties)   ? 0 : ties,
+          topScorers: [], // 後で埋める
+        });
         return;
       }
 
-      if (!inTeamSection) return;
+      // ─── プレイヤーセクション解析 ───
+      // 行構造（raw td）: [0]Rank [1]Name [2]# [3]Team [4]GP [5]G [6]A [7]P [8]PIM
+      // Name・Team は colspan=2 の場合もあるが raw td インデックスは同じ
+      if (section === "player") {
+        if (cellData.length < 4) return;
 
-      // colspan=2 のセルをチーム名として検出（非空・非ヘッダー・非数値）
-      const teamCellIdx = cellData.findIndex(
-        (c) =>
-          c.colspan === 2 &&
-          c.text !== "" &&
-          c.text !== "Team" &&
-          !/^[\d\s\-\+]+$/.test(c.text)
-      );
-      if (teamCellIdx === -1) return;
+        const rank = parseInt(cellData[0].text, 10);
+        if (isNaN(rank) || rank <= 0 || String(rank) !== cellData[0].text) return;
 
-      // デバッグ: 検出されたチーム名候補を記録
-      if (debugMode) {
-        result.colspan2Cells.push(`[${divisionLabel}] "${cellData[teamCellIdx].text}"`);
-      }
+        const jersey = parseInt(cellData[2].text, 10);
+        if (isNaN(jersey) || jersey <= 0) return;
 
-      // チーム名セルより前のセルから順位（整数）を探す
-      let rank = 0;
-      for (let i = 0; i < teamCellIdx; i++) {
-        const n = parseInt(cellData[i].text, 10);
-        if (!isNaN(n) && n > 0 && String(n) === cellData[i].text) {
-          rank = n;
-          break;
+        const teamName = cleanText(cellData[3].text);
+        if (!teamName || teamName === "Team") return;
+
+        if (!playersByTeam[teamName]) playersByTeam[teamName] = [];
+        if (playersByTeam[teamName].length < 3) {
+          playersByTeam[teamName].push(jersey);
         }
       }
-      if (rank === 0) return;
-
-      const teamName = cellData[teamCellIdx].text;
-      const gp     = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
-      const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
-      const wins   = parseInt(cellData[teamCellIdx + 3]?.text ?? "", 10);
-      const losses = parseInt(cellData[teamCellIdx + 4]?.text ?? "", 10);
-      const ties   = parseInt(cellData[teamCellIdx + 5]?.text ?? "", 10);
-      if (isNaN(gp)) return;
-
-      result.standings.push({
-        rank, team: teamName, divisionLabel,
-        points, gp,
-        wins:   isNaN(wins)   ? 0 : wins,
-        losses: isNaN(losses) ? 0 : losses,
-        ties:   isNaN(ties)   ? 0 : ties,
-      });
     });
+
+    // 各チームの topScorers を設定（大文字小文字を無視して照合）
+    for (const standing of result.standings) {
+      const key = Object.keys(playersByTeam).find(
+        (k) => k.toLowerCase() === standing.team.toLowerCase()
+      );
+      standing.topScorers = key ? playersByTeam[key] : [];
+    }
+
   } catch (e) {
     result.error = String(e);
   }
@@ -181,20 +219,18 @@ export async function GET(req: Request): Promise<NextResponse> {
   const allStandings = results.flatMap((r) => r.standings);
 
   if (debugMode) {
-    return NextResponse.json(
-      {
-        debug: results.map((r) => ({
-          label: r.label,
-          httpStatus: r.status,
-          rowCount: r.rowCount,
-          colspan2Cells: r.colspan2Cells,
-          found: r.standings.length,
-          error: r.error,
-        })),
-        standings: allStandings,
-        lastUpdated: new Date().toISOString(),
-      }
-    );
+    return NextResponse.json({
+      debug: results.map((r) => ({
+        label: r.label,
+        httpStatus: r.status,
+        rowCount: r.rowCount,
+        colspan2Cells: r.colspan2Cells,
+        found: r.standings.length,
+        error: r.error,
+      })),
+      standings: allStandings,
+      lastUpdated: new Date().toISOString(),
+    });
   }
 
   return NextResponse.json(
