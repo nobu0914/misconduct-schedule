@@ -92,8 +92,8 @@ async function fetchAndParseStandings(
     type Section = "none" | "team" | "goalie" | "player";
     let section: Section = "none";
 
-    // チームごとの得点上位背番号（プレイヤーセクションで収集）
-    const playersByTeam: Record<string, number[]> = {};
+    // チームごとの選手データ（プレイヤーセクションで収集）
+    const playersByTeam: Record<string, { jersey: number; points: number }[]> = {};
 
     $("tr").each((_, row) => {
       result.rowCount++;
@@ -185,19 +185,25 @@ async function fetchAndParseStandings(
         const teamName = cleanText(cellData[3].text);
         if (!teamName || teamName === "Team") return;
 
+        // P列（得点）: [0]Rank [1]Name [2]# [3]Team [4]GP [5]G [6]A [7]P [8]PIM
+        const pts = parseInt(cellData[7]?.text ?? "", 10);
+
         if (!playersByTeam[teamName]) playersByTeam[teamName] = [];
-        if (playersByTeam[teamName].length < 3) {
-          playersByTeam[teamName].push(jersey);
-        }
+        playersByTeam[teamName].push({ jersey, points: isNaN(pts) ? 0 : pts });
       }
     });
 
-    // 各チームの topScorers を設定（大文字小文字を無視して照合）
+    // 各チームの topScorers を設定（チーム内得点順上位3名・大文字小文字を無視して照合）
     for (const standing of result.standings) {
       const key = Object.keys(playersByTeam).find(
         (k) => k.toLowerCase() === standing.team.toLowerCase()
       );
-      standing.topScorers = key ? playersByTeam[key] : [];
+      standing.topScorers = key
+        ? playersByTeam[key]
+            .sort((a, b) => b.points - a.points)
+            .slice(0, 3)
+            .map((p) => p.jersey)
+        : [];
     }
 
   } catch (e) {
