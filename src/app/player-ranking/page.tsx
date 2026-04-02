@@ -46,11 +46,11 @@ function PlayerRankingContent() {
       .catch(() => setLoading(false));
   }, []);
 
-  // 前シーズンの同名選手を検索（名前一致）
-  function findPrevPlayer(name: string): PrevPlayerStat | undefined {
+  // 前シーズンの同名・同ディビジョン選手を検索
+  function findPrevPlayer(name: string, divisionLabel: string): PrevPlayerStat | undefined {
     if (!name) return undefined;
     const nameLower = name.toLowerCase();
-    return prevPlayers.find((p) => p.name.toLowerCase() === nameLower);
+    return prevPlayers.find((p) => p.name.toLowerCase() === nameLower && p.divisionLabel === divisionLabel);
   }
 
   useEffect(() => {
@@ -202,16 +202,13 @@ function PlayerRankingContent() {
 
                   {/* 前シーズン（52nd）成績 */}
                   {(() => {
-                    const prev = findPrevPlayer(p.name);
+                    const prev = findPrevPlayer(p.name, p.divisionLabel);
                     if (!prev) return null;
                     const pointsDiff = p.points - prev.points;
                     const rankDiff = prev.divisionRank - p.divisionRank; // 正=順位上昇
                     return (
                       <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400 text-xs">前シーズン（52nd）</span>
-                          <span className="text-gray-500 text-xs">{prev.divisionLabel}</span>
-                        </div>
+                        <p className="text-gray-400 text-xs">前シーズン（52nd）</p>
                         <div className="w-full border border-gray-700 rounded-lg overflow-hidden">
                           <table className="w-full text-sm">
                             <thead>
@@ -235,7 +232,7 @@ function PlayerRankingContent() {
                         </div>
                         {/* 前シーズン比較 */}
                         <div className="flex items-center gap-3 text-xs">
-                          {p.divisionLabel === prev.divisionLabel && rankDiff !== 0 && (
+                          {rankDiff !== 0 && (
                             <span className={rankDiff > 0 ? "text-green-400" : "text-red-400"}>
                               順位 {rankDiff > 0 ? `↑${rankDiff}` : `↓${Math.abs(rankDiff)}`}
                             </span>
@@ -243,9 +240,6 @@ function PlayerRankingContent() {
                           <span className={pointsDiff > 0 ? "text-green-400" : pointsDiff < 0 ? "text-red-400" : "text-gray-500"}>
                             得点 {pointsDiff > 0 ? "+" : ""}{pointsDiff}
                           </span>
-                          {p.divisionLabel !== prev.divisionLabel && (
-                            <span className="text-blue-400">{prev.divisionLabel} → {p.divisionLabel}</span>
-                          )}
                         </div>
                       </div>
                     );
