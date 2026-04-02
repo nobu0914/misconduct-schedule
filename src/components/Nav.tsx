@@ -30,9 +30,9 @@ export default function Nav() {
 
   const links = [
     { href: "/", label: "ゲーム情報", badge: false },
-    { href: "/player-ranking", label: "個人ランク検索", badge: false },
-    { href: "/rental", label: "レンタル情報", badge: false },
-    { href: "/events", label: "イベント情報", badge: hasNewEvents },
+    { href: "/player-ranking", label: "ランク検索", badge: false },
+    { href: "/rental", label: "リンク予定", badge: false },
+    { href: "/events", label: "イベント", badge: hasNewEvents },
   ];
 
   return (
@@ -46,7 +46,7 @@ export default function Nav() {
             </svg>
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white">MHL / CXC <span className="text-xs font-normal text-gray-500">Ver.1-260402-1301</span></h1>
+            <h1 className="text-xl font-bold text-white">MHL / CXC <span className="text-xs font-normal text-gray-500">Ver.1-260402-1541</span></h1>
             <p className="text-xs text-gray-400">公式サイトの情報を自動表示している非公式ツールです。</p>
           </div>
 
