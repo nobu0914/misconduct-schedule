@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlayerStat } from "../api/player-stats/route";
+import type { PrevPlayerStat } from "../api/prev-season-players/route";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -28,15 +29,29 @@ function PlayerRankingContent() {
   const searchParams = useSearchParams();
 
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  const [prevPlayers, setPrevPlayers] = useState<PrevPlayerStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   useEffect(() => {
-    fetch("/api/player-stats")
-      .then((r) => r.json())
-      .then((d) => { setPlayers(d.players ?? []); setLoading(false); })
+    Promise.all([
+      fetch("/api/player-stats").then((r) => r.json()),
+      fetch("/api/prev-season-players").then((r) => r.json()).catch(() => ({ players: [] })),
+    ])
+      .then(([d, prev]) => {
+        setPlayers(d.players ?? []);
+        setPrevPlayers(prev.players ?? []);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
+
+  // 前シーズンの同名選手を検索（名前一致）
+  function findPrevPlayer(name: string): PrevPlayerStat | undefined {
+    if (!name) return undefined;
+    const nameLower = name.toLowerCase();
+    return prevPlayers.find((p) => p.name.toLowerCase() === nameLower);
+  }
 
   useEffect(() => {
     const qs = query ? `?q=${encodeURIComponent(query)}` : "";
@@ -184,6 +199,57 @@ function PlayerRankingContent() {
                       </div>
                     ) : null}
                   </div>
+
+                  {/* 前シーズン（52nd）成績 */}
+                  {(() => {
+                    const prev = findPrevPlayer(p.name);
+                    if (!prev) return null;
+                    const pointsDiff = p.points - prev.points;
+                    const rankDiff = prev.divisionRank - p.divisionRank; // 正=順位上昇
+                    return (
+                      <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400 text-xs">前シーズン（52nd）</span>
+                          <span className="text-gray-500 text-xs">{prev.divisionLabel}</span>
+                        </div>
+                        <div className="w-full border border-gray-700 rounded-lg overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-800">
+                                {["順位", "GP", "G", "A", "P", "PIM"].map((h) => (
+                                  <th key={h} className="py-1 text-center text-xs text-gray-500 font-medium">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="py-1.5 text-center text-gray-300 font-semibold text-xs">{prev.divisionRank}位</td>
+                                <td className="py-1.5 text-center text-gray-400 text-xs">{prev.gp}</td>
+                                <td className="py-1.5 text-center text-gray-400 text-xs">{prev.goals}</td>
+                                <td className="py-1.5 text-center text-gray-400 text-xs">{prev.assists}</td>
+                                <td className="py-1.5 text-center text-gray-300 font-semibold text-xs">{prev.points}</td>
+                                <td className="py-1.5 text-center text-gray-500 text-xs">{prev.pim}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        {/* 前シーズン比較 */}
+                        <div className="flex items-center gap-3 text-xs">
+                          {p.divisionLabel === prev.divisionLabel && rankDiff !== 0 && (
+                            <span className={rankDiff > 0 ? "text-green-400" : "text-red-400"}>
+                              順位 {rankDiff > 0 ? `↑${rankDiff}` : `↓${Math.abs(rankDiff)}`}
+                            </span>
+                          )}
+                          <span className={pointsDiff > 0 ? "text-green-400" : pointsDiff < 0 ? "text-red-400" : "text-gray-500"}>
+                            得点 {pointsDiff > 0 ? "+" : ""}{pointsDiff}
+                          </span>
+                          {p.divisionLabel !== prev.divisionLabel && (
+                            <span className="text-blue-400">{prev.divisionLabel} → {p.divisionLabel}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* 公式ランキングリンク */}
                   <div className="flex justify-end">

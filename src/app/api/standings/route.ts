@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { kv } from "@vercel/kv";
 
-export const revalidate = 259200; // 3日（72時間）
+export const revalidate = 172800; // 2日（48時間）
 
 export interface TeamStanding {
   rank: number;
