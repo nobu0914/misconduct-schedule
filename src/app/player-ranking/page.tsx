@@ -193,7 +193,7 @@ function PlayerRankingContent() {
                     ) : directlyAbove ? (
                       <div className="space-y-1 text-xs text-gray-400">
                         <p>上位の<span className="text-white mx-1">{directlyAbove.name}</span>との差：<span className="text-orange-400 font-semibold ml-1">+{gap}点</span></p>
-                        <p className="text-gray-500">あと<span className="text-white mx-1">{gap + 1}ポイント</span>で追い抜き可能</p>
+                        <p className="text-gray-500">あと<span className="text-white mx-1">{gap + 1}ゴール</span>または<span className="text-white mx-1">{gap + 1}アシスト</span>で追い抜き可能</p>
                       </div>
                     ) : null}
                   </div>
