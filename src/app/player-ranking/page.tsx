@@ -24,6 +24,8 @@ function getDivisionColor(division: string): string {
   return "bg-gray-500";
 }
 
+type SeasonMode = "current" | "prev";
+
 function PlayerRankingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,6 +34,7 @@ function PlayerRankingContent() {
   const [prevPlayers, setPrevPlayers] = useState<PrevPlayerStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [season, setSeason] = useState<SeasonMode>(() => (searchParams.get("season") === "prev" ? "prev" : "current"));
 
   useEffect(() => {
     Promise.all([
@@ -54,15 +57,29 @@ function PlayerRankingContent() {
   }
 
   useEffect(() => {
-    const qs = query ? `?q=${encodeURIComponent(query)}` : "";
-    router.replace(`/player-ranking${qs}`, { scroll: false });
-  }, [query, router]);
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (season === "prev") params.set("season", "prev");
+    const qs = params.toString();
+    router.replace(`/player-ranking${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [query, season, router]);
 
-  const results = useMemo(() => {
+  // 今シーズン検索結果
+  const currentResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.trim().toLowerCase();
     return players.filter((p) => p.name.toLowerCase().includes(q));
   }, [players, query]);
+
+  // 昨シーズン検索結果
+  const prevResults = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.trim().toLowerCase();
+    return prevPlayers.filter((p) => p.name.toLowerCase().includes(q));
+  }, [prevPlayers, query]);
+
+  const results = season === "current" ? currentResults : prevResults;
+  const noResults = !loading && query.trim() && results.length === 0;
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -78,6 +95,30 @@ function PlayerRankingContent() {
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-base"
         />
 
+        {/* シーズン切り替え */}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => setSeason("current")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              season === "current"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 border border-gray-700"
+            }`}
+          >
+            今シーズン（53rd）
+          </button>
+          <button
+            onClick={() => setSeason("prev")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              season === "prev"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 border border-gray-700"
+            }`}
+          >
+            昨シーズン（52nd）
+          </button>
+        </div>
+
         {loading && (
           <div className="flex items-center justify-center py-16 gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
@@ -85,7 +126,7 @@ function PlayerRankingContent() {
           </div>
         )}
 
-        {!loading && query.trim() && results.length === 0 && (
+        {noResults && (
           <p className="text-center py-12 text-gray-500">「{query}」に一致する選手が見つかりません</p>
         )}
 
@@ -94,21 +135,15 @@ function PlayerRankingContent() {
         )}
 
         <div className="mt-4 space-y-4">
-          {results.map((p, i) => {
-            // ディビジョン内で自分より得点が多い選手の中で最低得点の選手を探す
-            const divisionPlayers = players.filter(
-              (x) => x.divisionLabel === p.divisionLabel
-            );
+          {season === "current" && currentResults.map((p, i) => {
+            const divisionPlayers = players.filter((x) => x.divisionLabel === p.divisionLabel);
             const abovePlayers = divisionPlayers
               .filter((x) => x.points > p.points)
-              .sort((a, b) => a.points - b.points); // 昇順（一番近い上位者が先頭）
+              .sort((a, b) => a.points - b.points);
             const directlyAbove = abovePlayers[0] ?? null;
             const gap = directlyAbove ? directlyAbove.points - p.points : 0;
 
-            // チーム内での自分より上位の選手
-            const teamPlayers = players.filter(
-              (x) => x.team === p.team && x.divisionLabel === p.divisionLabel
-            );
+            const teamPlayers = players.filter((x) => x.team === p.team && x.divisionLabel === p.divisionLabel);
             const aboveInTeam = teamPlayers
               .filter((x) => x.points > p.points)
               .sort((a, b) => a.points - b.points);
@@ -117,7 +152,6 @@ function PlayerRankingContent() {
 
             return (
               <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                {/* ヘッダー */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800">
                   <span className={`${getDivisionColor(p.divisionLabel)} text-white text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0`}>
                     {p.divisionLabel}
@@ -128,7 +162,6 @@ function PlayerRankingContent() {
                 </div>
 
                 <div className="px-4 py-3 space-y-3">
-                  {/* 成績テーブル */}
                   <div className="w-full border border-gray-700 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
@@ -150,52 +183,32 @@ function PlayerRankingContent() {
                     </table>
                   </div>
 
-                  {/* ディビジョンランキング */}
                   <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400 text-xs">ディビジョン内順位</span>
                       <span className="text-white font-bold text-lg">{p.divisionRank}<span className="text-gray-400 text-sm font-normal">位</span></span>
                     </div>
-
                     {p.divisionRank === 1 ? (
                       <p className="text-yellow-400 text-xs">ディビジョン得点1位</p>
                     ) : directlyAbove ? (
                       <div className="space-y-1 text-xs text-gray-400">
-                        <p>
-                          上位の
-                          <span className="text-white mx-1">{directlyAbove.name}</span>
-                          との差：
-                          <span className="text-orange-400 font-semibold ml-1">+{gap}点</span>
-                        </p>
-                        <p className="text-gray-500">
-                          あと<span className="text-white mx-1">{gap + 1}ゴール</span>または
-                          <span className="text-white mx-1">{gap + 1}アシスト</span>で追い抜き可能
-                        </p>
+                        <p>上位の<span className="text-white mx-1">{directlyAbove.name}</span>との差：<span className="text-orange-400 font-semibold ml-1">+{gap}点</span></p>
+                        <p className="text-gray-500">あと<span className="text-white mx-1">{gap + 1}ゴール</span>または<span className="text-white mx-1">{gap + 1}アシスト</span>で追い抜き可能</p>
                       </div>
                     ) : null}
                   </div>
 
-                  {/* チーム内ランキング */}
                   <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400 text-xs">チーム内順位</span>
                       <span className="text-white font-bold text-lg">{p.teamRank}<span className="text-gray-400 text-sm font-normal">位</span></span>
                     </div>
-
                     {p.teamRank === 1 ? (
                       <p className="text-yellow-400 text-xs">チーム得点1位</p>
                     ) : directlyAboveInTeam ? (
                       <div className="space-y-1 text-xs text-gray-400">
-                        <p>
-                          上位の
-                          <span className="text-white mx-1">{directlyAboveInTeam.name}</span>
-                          との差：
-                          <span className="text-orange-400 font-semibold ml-1">+{teamGap}点</span>
-                        </p>
-                        <p className="text-gray-500">
-                          あと<span className="text-white mx-1">{teamGap + 1}ゴール</span>または
-                          <span className="text-white mx-1">{teamGap + 1}アシスト</span>で追い抜き可能
-                        </p>
+                        <p>上位の<span className="text-white mx-1">{directlyAboveInTeam.name}</span>との差：<span className="text-orange-400 font-semibold ml-1">+{teamGap}点</span></p>
+                        <p className="text-gray-500">あと<span className="text-white mx-1">{teamGap + 1}ゴール</span>または<span className="text-white mx-1">{teamGap + 1}アシスト</span>で追い抜き可能</p>
                       </div>
                     ) : null}
                   </div>
@@ -205,7 +218,7 @@ function PlayerRankingContent() {
                     const prev = findPrevPlayer(p.name, p.divisionLabel);
                     if (!prev) return null;
                     const pointsDiff = p.points - prev.points;
-                    const rankDiff = prev.divisionRank - p.divisionRank; // 正=順位上昇
+                    const rankDiff = prev.divisionRank - p.divisionRank;
                     return (
                       <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
                         <p className="text-gray-400 text-xs">前シーズン（52nd）</p>
@@ -230,7 +243,6 @@ function PlayerRankingContent() {
                             </tbody>
                           </table>
                         </div>
-                        {/* 前シーズン比較 */}
                         <div className="flex items-center gap-3 text-xs">
                           {rankDiff !== 0 && (
                             <span className={rankDiff > 0 ? "text-green-400" : "text-red-400"}>
@@ -245,14 +257,8 @@ function PlayerRankingContent() {
                     );
                   })()}
 
-                  {/* 公式ランキングリンク */}
                   <div className="flex justify-end">
-                    <a
-                      href={p.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                    >
+                    <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
                       全体ランキング（公式）
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -263,6 +269,49 @@ function PlayerRankingContent() {
               </div>
             );
           })}
+
+          {season === "prev" && prevResults.map((p, i) => (
+            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800">
+                <span className={`${getDivisionColor(p.divisionLabel)} text-white text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0`}>
+                  {p.divisionLabel}
+                </span>
+                <span className="text-white font-semibold">{p.name}</span>
+                <span className="text-gray-500 text-sm">#{p.jersey}</span>
+                <span className="text-gray-500 text-sm truncate">{p.team}</span>
+              </div>
+
+              <div className="px-4 py-3 space-y-3">
+                <div className="w-full border border-gray-700 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-800">
+                        {["GP", "G", "A", "P", "PIM"].map((h) => (
+                          <th key={h} className="py-1.5 text-center text-xs text-gray-400 font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-2 text-center text-white font-semibold">{p.gp}</td>
+                        <td className="py-2 text-center text-green-400 font-semibold">{p.goals}</td>
+                        <td className="py-2 text-center text-blue-400 font-semibold">{p.assists}</td>
+                        <td className="py-2 text-center text-white font-bold text-base">{p.points}</td>
+                        <td className="py-2 text-center text-gray-400 font-semibold">{p.pim}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-xs">ディビジョン内順位</span>
+                    <span className="text-white font-bold text-lg">{p.divisionRank}<span className="text-gray-400 text-sm font-normal">位</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
