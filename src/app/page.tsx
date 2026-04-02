@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Match } from "./api/schedule/route";
 import type { TeamStanding } from "./api/standings/route";
+import type { PrevSeasonEntry } from "./api/prev-season/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
@@ -59,18 +60,37 @@ const DIVISION_ORDER = [
   "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "35&Over",
 ];
 
+interface SavedFilter {
+  id: string;
+  label: string;
+  divisions: string[];
+  month: string;
+  query: string;
+  upcomingOnly: boolean;
+}
+
+// チーム名から括弧内のベンチ記号を分離する
+// 例: "Dark Sales (B)" → { base: "Dark Sales", bench: "B" }
+function parseTeamName(name: string): { base: string; bench: string | null } {
+  const m = name.match(/^(.*?)\s*\(([A-Z])\)\s*$/);
+  if (m) return { base: m[1].trim(), bench: m[2] };
+  return { base: name, bench: null };
+}
+
 function ScheduleContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
+  const [prevSeason, setPrevSeason] = useState<Record<string, PrevSeasonEntry>>({});
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [favorites, setFavorites] = useState<SavedFilter[]>([]);
 
   // Init filter state from URL params
   const [selectedDivisions, setSelectedDivisions] = useState<string[]>(() => {
@@ -95,10 +115,65 @@ function ScheduleContent() {
     router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }, [selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery, router]);
 
+  // Load favorites from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("schedule_favorites");
+      if (saved) setFavorites(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  function saveFavorite() {
+    const rawLabel = searchQuery || selectedDivisions.join(", ") || (selectedMonth !== "ALL" ? selectedMonth : "お気に入り");
+    const newFav: SavedFilter = {
+      id: Date.now().toString(),
+      label: rawLabel.slice(0, 16),
+      divisions: selectedDivisions,
+      month: selectedMonth,
+      query: searchQuery,
+      upcomingOnly: showUpcomingOnly,
+    };
+    const updated = [...favorites, newFav];
+    setFavorites(updated);
+    localStorage.setItem("schedule_favorites", JSON.stringify(updated));
+  }
+
+  function deleteFavorite(id: string) {
+    const updated = favorites.filter((f) => f.id !== id);
+    setFavorites(updated);
+    localStorage.setItem("schedule_favorites", JSON.stringify(updated));
+  }
+
+  function applyFavorite(f: SavedFilter) {
+    setSelectedDivisions(f.divisions);
+    setSelectedMonth(f.month);
+    setSearchQuery(f.query);
+    setShowUpcomingOnly(f.upcomingOnly);
+  }
+
   function buildStandingsMap(list: TeamStanding[]): Record<string, TeamStanding> {
     const map: Record<string, TeamStanding> = {};
     for (const s of list) map[s.team] = s;
     return map;
+  }
+
+  function buildPrevSeasonMap(list: PrevSeasonEntry[]): Record<string, PrevSeasonEntry> {
+    const map: Record<string, PrevSeasonEntry> = {};
+    for (const s of list) map[s.team] = s;
+    return map;
+  }
+
+  // 52ndシーズンデータとの照合（大文字小文字・括弧を無視）
+  function findPrevSeason(scheduleName: string): PrevSeasonEntry | undefined {
+    if (!scheduleName) return undefined;
+    const { base } = parseTeamName(scheduleName);
+    if (prevSeason[base]) return prevSeason[base];
+    if (base !== scheduleName && prevSeason[scheduleName]) return prevSeason[scheduleName];
+    const baseLower = base.toLowerCase();
+    for (const val of Object.values(prevSeason)) {
+      if (val.team.toLowerCase() === baseLower) return val;
+    }
+    return undefined;
   }
 
   // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合
@@ -127,6 +202,7 @@ function ScheduleContent() {
     setStandings(buildStandingsMap(stData.standings ?? []));
     setStandingsLoading(false);
   }, []);
+
   const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
   useEffect(() => {
@@ -143,11 +219,13 @@ function ScheduleContent() {
     Promise.all([
       fetch("/api/schedule").then((r) => r.json()),
       fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
+      fetch("/api/prev-season").then((r) => r.json()).catch(() => ({ data: [] })),
     ])
-      .then(([schedData, stData]) => {
+      .then(([schedData, stData, prevData]) => {
         setMatches(schedData.matches ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
         setStandings(buildStandingsMap(stData.standings ?? []));
+        setPrevSeason(buildPrevSeasonMap(prevData.data ?? []));
         setLoading(false);
         setStandingsLoading(false);
       })
@@ -208,11 +286,18 @@ function ScheduleContent() {
   }
 
   // 比較モーダル用ヘルパー
-  function TeamCompareCol({ name }: { name: string }) {
+  function TeamCompareCol({ name, role }: { name: string; role: "away" | "home" }) {
     const s = findStanding(name);
+    const { base, bench } = parseTeamName(name);
     return (
       <div className="flex-1 flex flex-col gap-3 p-4 min-w-0">
-        <p className="text-white font-semibold text-sm truncate">{name || "─"}</p>
+        <div>
+          <p className={`text-xs font-medium mb-0.5 ${role === "away" ? "text-blue-400" : "text-orange-400"}`}>
+            {role === "away" ? "Away" : "Home"}
+            {bench && <span className="text-gray-500 font-normal ml-1.5">ベンチ: {bench}</span>}
+          </p>
+          <p className="text-white font-semibold text-sm truncate">{base || "─"}</p>
+        </div>
         {standingsLoading ? (
           <div className="space-y-2">
             {[1,2,3,4,5].map((i) => (
@@ -221,10 +306,15 @@ function ScheduleContent() {
           </div>
         ) : s ? (
           <>
-            <div className="text-center">
+            <div className="text-center flex items-baseline justify-center gap-1">
               <span className="text-2xl font-bold text-white">{s.rank}</span>
               <span className="text-gray-400 text-sm">位</span>
-              <span className="text-gray-500 text-xs ml-1">（{s.gp}試合）</span>
+              <span className="text-gray-500 text-xs">（{s.gp}試合）</span>
+              {s.rankChange !== 0 && (
+                <span className={`text-xs font-medium ${s.rankChange > 0 ? "text-green-400" : "text-red-400"}`}>
+                  {s.rankChange > 0 ? `↑${s.rankChange}` : `↓${Math.abs(s.rankChange)}`}
+                </span>
+              )}
             </div>
             <div className="flex justify-center items-center gap-2 text-sm">
               <span className="text-green-400">{s.wins}勝</span>
@@ -250,6 +340,26 @@ function ScheduleContent() {
         ) : (
           <p className="text-gray-600 text-xs text-center">データなし</p>
         )}
+        {/* 前シーズン（52nd）情報 */}
+        {(() => {
+          const p = findPrevSeason(name);
+          if (!p) return null;
+          return (
+            <div className="pt-3 border-t border-gray-800">
+              <p className="text-xs text-gray-500 mb-1.5 text-center">前シーズン（52nd）</p>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-base font-bold text-gray-300">{p.rank}位</span>
+                <span className="text-gray-600 text-xs">/ {p.totalTeams}チーム</span>
+                {p.rank === 1 && (
+                  <span className="bg-yellow-600/30 text-yellow-300 text-xs px-1.5 py-0.5 rounded font-medium">優勝</span>
+                )}
+                {p.rank === 2 && (
+                  <span className="bg-gray-600/40 text-gray-300 text-xs px-1.5 py-0.5 rounded font-medium">準優勝</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   }
@@ -286,9 +396,9 @@ function ScheduleContent() {
             </div>
             {/* 比較エリア */}
             <div className="flex divide-x divide-gray-800">
-              <TeamCompareCol name={selectedMatch.awayTeam} />
+              <TeamCompareCol name={selectedMatch.awayTeam} role="away" />
               <div className="flex items-center justify-center px-2 text-gray-600 text-xs font-bold self-stretch">vs</div>
-              <TeamCompareCol name={selectedMatch.homeTeam} />
+              <TeamCompareCol name={selectedMatch.homeTeam} role="home" />
             </div>
           </div>
         </div>
@@ -383,6 +493,15 @@ function ScheduleContent() {
             今後のみ
           </button>
 
+          {/* Save favorite */}
+          <button
+            onClick={saveFavorite}
+            title="現在の条件をお気に入り登録"
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:text-yellow-400 hover:border-yellow-600 transition-colors"
+          >
+            ★
+          </button>
+
           {/* Share button */}
           <button
             onClick={handleShare}
@@ -410,6 +529,28 @@ function ScheduleContent() {
 
           <span className="ml-auto text-sm text-gray-400">{filtered.length} 試合</span>
         </div>
+
+        {/* Favorites row */}
+        {favorites.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {favorites.map((f) => (
+              <div key={f.id} className="flex items-center gap-0.5 bg-gray-800 border border-gray-700 rounded-full text-xs">
+                <button
+                  onClick={() => applyFavorite(f)}
+                  className="px-3 py-1 text-yellow-400 hover:text-yellow-300 transition-colors"
+                >
+                  ★ {f.label}
+                </button>
+                <button
+                  onClick={() => deleteFavorite(f.id)}
+                  className="pr-2 text-gray-600 hover:text-red-400 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -486,13 +627,31 @@ function ScheduleContent() {
 
                       <div className="flex-1 flex items-center gap-2 min-w-0">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-white font-medium truncate">{match.awayTeam || "─"}</span>
-                          {(() => { const s = findStanding(match.awayTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 {s.wins}勝{s.losses}負{s.ties}引 {s.points}pt</span> : null; })()}
+                          <span className="text-white font-medium truncate">{parseTeamName(match.awayTeam).base || "─"}</span>
+                          {(() => {
+                            const s = findStanding(match.awayTeam);
+                            if (!s) return null;
+                            const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
+                            return (
+                              <span className="text-xs text-gray-400">
+                                {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
+                              </span>
+                            );
+                          })()}
                         </div>
                         <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-white font-medium truncate">{match.homeTeam || "─"}</span>
-                          {(() => { const s = findStanding(match.homeTeam); return s ? <span className="text-xs text-gray-400">{s.rank}位 {s.wins}勝{s.losses}負{s.ties}引 {s.points}pt</span> : null; })()}
+                          <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
+                          {(() => {
+                            const s = findStanding(match.homeTeam);
+                            if (!s) return null;
+                            const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
+                            return (
+                              <span className="text-xs text-gray-400">
+                                {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 

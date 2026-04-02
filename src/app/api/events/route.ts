@@ -24,7 +24,7 @@ const MONTH_MAP: Record<string, number> = {
 async function fetchPage(url: string): Promise<EventItem[]> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
-    next: { revalidate: 1800 },
+    next: { revalidate: 86400 },
   });
   if (!res.ok) return [];
 

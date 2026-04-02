@@ -63,7 +63,7 @@ async function fetchAndParseRental(
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 3600 },
+      next: { revalidate: 259200 },
     });
     if (!res.ok) return entries;
 

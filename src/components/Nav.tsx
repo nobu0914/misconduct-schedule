@@ -29,7 +29,8 @@ export default function Nav() {
   }, [menuOpen]);
 
   const links = [
-    { href: "/", label: "ゲームスケジュール", badge: false },
+    { href: "/", label: "ゲーム情報", badge: false },
+    { href: "/player-ranking", label: "個人ランク検索", badge: false },
     { href: "/rental", label: "レンタル情報", badge: false },
     { href: "/events", label: "イベント情報", badge: hasNewEvents },
   ];
@@ -45,7 +46,7 @@ export default function Nav() {
             </svg>
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white">MHL / CXC <span className="text-xs font-normal text-gray-500">Ver.1-260402-0106</span></h1>
+            <h1 className="text-xl font-bold text-white">MHL / CXC <span className="text-xs font-normal text-gray-500">Ver.1-260402-1525</span></h1>
             <p className="text-xs text-gray-400">公式サイトの情報を自動表示している非公式ツールです。</p>
           </div>
 
@@ -95,6 +96,32 @@ export default function Nav() {
                   </svg>
                   お問い合わせ
                 </Link>
+
+                <Link
+                  href="/player-ranking"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  個人ランキング検索
+                </Link>
+
+                <div className="border-t border-gray-700" />
+
+                <Link
+                  href="/changelog"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  バージョン履歴
+                </Link>
+
+                <div className="border-t border-gray-700" />
 
                 <Link
                   href="/disclaimer"

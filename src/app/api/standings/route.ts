@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { kv } from "@vercel/kv";
 
 export const revalidate = 259200; // 3日（72時間）
 
@@ -14,6 +15,8 @@ export interface TeamStanding {
   losses: number;
   ties: number;
   topScorers: number[]; // 得点上位3名の背番号
+  sourceUrl: string;    // standings ファイルの URL
+  rankChange: number;   // 前回比 順位変動（正=上昇, 負=下降）
 }
 
 interface StandingsData {
@@ -173,6 +176,8 @@ async function fetchAndParseStandings(
           losses: isNaN(losses) ? 0 : losses,
           ties:   isNaN(ties)   ? 0 : ties,
           topScorers: [], // 後で埋める
+          sourceUrl: url,
+          rankChange: 0, // 後で設定
         });
         return;
       }
@@ -234,6 +239,21 @@ export async function GET(req: Request): Promise<NextResponse> {
   );
 
   const allStandings = results.flatMap((r) => r.standings);
+
+  // KV を使って前回のランキングと比較し rankChange を設定
+  try {
+    const prevSnap = await kv.get<Record<string, number>>("standings:last") ?? {};
+    const currentSnap: Record<string, number> = {};
+    for (const s of allStandings) {
+      const key = `${s.divisionLabel}|${s.team}`;
+      currentSnap[key] = s.rank;
+      const prev = prevSnap[key];
+      if (prev !== undefined) s.rankChange = prev - s.rank;
+    }
+    await kv.set("standings:last", currentSnap);
+  } catch {
+    // KV エラーは無視（rankChange=0 のまま返す）
+  }
 
   if (debugMode) {
     return NextResponse.json({
