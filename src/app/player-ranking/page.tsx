@@ -119,6 +119,10 @@ function PlayerRankingContent() {
           </button>
         </div>
 
+        {season === "prev" && (
+          <p className="text-xs text-gray-500 mt-2">※ 過去データの履歴が一部破損しており、検索しても出てこない場合があります</p>
+        )}
+
         {loading && (
           <div className="flex items-center justify-center py-16 gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
