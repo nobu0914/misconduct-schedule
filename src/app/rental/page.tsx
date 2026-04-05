@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { RentalEntry } from "../api/rental/route";
+import type { EventItem, ProgramEntry } from "../api/events/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import WednesdayVoteModal from "@/components/WednesdayVoteModal";
@@ -34,17 +35,37 @@ function RentalContent() {
   const searchParams = useSearchParams();
 
   const [entries, setEntries] = useState<RentalEntry[]>([]);
+  const [programs, setPrograms] = useState<ProgramEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("");
   const [copied, setCopied] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState<ProgramEntry | null>(null);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => searchParams.get("month") ?? "ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
   const [wednesdayOnly, setWednesdayOnly] = useState<boolean>(() => searchParams.get("wed") === "1");
   const [officialOnly, setOfficialOnly] = useState<boolean>(() => searchParams.get("official") === "1");
   const [voteModal, setVoteModal] = useState<{ date: string; dateLabel: string } | null>(null);
+
+  // イベントプログラムとレンタル予定をマッチング
+  // programのdateTimeは "4月4日(土) 9:00-11:00" 形式
+  function findMatchingProgram(entry: RentalEntry): ProgramEntry | undefined {
+    if (!programs.length) return undefined;
+    const [, m, d] = entry.date.split("/").map(Number);
+    return programs.find((p) => {
+      // 日付マッチ: "4月4日" を含むか
+      if (!p.dateTime.includes(`${m}月${d}日`)) return false;
+      // 時刻マッチ: プログラムのdateTimeからstart時刻を抽出して比較
+      const timeMatch = p.dateTime.match(/(\d{1,2}:\d{2})-/);
+      if (!timeMatch) return false;
+      // "9:00" vs "9:00" — 先頭0なし統一で比較
+      const progStart = timeMatch[1].replace(/^0/, "");
+      const entryStart = entry.timeStart.replace(/^0/, "");
+      return progStart === entryStart;
+    });
+  }
 
   // Sync state → URL
   useEffect(() => {
@@ -65,11 +86,19 @@ function RentalContent() {
   const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
   useEffect(() => {
-    fetch("/api/rental")
-      .then((r) => r.json())
-      .then((data) => {
-        setEntries(data.entries ?? []);
-        setLastUpdated(data.lastUpdated ?? "");
+    Promise.all([
+      fetch("/api/rental").then((r) => r.json()),
+      fetch("/api/events").then((r) => r.json()).catch(() => ({ items: [] })),
+    ])
+      .then(([rentalData, eventsData]) => {
+        setEntries(rentalData.entries ?? []);
+        setLastUpdated(rentalData.lastUpdated ?? "");
+        // イベント・プログラム記事からプログラム一覧を抽出
+        const allPrograms: ProgramEntry[] = [];
+        for (const item of (eventsData.items ?? []) as EventItem[]) {
+          if (item.programs) allPrograms.push(...item.programs);
+        }
+        setPrograms(allPrograms);
         setLoading(false);
       })
       .catch(() => {
@@ -116,6 +145,53 @@ function RentalContent() {
   return (
     <div className="min-h-screen bg-gray-950">
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
+
+      {/* イベント概要モーダル */}
+      {selectedProgram && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setSelectedProgram(null)} />
+          <div className="relative w-full sm:max-w-md bg-gray-900 rounded-t-2xl sm:rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">イベント</span>
+                <span className="text-gray-400 text-xs">{selectedProgram.dateTime}</span>
+              </div>
+              <button
+                onClick={() => setSelectedProgram(null)}
+                className="text-gray-400 hover:text-white transition-colors p-1"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* コンテンツ */}
+            <div className="p-4 space-y-3">
+              <h3 className="text-white font-bold text-lg">{selectedProgram.name}</h3>
+              {selectedProgram.description && (
+                <p className="text-gray-300 text-sm leading-relaxed">{selectedProgram.description}</p>
+              )}
+              <div className="pt-2 border-t border-gray-800 space-y-2">
+                <a
+                  href={selectedProgram.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <span>公式サイトで見る</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                <p className="text-xs text-gray-500 text-center">
+                  お問い合わせ: takayama@misconduct.co.jp
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
@@ -279,11 +355,13 @@ function RentalContent() {
               <div className="space-y-2">
                 {dateEntries.map((entry, i) => {
                   const isWed = entry.label.includes("水曜練習会");
+                  const matchedProgram = findMatchingProgram(entry);
+                  const isClickable = isWed || !!matchedProgram;
                   return (
                   <div
                     key={`${date}-${i}`}
-                    onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : undefined}
-                    className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : "hover:border-gray-600"}`}
+                    onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : matchedProgram ? () => setSelectedProgram(matchedProgram) : undefined}
+                    className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : isClickable ? "cursor-pointer hover:border-blue-700 hover:bg-blue-950/20" : "hover:border-gray-600"}`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                       {/* 時間 */}
@@ -312,6 +390,14 @@ function RentalContent() {
                         <span className="font-medium truncate">{entry.label}</span>
                         {entry.isOfficial && (
                           <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">公式</span>
+                        )}
+                        {matchedProgram && !isWed && (
+                          <span className="flex items-center gap-1 bg-blue-700/60 text-blue-300 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 border border-blue-600">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            詳細
+                          </span>
                         )}
                         {isWed && (
                           <span className="flex items-center gap-1 bg-green-700/60 text-green-300 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 border border-green-600">

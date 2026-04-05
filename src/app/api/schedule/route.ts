@@ -151,6 +151,8 @@ async function fetchAndParseSchedule(
   return matches;
 }
 
+export const revalidate = 3600; // 1時間キャッシュ
+
 export async function GET(): Promise<NextResponse<ScheduleData>> {
   const allMatches: Match[] = [];
 
@@ -169,8 +171,8 @@ export async function GET(): Promise<NextResponse<ScheduleData>> {
 
   allMatches.sort((a, b) => dateToMs(a.date, a.timeStart) - dateToMs(b.date, b.timeStart));
 
-  return NextResponse.json({
-    matches: allMatches,
-    lastUpdated: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    { matches: allMatches, lastUpdated: new Date().toISOString() },
+    { headers: { "Cache-Control": "s-maxage=3600, stale-while-revalidate=1800" } }
+  );
 }

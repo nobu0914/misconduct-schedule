@@ -96,12 +96,16 @@ const SEASON_52_DATA: PrevSeasonEntry[] = [
   { team: "Individuals 35",        divisionLabel: "35&Over", rank: 5, totalTeams: 5 },
 ];
 
+export const revalidate = 86400; // 1日キャッシュ（静的データのため長め）
+
 export async function GET(): Promise<NextResponse> {
+  const headers = { "Cache-Control": "s-maxage=86400, stale-while-revalidate=43200" };
+
   // KVキャッシュを確認（ページが消えた後もデータを保持するためのバックアップ）
   try {
     const cached = await kv.get<PrevSeasonEntry[]>(KV_KEY);
     if (cached && cached.length > 0) {
-      return NextResponse.json({ season: 52, data: cached });
+      return NextResponse.json({ season: 52, data: cached }, { headers });
     }
   } catch {}
 
@@ -110,5 +114,5 @@ export async function GET(): Promise<NextResponse> {
     await kv.set(KV_KEY, SEASON_52_DATA);
   } catch {}
 
-  return NextResponse.json({ season: 52, data: SEASON_52_DATA });
+  return NextResponse.json({ season: 52, data: SEASON_52_DATA }, { headers });
 }

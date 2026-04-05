@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 
+export interface ProgramEntry {
+  dateTime: string;   // "4月4日(土) 9:00-11:00"
+  name: string;       // "Saturday Pick Up Hockey"
+  description: string; // "※どなたでもご参加いただける..."
+  sourceUrl: string;  // 掲載元の公式ニュースURL
+}
+
 export interface EventItem {
   date: string;       // "YYYY/MM/DD"
   dateLabel: string;  // "2026年3月22日"
@@ -8,6 +15,7 @@ export interface EventItem {
   excerpt: string;
   url: string;
   isNew: boolean;     // posted within 7 days
+  programs?: ProgramEntry[]; // イベント・プログラム紹介記事の場合のみ
 }
 
 interface EventsData {
@@ -72,6 +80,78 @@ async function fetchPage(url: string): Promise<EventItem[]> {
   return items;
 }
 
+function cleanHtmlText(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\u00a0/g, " ")
+    .trim();
+}
+
+async function fetchProgramDetail(url: string): Promise<ProgramEntry[]> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const contentEl = $(".post_content");
+    if (!contentEl.length) return [];
+
+    // Get inner HTML, split by <br> and <p> tags
+    const rawHtml = contentEl.html() ?? "";
+    const lines = rawHtml
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<p[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .split("\n")
+      .map(cleanHtmlText)
+      .filter(Boolean);
+
+    const programs: ProgramEntry[] = [];
+    // Pattern: lines starting with ・ are event headers, next line starting with ※ is description
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.startsWith("・")) continue;
+
+      // Parse: ・4月4日(土)　9:00-11:00　Saturday Pick Up Hockey
+      const content = line.slice(1).trim();
+      // Split by datetime pattern
+      const m = content.match(/^(.+?\d{1,2}:\d{2}(?:-\d{1,2}:\d{2})?)\s+(.+)$/);
+      if (!m) continue;
+
+      const dateTime = m[1].replace(/\s+/g, " ").trim();
+      const name = m[2].trim();
+
+      // Collect description lines (starting with ※)
+      let description = "";
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].startsWith("※")) {
+          description += (description ? " " : "") + lines[j];
+        } else {
+          break;
+        }
+      }
+
+      programs.push({ dateTime, name, description, sourceUrl: url });
+    }
+
+    return programs;
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(): Promise<NextResponse<EventsData>> {
   const allItems: EventItem[] = [];
 
@@ -90,6 +170,14 @@ export async function GET(): Promise<NextResponse<EventsData>> {
     seen.add(item.url);
     return true;
   });
+
+  // イベント・プログラム紹介記事の詳細を取得
+  const programItems = unique.filter((item) => item.title.includes("イベント・プログラム"));
+  await Promise.all(
+    programItems.map(async (item) => {
+      item.programs = await fetchProgramDetail(item.url);
+    })
+  );
 
   const hasNew = unique.some((item) => item.isNew);
 
