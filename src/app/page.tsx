@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Match } from "./api/schedule/route";
 import type { TeamStanding } from "./api/standings/route";
 import type { PrevSeasonEntry } from "./api/prev-season/route";
+import type { DayForecast } from "./api/weather/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
@@ -90,6 +91,7 @@ function ScheduleContent() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [weatherMap, setWeatherMap] = useState<Record<string, DayForecast>>({});
   const [favorites, setFavorites] = useState<SavedFilter[]>([]);
 
   // Init filter state from URL params
@@ -163,15 +165,34 @@ function ScheduleContent() {
     return map;
   }
 
-  // 52ndシーズンデータとの照合（大文字小文字・括弧を無視）
-  function findPrevSeason(scheduleName: string): PrevSeasonEntry | undefined {
+  // チーム名のエイリアス（今シーズン名 → 前シーズン名）
+  const TEAM_ALIASES: Record<string, string> = {
+    "伊王島": "伊王島観光協会",
+  };
+
+  // 52ndシーズンデータとの照合（大文字小文字・括弧・エイリアスを考慮、ディビジョン一致のみ）
+  function findPrevSeason(scheduleName: string, currentDivision?: string): PrevSeasonEntry | undefined {
     if (!scheduleName) return undefined;
     const { base } = parseTeamName(scheduleName);
-    if (prevSeason[base]) return prevSeason[base];
-    if (base !== scheduleName && prevSeason[scheduleName]) return prevSeason[scheduleName];
+
+    function matchesDivision(entry: PrevSeasonEntry): boolean {
+      if (!currentDivision) return true;
+      return entry.divisionLabel === currentDivision;
+    }
+
+    const candidates = [
+      prevSeason[base],
+      base !== scheduleName ? prevSeason[scheduleName] : undefined,
+      TEAM_ALIASES[base] ? prevSeason[TEAM_ALIASES[base]] : undefined,
+    ].filter((c): c is PrevSeasonEntry => !!c);
+
+    for (const c of candidates) {
+      if (matchesDivision(c)) return c;
+    }
+
     const baseLower = base.toLowerCase();
     for (const val of Object.values(prevSeason)) {
-      if (val.team.toLowerCase() === baseLower) return val;
+      if (val.team.toLowerCase() === baseLower && matchesDivision(val)) return val;
     }
     return undefined;
   }
@@ -220,12 +241,19 @@ function ScheduleContent() {
       fetch("/api/schedule").then((r) => r.json()),
       fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
       fetch("/api/prev-season").then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/weather").then((r) => r.json()).catch(() => ({ forecasts: [] })),
     ])
-      .then(([schedData, stData, prevData]) => {
+      .then(([schedData, stData, prevData, weatherData]) => {
         setMatches(schedData.matches ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
         setStandings(buildStandingsMap(stData.standings ?? []));
         setPrevSeason(buildPrevSeasonMap(prevData.data ?? []));
+        // 天気マップ構築（"月/日" → DayForecast）
+        const wMap: Record<string, DayForecast> = {};
+        for (const f of (weatherData.forecasts ?? []) as DayForecast[]) {
+          wMap[f.date] = f;
+        }
+        setWeatherMap(wMap);
         setLoading(false);
         setStandingsLoading(false);
       })
@@ -278,11 +306,17 @@ function ScheduleContent() {
     });
   }, [filtered]);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
+  async function handleShare() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Rinnavi - ゲーム情報", url });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }
   }
 
   // 比較モーダル用ヘルパー
@@ -342,7 +376,7 @@ function ScheduleContent() {
         )}
         {/* 前シーズン（52nd）情報 */}
         {(() => {
-          const p = findPrevSeason(name);
+          const p = findPrevSeason(name, selectedMatch?.division);
           if (!p) return null;
           return (
             <div className="pt-3 border-t border-gray-800">
@@ -394,12 +428,66 @@ function ScheduleContent() {
                 </svg>
               </button>
             </div>
+            {/* 天気情報 */}
+            {(() => {
+              const [, m, d] = selectedMatch.date.split("/").map(Number);
+              const w = weatherMap[`${m}/${d}`];
+              if (!w) return null;
+
+              // 試合時間帯の天気を取得
+              const startHour = parseInt(selectedMatch.timeStart.split(":")[0], 10);
+              const endHour = selectedMatch.timeEnd ? parseInt(selectedMatch.timeEnd.split(":")[0], 10) : startHour + 1;
+
+              if (w.hourly.length > 0) {
+                // 試合時間帯のhourlyデータを抽出
+                const matchHours = w.hourly.filter(
+                  (h) => h.hour >= startHour && h.hour <= endHour
+                );
+                if (matchHours.length === 0) return null;
+
+                const temps = matchHours.map((h) => h.temp);
+                const maxTemp = Math.round(Math.max(...temps) * 10) / 10;
+                const minTemp = Math.round(Math.min(...temps) * 10) / 10;
+                // 開始時の天気を代表として使用
+                const startWeather = matchHours[0];
+
+                return (
+                  <div className="flex items-center justify-center gap-3 px-4 py-2 border-b border-gray-800 bg-gray-800/50">
+                    {startWeather.iconUrl && (
+                      <img src={startWeather.iconUrl} alt={startWeather.weather} className="h-5 object-contain" />
+                    )}
+                    <span className="text-gray-300 text-xs">{startWeather.weather}</span>
+                    <span className="text-red-400 text-xs font-semibold">{maxTemp}℃</span>
+                    <span className="text-blue-400 text-xs">/ {minTemp}℃</span>
+                    <span className="text-gray-600 text-xs">戸田市 {startHour}〜{endHour}時</span>
+                  </div>
+                );
+              }
+
+              // hourlyがない場合は日別予報を表示
+              return (
+                <div className="flex items-center justify-center gap-3 px-4 py-2 border-b border-gray-800 bg-gray-800/50">
+                  {w.iconUrl && (
+                    <img src={w.iconUrl} alt={w.weather} className="h-5 object-contain" />
+                  )}
+                  <span className="text-gray-300 text-xs">{w.weather}</span>
+                  {w.high !== null && (
+                    <span className="text-red-400 text-xs font-semibold">{w.high}℃</span>
+                  )}
+                  {w.low !== null && (
+                    <span className="text-blue-400 text-xs">/ {w.low}℃</span>
+                  )}
+                  <span className="text-gray-600 text-xs">戸田市</span>
+                </div>
+              );
+            })()}
             {/* 比較エリア */}
             <div className="flex divide-x divide-gray-800">
               <TeamCompareCol name={selectedMatch.awayTeam} role="away" />
               <div className="flex items-center justify-center px-2 text-gray-600 text-xs font-bold self-stretch">vs</div>
               <TeamCompareCol name={selectedMatch.homeTeam} role="home" />
             </div>
+            <p className="text-xs text-gray-600 text-center px-4 py-2 border-t border-gray-800">※昨シーズンランクはレギュラーシーズン順位の場合があります。</p>
           </div>
         </div>
       )}

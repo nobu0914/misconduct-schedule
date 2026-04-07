@@ -135,11 +135,17 @@ function RentalContent() {
     });
   }, [filtered]);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
+  async function handleShare() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Rinnavi - リンク予定", url });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }
   }
 
   return (
@@ -172,7 +178,7 @@ function RentalContent() {
               {selectedProgram.description && (
                 <p className="text-gray-300 text-sm leading-relaxed">{selectedProgram.description}</p>
               )}
-              <div className="pt-2 border-t border-gray-800 space-y-2">
+              <div className="pt-2 border-t border-gray-800">
                 <a
                   href={selectedProgram.sourceUrl}
                   target="_blank"
@@ -184,9 +190,6 @@ function RentalContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </a>
-                <p className="text-xs text-gray-500 text-center">
-                  お問い合わせ: takayama@misconduct.co.jp
-                </p>
               </div>
             </div>
           </div>
