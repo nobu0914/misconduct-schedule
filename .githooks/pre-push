@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+if [ "${ALLOW_DIRTY_PUSH:-}" = "1" ]; then
+  exit 0
+fi
+
+dirty="$(git status --porcelain)"
+if [ -n "$dirty" ]; then
+  cat >&2 <<'EOF'
+pre-push blocked: the working tree has uncommitted changes.
+
+Commit, stash, or remove every local change before pushing.
+This prevents deploying only part of the local app and making production
+look like it rolled back.
+
+If this is an intentional emergency push, rerun with:
+  ALLOW_DIRTY_PUSH=1 git push
+EOF
+  printf '\nCurrent uncommitted changes:\n%s\n' "$dirty" >&2
+  exit 1
+fi

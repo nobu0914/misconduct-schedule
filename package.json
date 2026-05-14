@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "setup-hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",
