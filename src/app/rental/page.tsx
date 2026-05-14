@@ -47,7 +47,10 @@ function RentalContent() {
   const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
   const [wednesdayOnly, setWednesdayOnly] = useState<boolean>(() => searchParams.get("wed") === "1");
   const [officialOnly, setOfficialOnly] = useState<boolean>(() => searchParams.get("official") === "1");
-  const [voteModal, setVoteModal] = useState<{ date: string; dateLabel: string } | null>(null);
+  const [voteModal, setVoteModal] = useState<{ date: string; dateLabel: string } | null>(() => {
+    const practice = searchParams.get("practice");
+    return practice ? { date: practice, dateLabel: formatDate(practice) } : null;
+  });
 
   // イベントプログラムとレンタル予定をマッチング
   // programのdateTimeは "4月4日(土) 9:00-11:00" 形式
@@ -74,9 +77,10 @@ function RentalContent() {
     if (!showUpcomingOnly) params.set("upcoming", "0");
     if (wednesdayOnly) params.set("wed", "1");
     if (officialOnly) params.set("official", "1");
+    if (voteModal) params.set("practice", voteModal.date);
     const qs = params.toString();
     router.replace(qs ? `/rental?${qs}` : "/rental", { scroll: false });
-  }, [selectedMonth, showUpcomingOnly, wednesdayOnly, officialOnly, router]);
+  }, [selectedMonth, showUpcomingOnly, wednesdayOnly, officialOnly, voteModal, router]);
 
   const refresh = useCallback(async () => {
     const data = await fetch("/api/rental").then((r) => r.json());

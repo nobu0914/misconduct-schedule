@@ -6,6 +6,11 @@ import type { Match } from "./api/schedule/route";
 import type { TeamStanding } from "./api/standings/route";
 import type { PrevSeasonEntry } from "./api/prev-season/route";
 import type { DayForecast } from "./api/weather/route";
+import type { RentalEntry } from "./api/rental/route";
+
+type TimelineItem =
+  | { kind: "match"; date: string; time: string; data: Match }
+  | { kind: "rental"; date: string; time: string; data: RentalEntry };
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
@@ -83,6 +88,7 @@ function ScheduleContent() {
   const searchParams = useSearchParams();
 
   const [matches, setMatches] = useState<Match[]>([]);
+  const [rentals, setRentals] = useState<RentalEntry[]>([]);
   const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
   const [prevSeason, setPrevSeason] = useState<Record<string, PrevSeasonEntry>>({});
   const [loading, setLoading] = useState(true);
@@ -101,6 +107,7 @@ function ScheduleContent() {
   });
   const [selectedMonth, setSelectedMonth] = useState<string>(() => searchParams.get("month") ?? "ALL");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState<boolean>(() => searchParams.get("upcoming") !== "0");
+  const [showRentals, setShowRentals] = useState<boolean>(() => searchParams.get("rental") !== "0");
   const [searchQuery, setSearchQuery] = useState<string>(() => searchParams.get("q") ?? "");
 
   const [divisionOpen, setDivisionOpen] = useState(false);
@@ -112,10 +119,11 @@ function ScheduleContent() {
     if (selectedDivisions.length > 0) params.set("div", selectedDivisions.join(","));
     if (selectedMonth !== "ALL") params.set("month", selectedMonth);
     if (!showUpcomingOnly) params.set("upcoming", "0");
+    if (!showRentals) params.set("rental", "0");
     if (searchQuery) params.set("q", searchQuery);
     const qs = params.toString();
     router.replace(qs ? `/?${qs}` : "/", { scroll: false });
-  }, [selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery, router]);
+  }, [selectedDivisions, selectedMonth, showUpcomingOnly, showRentals, searchQuery, router]);
 
   // Load favorites from localStorage
   useEffect(() => {
@@ -214,11 +222,13 @@ function ScheduleContent() {
   }
 
   const refresh = useCallback(async () => {
-    const [schedData, stData] = await Promise.all([
+    const [schedData, stData, rentData] = await Promise.all([
       fetch("/api/schedule").then((r) => r.json()),
       fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
+      fetch("/api/rental").then((r) => r.json()).catch(() => ({ entries: [] })),
     ]);
     setMatches(schedData.matches ?? []);
+    setRentals(rentData.entries ?? []);
     setLastUpdated(schedData.lastUpdated ?? "");
     setStandings(buildStandingsMap(stData.standings ?? []));
     setStandingsLoading(false);
@@ -242,9 +252,11 @@ function ScheduleContent() {
       fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
       fetch("/api/prev-season").then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/weather").then((r) => r.json()).catch(() => ({ forecasts: [] })),
+      fetch("/api/rental").then((r) => r.json()).catch(() => ({ entries: [] })),
     ])
-      .then(([schedData, stData, prevData, weatherData]) => {
+      .then(([schedData, stData, prevData, weatherData, rentData]) => {
         setMatches(schedData.matches ?? []);
+        setRentals(rentData.entries ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
         setStandings(buildStandingsMap(stData.standings ?? []));
         setPrevSeason(buildPrevSeasonMap(prevData.data ?? []));
@@ -293,18 +305,39 @@ function ScheduleContent() {
     });
   }, [matches, selectedDivisions, selectedMonth, showUpcomingOnly, searchQuery]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, Match[]>();
+  const filteredRentals = useMemo(() => {
+    return rentals.filter((r) => {
+      if (selectedMonth !== "ALL" && r.month !== selectedMonth) return false;
+      if (showUpcomingOnly && !isUpcoming(r.date)) return false;
+      return true;
+    });
+  }, [rentals, selectedMonth, showUpcomingOnly]);
+
+  const grouped = useMemo<[string, TimelineItem[]][]>(() => {
+    const map = new Map<string, TimelineItem[]>();
     for (const m of filtered) {
       if (!map.has(m.date)) map.set(m.date, []);
-      map.get(m.date)!.push(m);
+      map.get(m.date)!.push({ kind: "match", date: m.date, time: m.timeStart, data: m });
+    }
+    if (showRentals) {
+      for (const r of filteredRentals) {
+        if (!map.has(r.date)) map.set(r.date, []);
+        map.get(r.date)!.push({ kind: "rental", date: r.date, time: r.timeStart, data: r });
+      }
+    }
+    const timeMin = (t: string): number => {
+      const m = t.match(/^(\d+):(\d+)/);
+      return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+    };
+    for (const [, items] of map) {
+      items.sort((a, b) => timeMin(a.time) - timeMin(b.time));
     }
     return Array.from(map.entries()).sort(([a], [b]) => {
       const [ay, am, ad] = a.split("/").map(Number);
       const [by, bm, bd] = b.split("/").map(Number);
       return new Date(ay, am - 1, ad).getTime() - new Date(by, bm - 1, bd).getTime();
     });
-  }, [filtered]);
+  }, [filtered, filteredRentals, showRentals]);
 
   async function handleShare() {
     const url = window.location.href;
@@ -581,6 +614,17 @@ function ScheduleContent() {
             今後のみ
           </button>
 
+          {/* Rentals toggle */}
+          <button
+            onClick={() => setShowRentals(!showRentals)}
+            title="リンク予定を時系列に重ねて表示"
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              showRentals ? "bg-emerald-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
+            }`}
+          >
+            リンク予定
+          </button>
+
           {/* Save favorite */}
           <button
             onClick={saveFavorite}
@@ -615,7 +659,12 @@ function ScheduleContent() {
             )}
           </button>
 
-          <span className="ml-auto text-sm text-gray-400">{filtered.length} 試合</span>
+          <span className="ml-auto text-sm text-gray-400">
+            {filtered.length} 試合
+            {showRentals && filteredRentals.length > 0 && (
+              <span className="text-emerald-400 ml-1">+ {filteredRentals.length} リンク</span>
+            )}
+          </span>
         </div>
 
         {/* Favorites row */}
@@ -662,9 +711,11 @@ function ScheduleContent() {
           </div>
         )}
 
-        {grouped.map(([date, dateMatches]) => {
+        {grouped.map(([date, dateItems]) => {
           const { display } = formatDate(date);
           const today = isToday(date);
+          const matchCount = dateItems.filter((it) => it.kind === "match").length;
+          const rentalCount = dateItems.filter((it) => it.kind === "rental").length;
 
           return (
             <div key={date} className="mb-6">
@@ -674,25 +725,108 @@ function ScheduleContent() {
                   <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">TODAY</span>
                 )}
                 <div className="flex-1 h-px bg-gray-800" />
-                <span className="text-sm text-gray-500">{dateMatches.length}試合</span>
+                <span className="text-sm text-gray-500">
+                  {matchCount}試合
+                  {rentalCount > 0 && <span className="text-emerald-400 ml-1">+{rentalCount}リンク</span>}
+                </span>
               </div>
 
               <div className="space-y-2">
-                {dateMatches.map((match, i) => (
-                  <div
-                    key={`${date}-${i}`}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors cursor-pointer active:bg-gray-800"
-                    onClick={() => setSelectedMatch(match)}
-                  >
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="text-blue-400 font-mono font-semibold">
-                          {match.timeStart}
-                          {match.timeEnd && (
-                            <span className="text-gray-500 text-sm"> ~ {match.timeEnd}</span>
-                          )}
+                {dateItems.map((item, i) => {
+                  if (item.kind === "rental") {
+                    const r = item.data;
+                    return (
+                      <a
+                        key={`${date}-r-${i}`}
+                        href={r.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block border-l-4 ${r.isOfficial ? "border-blue-500" : "border-emerald-500"} bg-gray-900/40 border-y border-r border-gray-800 rounded-r-xl px-4 py-2.5 hover:bg-gray-900 transition-colors`}
+                      >
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="text-emerald-400 font-mono text-sm font-semibold">
+                            {r.timeStart}
+                            {r.timeEnd && <span className="text-gray-500"> ~ {r.timeEnd}</span>}
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.isOfficial ? "bg-blue-600 text-white" : "bg-emerald-700 text-emerald-100"}`}>
+                            {r.isOfficial ? "MHL枠" : "リンク予定"}
+                          </span>
+                          <span className="text-gray-300 text-sm flex-1 min-w-0 truncate">{r.label || "─"}</span>
+                          <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
                         </div>
-                        <div className="flex items-center gap-2 ml-auto sm:hidden">
+                      </a>
+                    );
+                  }
+
+                  const match = item.data;
+                  return (
+                    <div
+                      key={`${date}-${i}`}
+                      className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors cursor-pointer active:bg-gray-800"
+                      onClick={() => setSelectedMatch(match)}
+                    >
+                      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="text-blue-400 font-mono font-semibold">
+                            {match.timeStart}
+                            {match.timeEnd && (
+                              <span className="text-gray-500 text-sm"> ~ {match.timeEnd}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 ml-auto sm:hidden">
+                            {match.division && (
+                              <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
+                                {match.division}
+                              </span>
+                            )}
+                            <a
+                              href={match.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="ソースページを開く"
+                              className="text-gray-500 hover:text-blue-400 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 flex items-center gap-2 min-w-0">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-white font-medium truncate">{parseTeamName(match.awayTeam).base || "─"}</span>
+                            {(() => {
+                              const s = findStanding(match.awayTeam);
+                              if (!s) return null;
+                              const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
+                              return (
+                                <span className="text-xs text-gray-400">
+                                  {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
+                            {(() => {
+                              const s = findStanding(match.homeTeam);
+                              if (!s) return null;
+                              const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
+                              return (
+                                <span className="text-xs text-gray-400">
+                                  {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
                           {match.division && (
                             <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
                               {match.division}
@@ -712,59 +846,9 @@ function ScheduleContent() {
                           </a>
                         </div>
                       </div>
-
-                      <div className="flex-1 flex items-center gap-2 min-w-0">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-white font-medium truncate">{parseTeamName(match.awayTeam).base || "─"}</span>
-                          {(() => {
-                            const s = findStanding(match.awayTeam);
-                            if (!s) return null;
-                            const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
-                            return (
-                              <span className="text-xs text-gray-400">
-                                {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
-                          {(() => {
-                            const s = findStanding(match.homeTeam);
-                            if (!s) return null;
-                            const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
-                            return (
-                              <span className="text-xs text-gray-400">
-                                {s.rank}位{arrow && <span className={s.rankChange > 0 ? " text-green-400" : " text-red-400"}> {arrow}</span>} {s.wins}勝{s.losses}負{s.ties}引
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-                        {match.division && (
-                          <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
-                            {match.division}
-                          </span>
-                        )}
-                        <a
-                          href={match.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="ソースページを開く"
-                          className="text-gray-500 hover:text-blue-400 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );

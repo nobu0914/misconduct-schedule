@@ -132,6 +132,9 @@ export default function EventsPage() {
         <div className="space-y-3">
           {items.map((item, i) => {
             const hasPrograms = item.programs && item.programs.length > 0;
+            const dateMatch = item.dateLabel.match(/(\d+)年(\d+)月(\d+)日/);
+            const year = dateMatch?.[1] ?? "";
+            const monthDay = dateMatch ? `${dateMatch[2]}/${dateMatch[3]}` : item.dateLabel;
             return (
               <div
                 key={`${item.url}-${i}`}
@@ -141,8 +144,8 @@ export default function EventsPage() {
                 <div className="flex items-start gap-3">
                   {/* Date block */}
                   <div className="flex-shrink-0 text-center bg-gray-800 rounded-lg px-3 py-2 min-w-[72px]">
-                    <div className="text-xs text-gray-400">{item.dateLabel.replace(/年(\d+)月(\d+)日/, (_,m,d) => `${m}/${d}`)}</div>
-                    <div className="text-xs text-gray-500">{item.dateLabel.match(/(\d+)年/)?.[1]}</div>
+                    <div className="text-xs text-gray-400">{monthDay}</div>
+                    <div className="text-xs text-gray-500">{year}</div>
                   </div>
 
                   {/* Content */}

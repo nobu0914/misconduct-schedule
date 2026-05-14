@@ -31,7 +31,7 @@ export default function Nav() {
 
   const links = [
     { href: "/", label: "ゲーム情報", badge: false },
-    { href: "/player-ranking", label: "ランク検索", badge: false },
+    { href: "/player-ranking", label: "ランク", badge: false },
     { href: "/rental", label: "リンク予定", badge: false },
     { href: "/events", label: "イベント", badge: hasNewEvents },
   ];

@@ -222,7 +222,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                   {ATTEND_OPTIONS.map(({ value, label, color, activeColor }) => (
                     <button
                       key={value}
-                      onClick={() => !hasVoted && setSelectedAttend(value)}
+                      onClick={() => !hasVoted && setSelectedAttend((prev) => (prev === value ? null : value))}
                       disabled={hasVoted}
                       className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all ${
                         selectedAttend === value ? activeColor : color
