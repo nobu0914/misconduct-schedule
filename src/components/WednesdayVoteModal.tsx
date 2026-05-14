@@ -87,6 +87,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
     setResult(data);
     setEditMode(false);
     setSubmitting(false);
+    if (hasManga) setMangaOpen(true);
   }
 
   function toggleMenu(item: string) {
@@ -96,6 +97,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   }
 
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [mangaOpen, setMangaOpen] = useState(false);
+  const hasManga = date === "2026/5/27";
 
   const totalAttend = result ? result.attend.yes + result.attend.maybe + result.attend.no : 0;
   const hasVoted = !!result?.myVote && !editMode;
@@ -266,11 +269,24 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                   disabled={!selectedAttend || submitting}
                   className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold transition-colors"
                 >
-                  {submitting ? "送信中..." : "送信する"}
+                  {submitting ? "送信中..." : (
+                    <>
+                      送信する
+                      {hasManga && <span className="ml-1 text-yellow-200">（漫画配信！）</span>}
+                    </>
+                  )}
                 </button>
               ) : (
                 <div className="space-y-2">
                   <div className="text-center text-sm text-green-400 font-medium">✓ 投票済み</div>
+                  {hasManga && (
+                    <button
+                      onClick={() => setMangaOpen(true)}
+                      className="w-full py-2.5 rounded-xl bg-green-900/40 border border-green-700 text-green-300 text-sm hover:bg-green-900/60 transition-colors"
+                    >
+                      🎁 おまけ漫画を見る
+                    </button>
+                  )}
                   <button
                     onClick={() => setEditMode(true)}
                     className="w-full py-2.5 rounded-xl border border-gray-600 text-gray-400 text-sm hover:border-gray-400 hover:text-white transition-colors"
@@ -283,6 +299,39 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
           )}
         </div>
       </div>
+
+      {/* おまけ漫画オーバーレイ */}
+      {mangaOpen && hasManga && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-3"
+          onClick={() => setMangaOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/85" />
+          <div
+            className="relative w-full sm:max-w-md max-h-[94vh] overflow-y-auto bg-gray-900 rounded-2xl border border-green-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur px-4 py-3 flex items-center gap-2 border-b border-green-800">
+              <span className="text-lg">🎉</span>
+              <span className="text-sm font-bold text-green-300 flex-1">投票ありがとう！おまけ漫画</span>
+              <button
+                onClick={() => setMangaOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors p-1"
+                aria-label="閉じる"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <img
+              src="/wednesday-manga-vol1.jpg"
+              alt="水曜日のツーブロちゃん Vol.1"
+              className="w-full block"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
