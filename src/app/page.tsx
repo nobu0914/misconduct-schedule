@@ -173,10 +173,15 @@ function ScheduleContent() {
     return map;
   }
 
-  // チーム名のエイリアス（今シーズン名 → 前シーズン名）
+  // チーム名のエイリアス（スケジュール表記 → 順位表/前シーズン表記）
   const TEAM_ALIASES: Record<string, string> = {
     "伊王島": "伊王島観光協会",
+    "NANASHI Boyz": "名無しBoyz",
   };
+
+  function resolveTeamAlias(name: string): string | undefined {
+    return TEAM_ALIASES[name] ?? Object.entries(TEAM_ALIASES).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+  }
 
   // 52ndシーズンデータとの照合（大文字小文字・括弧・エイリアスを考慮、ディビジョン一致のみ）
   function findPrevSeason(scheduleName: string, currentDivision?: string): PrevSeasonEntry | undefined {
@@ -191,7 +196,7 @@ function ScheduleContent() {
     const candidates = [
       prevSeason[base],
       base !== scheduleName ? prevSeason[scheduleName] : undefined,
-      TEAM_ALIASES[base] ? prevSeason[TEAM_ALIASES[base]] : undefined,
+      resolveTeamAlias(base) ? prevSeason[resolveTeamAlias(base)!] : undefined,
     ].filter((c): c is PrevSeasonEntry => !!c);
 
     for (const c of candidates) {
@@ -206,17 +211,25 @@ function ScheduleContent() {
   }
 
   // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合
-  function findStanding(scheduleName: string): TeamStanding | undefined {
+  function findStanding(scheduleName: string, currentDivision?: string): TeamStanding | undefined {
     if (!scheduleName) return undefined;
+
+    function matchesDivision(entry: TeamStanding): boolean {
+      if (!currentDivision) return true;
+      return entry.divisionLabel === currentDivision;
+    }
+
     // 完全一致
-    if (standings[scheduleName]) return standings[scheduleName];
+    if (standings[scheduleName] && matchesDivision(standings[scheduleName])) return standings[scheduleName];
     // 括弧内のサブ情報を除いた名前で照合（例: "Dark Sales (B)" → "Dark Sales"）
     const baseName = scheduleName.replace(/\s*\(.*?\)\s*/g, "").trim();
-    if (baseName !== scheduleName && standings[baseName]) return standings[baseName];
+    if (baseName !== scheduleName && standings[baseName] && matchesDivision(standings[baseName])) return standings[baseName];
+    const alias = resolveTeamAlias(baseName);
+    if (alias && standings[alias] && matchesDivision(standings[alias])) return standings[alias];
     // 大文字小文字を無視して照合（例: "Dark Sales" vs "Dark sales"）
     const baseNameLower = baseName.toLowerCase();
     for (const val of Object.values(standings)) {
-      if (val.team.toLowerCase() === baseNameLower) return val;
+      if (val.team.toLowerCase() === baseNameLower && matchesDivision(val)) return val;
     }
     return undefined;
   }
@@ -354,7 +367,7 @@ function ScheduleContent() {
 
   // 比較モーダル用ヘルパー
   function TeamCompareCol({ name, role }: { name: string; role: "away" | "home" }) {
-    const s = findStanding(name);
+    const s = findStanding(name, selectedMatch?.division);
     const { base, bench } = parseTeamName(name);
     return (
       <div className="flex-1 flex flex-col gap-3 p-4 min-w-0">
@@ -800,7 +813,7 @@ function ScheduleContent() {
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-medium truncate">{parseTeamName(match.awayTeam).base || "─"}</span>
                             {(() => {
-                              const s = findStanding(match.awayTeam);
+                              const s = findStanding(match.awayTeam, match.division);
                               if (!s) return null;
                               const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
                               return (
@@ -814,7 +827,7 @@ function ScheduleContent() {
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
                             {(() => {
-                              const s = findStanding(match.homeTeam);
+                              const s = findStanding(match.homeTeam, match.division);
                               if (!s) return null;
                               const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
                               return (
