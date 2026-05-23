@@ -181,6 +181,8 @@ function ScheduleContent() {
   const TEAM_ALIASES: Record<string, string> = {
     "伊王島": "伊王島観光協会",
     "NANASHI Boyz": "名無しBoyz",
+    "青学 Quzilax": "青学Quzilax",
+    "武田園35+": "武田園",
   };
 
   function resolveTeamAlias(name: string): string | undefined {
