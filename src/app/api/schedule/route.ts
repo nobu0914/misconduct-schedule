@@ -10,6 +10,8 @@ export interface Match {
   awayTeam: string;
   homeTeam: string;
   division: string;
+  status: "scheduled" | "postponed";
+  statusLabel?: string;
   month: string;
   sourceUrl: string;
 }
@@ -131,6 +133,8 @@ async function fetchAndParseSchedule(
       const homeSub = isNormal && cells[7] ? `(${cells[7]})` : "";
       const homeTeam = [cells[8], homeSub].filter(Boolean).join(" ");
       const division = cells[9];
+      const statusText = cells.slice(5, 8).join(" ");
+      const isPostponed = statusText.includes("延期");
 
       matches.push({
         no: cells[0],
@@ -140,6 +144,8 @@ async function fetchAndParseSchedule(
         awayTeam,
         homeTeam,
         division,
+        status: isPostponed ? "postponed" : "scheduled",
+        statusLabel: isPostponed ? "延期" : undefined,
         month,
         sourceUrl: url,
       });
@@ -151,7 +157,7 @@ async function fetchAndParseSchedule(
   return matches;
 }
 
-export const revalidate = 3600; // 1時間キャッシュ
+export const revalidate = 86400; // 1日キャッシュ
 
 export async function GET(): Promise<NextResponse<ScheduleData>> {
   const allMatches: Match[] = [];
@@ -173,6 +179,6 @@ export async function GET(): Promise<NextResponse<ScheduleData>> {
 
   return NextResponse.json(
     { matches: allMatches, lastUpdated: new Date().toISOString() },
-    { headers: { "Cache-Control": "s-maxage=3600, stale-while-revalidate=1800" } }
+    { headers: { "Cache-Control": "s-maxage=86400, stale-while-revalidate=3600" } }
   );
 }

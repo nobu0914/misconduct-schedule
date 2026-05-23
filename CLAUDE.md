@@ -51,7 +51,8 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 ## アーキテクチャメモ
 
 ### API キャッシュ構成
-- `/api/schedule`: `revalidate=3600`（1時間）+ `s-maxage=3600, stale-while-revalidate=1800`
+- `/api/schedule`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
+- `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）巡回し、取得状態と試合数を確認
 - `/api/standings`: `revalidate=172800`（48時間）+ `s-maxage=172800, stale-while-revalidate=86400`
 - `/api/prev-season`: `revalidate=86400`（1日）
 - `/api/standings-debug`: `force-dynamic`（デバッグ専用、常にリアルタイム）

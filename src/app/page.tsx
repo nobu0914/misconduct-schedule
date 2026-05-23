@@ -33,6 +33,10 @@ function getDivisionColor(division: string): string {
   return "bg-gray-500";
 }
 
+function isPostponedMatch(match: Match): boolean {
+  return match.status === "postponed";
+}
+
 function formatDate(dateStr: string): { weekday: string; display: string } {
   const [year, month, day] = dateStr.split("/").map(Number);
   const d = new Date(year, month - 1, day);
@@ -326,6 +330,13 @@ function ScheduleContent() {
     });
   }, [rentals, selectedMonth, showUpcomingOnly]);
 
+  const scheduledMatchCount = useMemo(
+    () => filtered.filter((m) => !isPostponedMatch(m)).length,
+    [filtered]
+  );
+
+  const postponedMatchCount = filtered.length - scheduledMatchCount;
+
   const grouped = useMemo<[string, TimelineItem[]][]>(() => {
     const map = new Map<string, TimelineItem[]>();
     for (const m of filtered) {
@@ -461,6 +472,9 @@ function ScheduleContent() {
                     {selectedMatch.division}
                   </span>
                 )}
+                {isPostponedMatch(selectedMatch) && (
+                  <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">延期</span>
+                )}
                 <span className="text-gray-400 text-xs">
                   {formatDate(selectedMatch.date).display}&nbsp;{selectedMatch.timeStart}
                 </span>
@@ -474,8 +488,13 @@ function ScheduleContent() {
                 </svg>
               </button>
             </div>
+            {isPostponedMatch(selectedMatch) && (
+              <div className="px-4 py-2 border-b border-red-900/50 bg-red-950/40 text-red-200 text-xs text-center">
+                公式スケジュールで延期になっています。
+              </div>
+            )}
             {/* 天気情報 */}
-            {(() => {
+            {!isPostponedMatch(selectedMatch) && (() => {
               const [, m, d] = selectedMatch.date.split("/").map(Number);
               const w = weatherMap[`${m}/${d}`];
               if (!w) return null;
@@ -673,7 +692,10 @@ function ScheduleContent() {
           </button>
 
           <span className="ml-auto text-sm text-gray-400">
-            {filtered.length} 試合
+            {scheduledMatchCount} 試合
+            {postponedMatchCount > 0 && (
+              <span className="text-red-400 ml-1">+ {postponedMatchCount} 延期</span>
+            )}
             {showRentals && filteredRentals.length > 0 && (
               <span className="text-emerald-400 ml-1">+ {filteredRentals.length} リンク</span>
             )}
@@ -727,7 +749,8 @@ function ScheduleContent() {
         {grouped.map(([date, dateItems]) => {
           const { display } = formatDate(date);
           const today = isToday(date);
-          const matchCount = dateItems.filter((it) => it.kind === "match").length;
+          const matchCount = dateItems.filter((it) => it.kind === "match" && !isPostponedMatch(it.data)).length;
+          const postponedCount = dateItems.filter((it) => it.kind === "match" && isPostponedMatch(it.data)).length;
           const rentalCount = dateItems.filter((it) => it.kind === "rental").length;
 
           return (
@@ -740,6 +763,7 @@ function ScheduleContent() {
                 <div className="flex-1 h-px bg-gray-800" />
                 <span className="text-sm text-gray-500">
                   {matchCount}試合
+                  {postponedCount > 0 && <span className="text-red-400 ml-1">+{postponedCount}延期</span>}
                   {rentalCount > 0 && <span className="text-emerald-400 ml-1">+{rentalCount}リンク</span>}
                 </span>
               </div>
@@ -774,15 +798,20 @@ function ScheduleContent() {
                   }
 
                   const match = item.data;
+                  const postponed = isPostponedMatch(match);
                   return (
                     <div
                       key={`${date}-${i}`}
-                      className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors cursor-pointer active:bg-gray-800"
+                      className={`bg-gray-900 border rounded-xl p-4 transition-colors cursor-pointer active:bg-gray-800 ${
+                        postponed
+                          ? "border-red-900/70 hover:border-red-700/80"
+                          : "border-gray-800 hover:border-gray-600"
+                      }`}
                       onClick={() => setSelectedMatch(match)}
                     >
                       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="text-blue-400 font-mono font-semibold">
+                          <div className={`${postponed ? "text-red-300" : "text-blue-400"} font-mono font-semibold`}>
                             {match.timeStart}
                             {match.timeEnd && (
                               <span className="text-gray-500 text-sm"> ~ {match.timeEnd}</span>
@@ -792,6 +821,11 @@ function ScheduleContent() {
                             {match.division && (
                               <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
                                 {match.division}
+                              </span>
+                            )}
+                            {postponed && (
+                              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full font-medium">
+                                延期
                               </span>
                             )}
                             <a
@@ -823,7 +857,9 @@ function ScheduleContent() {
                               );
                             })()}
                           </div>
-                          <span className="text-gray-500 text-sm flex-shrink-0">vs</span>
+                          <span className={`${postponed ? "text-red-300 bg-red-950/60 border border-red-900/60 px-1.5 py-0.5 rounded" : "text-gray-500"} text-sm flex-shrink-0`}>
+                            {postponed ? "延期" : "vs"}
+                          </span>
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
                             {(() => {
@@ -843,6 +879,11 @@ function ScheduleContent() {
                           {match.division && (
                             <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
                               {match.division}
+                            </span>
+                          )}
+                          {postponed && (
+                            <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full font-medium">
+                              延期
                             </span>
                           )}
                           <a
