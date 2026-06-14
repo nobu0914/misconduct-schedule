@@ -32,6 +32,21 @@ const ATTEND_OPTIONS: { value: Attendance; label: string; color: string; activeC
   { value: "no",    label: "不参加",    color: "border-gray-600 text-gray-400", activeColor: "bg-gray-600 border-gray-600 text-white" },
 ];
 
+const MANGA_BY_DATE: Record<string, { src: string; alt: string }> = {
+  "2026/5/27": {
+    src: "/wednesday-manga-vol1.jpg",
+    alt: "水曜日のツーブロちゃん Vol.1",
+  },
+  "2026/6/3": {
+    src: "/wednesday-manga-vol2.jpg",
+    alt: "水曜日のツーブロちゃん Vol.2",
+  },
+  "2026/6/17": {
+    src: "/wednesday-manga-vol3.jpg",
+    alt: "水曜日のツーブロちゃん Vol.3",
+  },
+};
+
 export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) {
   const [result, setResult] = useState<VoteResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,10 +56,14 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
 
   const [selectedAttend, setSelectedAttend] = useState<Attendance | null>(null);
   const [selectedMenu, setSelectedMenu] = useState<string[]>([]);
+  const [voterId, setVoterId] = useState<string | null>(null);
 
-  const voterId = getVoterId();
+  useEffect(() => {
+    setVoterId(getVoterId());
+  }, []);
 
   const fetchVotes = useCallback(async () => {
+    if (!voterId) return;
     try {
       const res = await fetch(`/api/votes?date=${encodeURIComponent(date)}&voterId=${voterId}`);
       const data = await res.json();
@@ -76,7 +95,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   }, []);
 
   async function handleSubmit() {
-    if (!selectedAttend) return;
+    if (!selectedAttend || !voterId) return;
     setSubmitting(true);
     const res = await fetch("/api/votes", {
       method: "POST",
@@ -99,7 +118,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   const [aboutOpen, setAboutOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [mangaOpen, setMangaOpen] = useState(false);
-  const hasManga = date === "2026/5/27";
+  const manga = MANGA_BY_DATE[date];
+  const hasManga = Boolean(manga);
 
   async function handleShare() {
     const url = `${window.location.origin}/rental?practice=${encodeURIComponent(date)}`;
@@ -202,7 +222,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                           </a>
                         </p>
                         <p>🕗 時間：20:00〜22:00</p>
-                        <p>💴 参加費：大人 2,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
+                        <p>💴 参加費：大人 3,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
                         <p>🎯 対象：初心者〜ブロンズ・ブラス級程度の大人プレーヤー</p>
                         <p className="text-gray-400">✨ 上級者の場合、周囲のレベルに合わせてプレーいただける方</p>
                       </div>
@@ -336,7 +356,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
       </div>
 
       {/* おまけ漫画オーバーレイ */}
-      {mangaOpen && hasManga && (
+      {mangaOpen && manga && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-3"
           onClick={() => setMangaOpen(false)}
@@ -360,8 +380,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
               </button>
             </div>
             <img
-              src="/wednesday-manga-vol1.jpg"
-              alt="水曜日のツーブロちゃん Vol.1"
+              src={manga.src}
+              alt={manga.alt}
               className="w-full block"
             />
           </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import PageTracker from "@/components/PageTracker";
 
 export const metadata: Metadata = {
   title: "Rinnavi - MHL / CxC",
@@ -19,7 +20,8 @@ export default function RootLayout({
     <html lang="ja">
       <body className="bg-gray-950 text-white min-h-screen">
         <Nav />
-{children}
+        <PageTracker />
+        {children}
       </body>
     </html>
   );
