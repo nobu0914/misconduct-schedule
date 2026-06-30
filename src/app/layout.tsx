@@ -4,10 +4,15 @@ import Nav from "@/components/Nav";
 import PageTracker from "@/components/PageTracker";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mhlcxc.rinnavi.com"),
   title: "Rinnavi - MHL / CxC",
   description: "AIでホッケー情報を集めるサイト Rinnavi",
   openGraph: {
+    title: "Rinnavi - MHL / CxC",
     description: "AIでホッケー情報を集めるサイト Rinnavi",
+    url: "https://mhlcxc.rinnavi.com",
+    siteName: "Rinnavi - MHL / CxC",
+    type: "website",
   },
 };
 

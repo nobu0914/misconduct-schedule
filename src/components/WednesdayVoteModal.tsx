@@ -45,6 +45,10 @@ const MANGA_BY_DATE: Record<string, { src: string; alt: string }> = {
     src: "/wednesday-manga-vol3.jpg",
     alt: "水曜日のツーブロちゃん Vol.3",
   },
+  "2026/7/1": {
+    src: "/wednesday-manga-vol4.jpg",
+    alt: "ツーブロちゃんパパ 第1話「あと23日」",
+  },
 };
 
 export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) {

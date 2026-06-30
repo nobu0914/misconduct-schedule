@@ -67,6 +67,21 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 作業記録
 
+### 2026-06-24
+- 水曜練習会モーダルのおまけ漫画に vol4 を追加。
+  - `2026/7/1`: `/wednesday-manga-vol4.jpg`（新シリーズ「ツーブロちゃんパパ 第1話『あと23日』」）
+- `public/wednesday-manga-vol4.jpg` を追加。`WednesdayVoteModal.tsx` の `MANGA_BY_DATE` に `"2026/7/1"` を追加。
+- `RESEND_API_KEY=re_dummy npm run build` で検証済み。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_…b78vyp963…`、`mhlcxc.rinnavi.com` にエイリアス）。本番 `/wednesday-manga-vol4.jpg` は `200 image/jpeg`。
+
+### 2026-06-23
+- LINEでURLを貼った際に「変なサムネイル」が出る問題を修正。原因は `og:image` 未設定で、LINEが apple-touch-icon（`src/app/apple-icon.tsx`）を代替サムネイルとして拾っていたこと。
+- `src/app/opengraph-image.tsx` を追加し、`next/og` の `ImageResponse` でサイトロゴ調のOGP画像（1200×630・ダーク背景＋青アイコン＋「Rinnavi / MHL / CxC」）を自動生成。日本語はデフォルトフォントで豆腐化するため英字でレイアウト。
+- `src/app/layout.tsx` の `metadata` に `metadataBase`（`https://mhlcxc.rinnavi.com`）と `openGraph`（title/url/siteName/type）を追加し、`og:image` が絶対URLで出力されるよう修正。
+- `RESEND_API_KEY=re_dummy npm run build` で検証 → `npm run start` で `/opengraph-image`（200 image/png 1200×630）と `og:image` メタを目視/HTTP確認。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_DSy83kCsUqcmGfdxV45J3jF2ihAN`、`mhlcxc.rinnavi.com` にエイリアス）。本番の `og:image` 取得は `200 image/png`。
+- 注意: LINEはOGPを強くキャッシュするため、既存トークルームでは即時に変わらない場合あり。確認時は `?v=2` 等を付けた別URLで貼り直すと反映確認しやすい。
+
 ### 2026-06-14
 - アクセス解析が更新されない問題を修正。`PageTracker` が未接続だったため、`src/app/layout.tsx` に追加して `/admin` 以外のページPVを `/api/track` に送るよう復元。
 - `npx vercel --prod --yes` で本番反映済み（deployment `dpl_AbwUpFRWCNFY97RmzsmnV4o9KySc`、`mhlcxc.rinnavi.com` にエイリアス）。本番 `/api/track` への確認POSTは `{"ok":true}`。
