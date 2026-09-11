@@ -18,17 +18,22 @@ interface RentalData {
   lastUpdated: string;
 }
 
-const RENT_URLS: { month: string; year: number; monthNum: number; url: string }[] = [
-  { month: "1月", year: 2026, monthNum: 1, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202601.htm" },
-  { month: "2月", year: 2026, monthNum: 2, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202602.htm" },
-  { month: "3月", year: 2026, monthNum: 3, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202603.htm" },
-  { month: "4月", year: 2026, monthNum: 4, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202604.htm" },
-  { month: "5月", year: 2026, monthNum: 5, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202605.htm" },
-  { month: "6月", year: 2026, monthNum: 6, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202606.htm" },
-  { month: "7月", year: 2026, monthNum: 7, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202607.htm" },
-  { month: "8月", year: 2026, monthNum: 8, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202608.htm" },
-  { month: "9月", year: 2026, monthNum: 9, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202609.htm" },
-];
+// 過去8ヶ月〜3ヶ月先の12ヶ月分（JST基準）。12ヶ月以内なので月ラベルは重複しない
+// 未公開の月（HTTP 404）は空として扱われ、公開され次第自動で取り込まれる
+function getRentUrls(now = new Date()): { month: string; year: number; monthNum: number; url: string }[] {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() - 8 + i, 1));
+    const year = d.getUTCFullYear();
+    const monthNum = d.getUTCMonth() + 1;
+    return {
+      month: `${monthNum}月`,
+      year,
+      monthNum,
+      url: `https://misconduct.co.jp/wordpress/wp-content/uploads/rent_${year}${String(monthNum).padStart(2, "0")}.htm`,
+    };
+  });
+}
 
 // CSSから特定背景色のクラス名を抽出
 function extractClassesByBackground(css: string, color: string): Set<string> {
@@ -126,7 +131,7 @@ export async function GET(): Promise<NextResponse<RentalData>> {
   const allEntries: RentalEntry[] = [];
 
   await Promise.all(
-    RENT_URLS.map(async ({ month, year, monthNum, url }) => {
+    getRentUrls().map(async ({ month, year, monthNum, url }) => {
       const entries = await fetchAndParseRental(month, year, monthNum, url);
       allEntries.push(...entries);
     })

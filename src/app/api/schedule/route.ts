@@ -21,31 +21,18 @@ interface ScheduleData {
   lastUpdated: string;
 }
 
+const BASE = "https://misconduct.co.jp/wordpress/wp-content/uploads/";
+
+// 53rd は残り試合（9月）のみ、54th は 10月〜翌3月
+// 未公開の月（HTTP 404）は空として扱われ、公開され次第自動で取り込まれる
 const SCHEDULE_URLS: { month: string; url: string }[] = [
-  {
-    month: "3月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_march.htm",
-  },
-  {
-    month: "4月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_april.htm",
-  },
-  {
-    month: "5月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_may.htm",
-  },
-  {
-    month: "6月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_june.htm",
-  },
-  {
-    month: "7月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_july.htm",
-  },
-  {
-    month: "9月",
-    url: "https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_schedule_september.htm",
-  },
+  { month: "9月", url: `${BASE}53rd_schedule_september.htm` },
+  { month: "10月", url: `${BASE}54th_schedule_october.htm` },
+  { month: "11月", url: `${BASE}54th_schedule_november.htm` },
+  { month: "12月", url: `${BASE}54th_schedule_december.htm` },
+  { month: "1月", url: `${BASE}54th_schedule_january.htm` },
+  { month: "2月", url: `${BASE}54th_schedule_february.htm` },
+  { month: "3月", url: `${BASE}54th_schedule_march.htm` },
 ];
 
 function cleanText(text: string): string {

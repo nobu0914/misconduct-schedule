@@ -67,7 +67,7 @@ function isUpcoming(dateStr: string): boolean {
 }
 
 const DIVISION_ORDER = [
-  "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "35&Over",
+  "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over",
 ];
 
 interface SavedFilter {
