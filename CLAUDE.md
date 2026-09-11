@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260405-1726`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260911-1845`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -52,10 +52,31 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ### API キャッシュ構成
 - `/api/schedule`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
-- `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）巡回し、取得状態と試合数を確認
+- `/api/rental`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
+- `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）。公式サイトを直接（`no-store`）叩いて取得可否を検証し、その後 ISR キャッシュを破棄＋再生成する
 - `/api/standings`: `revalidate=172800`（48時間）+ `s-maxage=172800, stale-while-revalidate=86400`
 - `/api/prev-season`: `revalidate=86400`（1日）
 - `/api/standings-debug`: `force-dynamic`（デバッグ専用、常にリアルタイム）
+
+**重要**: ルートの `revalidate` と、その中の `fetch(..., { next: { revalidate } })` は必ず同じ値にする。
+- 内部 fetch を**短く**すると、セグメント全体の再生成間隔がそちらに引きずられる（Next は最小値を採用）
+- 内部 fetch を**長く**すると、再生成時に古いキャッシュが使われ鮮度が二重に劣化する
+- ルートの `revalidate` はリテラルで書く（定数を参照すると Next が静的解析できず警告）
+
+### 取得元URLの自動生成（重要）
+公式サイトは月ごとにファイルを追加していくため、URLを固定すると**新しい月が永久に取得されない**。
+`src/lib/schedule.ts` / `src/lib/rental.ts` が現在日付から候補URLを組み立てる。
+
+- スケジュール: `{シーズン}_schedule_{月名}.htm` を、進行中シーズンと次シーズンの全12か月分（計24件）
+  - シーズン番号は「53rd = 2026年3月開幕」を基準に年ごとに繰り上げ（`currentSeasonNumber()`）
+- レンタル: `rent_YYYYMM.htm` を、現在月の前8か月〜先6か月（計15件）
+- 未公開の月は 404 になるためスキップする（エラー扱いしない）
+- 月ラベル（フィルタ用）はURLではなく**ページ内の実日付**から生成。年をまたぐと `1月` が重複するため、当年以外は `2027年1月` 形式にする
+
+### 取得状態の可視化
+`/api/schedule` と `/api/rental` はレスポンスに `sources[]`（取得元ごとの `status` / `count` / `error`）を含む。
+- トップページは、取得0件や失敗があると警告バナーを表示する（「該当する試合がありません」と区別）
+- `/api/cron/schedule` は 0件・今後の予定0件・404以外の失敗を `warnings[]` にまとめ、異常時は HTTP 503 を返す（Vercel Cron のログで失敗として見える）
 
 ### standings 共通モジュール
 パース関数は `src/lib/standings.ts` に切り出し済み。`/api/standings`（キャッシュ有効）と `/api/standings-debug`（動的）の両方から利用。`/api/standings` は `GET()` に `req: Request` を受け取らないことでISRを有効化している。

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
+import { fetchAllMatches } from "@/lib/schedule";
+import { fetchAllRentalEntries } from "@/lib/rental";
+import type { SourceStatus } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ScheduleMatch = {
-  status?: string;
-};
+/** 404（未公開の月）以外の失敗、または取得0件を異常とみなす */
+function failedSources(sources: SourceStatus[]): SourceStatus[] {
+  return sources.filter((s) => s.status !== 200 && s.status !== 404);
+}
+
+function isUpcoming(date: string, today: Date): boolean {
+  const [y, m, d] = date.split("/").map(Number);
+  return new Date(y, m - 1, d).getTime() >= today.getTime();
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const expectedSecret = process.env.CRON_SECRET;
@@ -16,32 +26,77 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const scheduleUrl = new URL("/api/schedule", request.url);
-  scheduleUrl.searchParams.set("cron", Date.now().toString());
-
   const startedAt = Date.now();
-  const res = await fetch(scheduleUrl, { cache: "no-store" });
-  if (!res.ok) {
-    return NextResponse.json(
-      { ok: false, status: res.status, checkedAt: new Date().toISOString() },
-      { status: 502, headers: { "Cache-Control": "no-store, max-age=0" } }
-    );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // キャッシュを介さず公式サイトを直接叩いて、実際の取得可否を確認する
+  const [schedule, rental] = await Promise.all([
+    fetchAllMatches({ noStore: true }),
+    fetchAllRentalEntries({ noStore: true }),
+  ]);
+
+  const postponed = schedule.matches.filter((m) => m.status === "postponed").length;
+  const upcomingMatches = schedule.matches.filter((m) => isUpcoming(m.date, today)).length;
+  const upcomingRentals = rental.entries.filter((e) => isUpcoming(e.date, today)).length;
+  const latestMatchDate = schedule.matches.at(-1)?.date ?? null;
+  const latestRentalDate = rental.entries.at(-1)?.date ?? null;
+
+  const scheduleFailures = failedSources(schedule.sources);
+  const rentalFailures = failedSources(rental.sources);
+
+  const warnings: string[] = [];
+  if (schedule.matches.length === 0) warnings.push("スケジュールが1件も取得できていない");
+  else if (upcomingMatches === 0) warnings.push("今後の試合が0件（新しい月のページが未取得の可能性）");
+  if (rental.entries.length === 0) warnings.push("レンタル情報が1件も取得できていない");
+  else if (upcomingRentals === 0) warnings.push("今後のレンタル予定が0件（新しい月のページが未取得の可能性）");
+  for (const s of [...scheduleFailures, ...rentalFailures]) {
+    warnings.push(`取得失敗 ${s.label}: ${s.error ?? `HTTP ${s.status}`}`);
   }
 
-  const data = await res.json();
-  const matches: ScheduleMatch[] = Array.isArray(data.matches) ? data.matches : [];
-  const postponed = matches.filter((match) => match.status === "postponed").length;
+  // 公開APIのISRキャッシュを破棄し、その場で再生成させる（利用者が古い値を踏まないように）
+  let warmed = false;
+  try {
+    revalidatePath("/api/schedule");
+    revalidatePath("/api/rental");
+    await Promise.all([
+      fetch(new URL("/api/schedule", request.url), { cache: "no-store" }),
+      fetch(new URL("/api/rental", request.url), { cache: "no-store" }),
+    ]);
+    warmed = true;
+  } catch (e) {
+    warnings.push(`キャッシュ再生成に失敗: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
-  return NextResponse.json(
-    {
-      ok: true,
-      checkedAt: new Date().toISOString(),
-      upstreamLastUpdated: data.lastUpdated ?? null,
-      durationMs: Date.now() - startedAt,
-      totalMatches: matches.length,
-      scheduledMatches: matches.length - postponed,
+  const ok = warnings.length === 0;
+  const body = {
+    ok,
+    checkedAt: new Date().toISOString(),
+    durationMs: Date.now() - startedAt,
+    warmed,
+    warnings,
+    schedule: {
+      totalMatches: schedule.matches.length,
+      scheduledMatches: schedule.matches.length - postponed,
       postponedMatches: postponed,
+      upcomingMatches,
+      latestMatchDate,
+      months: [...new Set(schedule.matches.map((m) => m.month))],
+      okSources: schedule.sources.filter((s) => s.count > 0).map((s) => `${s.label}(${s.count})`),
+      failedSources: scheduleFailures,
     },
-    { headers: { "Cache-Control": "no-store, max-age=0" } }
-  );
+    rental: {
+      totalEntries: rental.entries.length,
+      upcomingEntries: upcomingRentals,
+      latestRentalDate,
+      months: [...new Set(rental.entries.map((e) => e.month))],
+      okSources: rental.sources.filter((s) => s.count > 0).map((s) => `${s.label}(${s.count})`),
+      failedSources: rentalFailures,
+    },
+  };
+
+  return NextResponse.json(body, {
+    status: ok ? 200 : 503,
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
 }

@@ -40,7 +40,7 @@ async function fetchDivisionPlayers(divisionLabel: string, url: string): Promise
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 259200 },
+      next: { revalidate: 259200 }, // ルートのISR(3日)と揃える
     });
     if (!res.ok) return [];
 
