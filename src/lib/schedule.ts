@@ -45,6 +45,13 @@ const MONTH_SLUGS = [
   "july", "august", "september", "october", "november", "december",
 ];
 
+/**
+ * 月名以外のスケジュールページ。
+ * 例: 53rd_schedule_playoff.htm（プレイオフ）
+ * 存在しないものは404でスキップされるので、候補として並べておいて問題ない。
+ */
+const EXTRA_SCHEDULE_SLUGS = ["playoff", "playoffs", "final"];
+
 // 53rd シーズン = 2026年3月開幕。以降は年ごとに繰り上がる想定。
 const BASE_SEASON = 53;
 const BASE_SEASON_START_YEAR = 2026;
@@ -82,8 +89,8 @@ export function buildScheduleSources(
   const sources: { label: string; url: string }[] = [];
   for (const s of [season, season + 1]) {
     const slug = seasonOrdinal(s);
-    for (const month of MONTH_SLUGS) {
-      sources.push({ label: `${slug}/${month}`, url: `${BASE}${slug}_schedule_${month}.htm` });
+    for (const name of [...MONTH_SLUGS, ...EXTRA_SCHEDULE_SLUGS]) {
+      sources.push({ label: `${slug}/${name}`, url: `${BASE}${slug}_schedule_${name}.htm` });
     }
   }
   return sources;
@@ -176,13 +183,16 @@ export async function fetchAndParseSchedule(
       // ビジター枠(colspan=3)があっても論理10列になる
       const cells = expandCells(row);
 
-      // 試合行: 論理10列以上 & col[0]が数字 & col[1]が時刻
+      // 試合行: 論理10列以上 & col[1]が時刻
       if (cells.length < 10) return;
-      if (!/^\d+$/.test(cells[0])) return;
 
       const timeStart = cells[1];
       const timeEnd = cells[3];
       if (!/^\d{1,2}:\d{2}$/.test(timeStart)) return;
+
+      // 通常の月別表は col[0] が連番。プレイオフ表は "SF1" や空欄など
+      // 連番でない場合があるため、その場合は col[6]="vs"（対戦カード）で判定する
+      if (!/^\d+$/.test(cells[0]) && cells[6] !== "vs") return;
 
       // col[6]="vs"なら通常試合、それ以外(ビジター等)はサブ情報なしとして扱う
       const isNormal = cells[6] === "vs";
