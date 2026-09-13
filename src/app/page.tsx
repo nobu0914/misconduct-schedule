@@ -490,6 +490,11 @@ function ScheduleContent() {
                     {selectedMatch.division}
                   </span>
                 )}
+                {selectedMatch.round && (
+                  <span className="border border-amber-500 text-amber-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                    {selectedMatch.round}
+                  </span>
+                )}
                 {isPostponedMatch(selectedMatch) && (
                   <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">延期</span>
                 )}
@@ -847,6 +852,11 @@ function ScheduleContent() {
                                 {match.division}
                               </span>
                             )}
+                            {match.round && (
+                              <span className="border border-amber-500 text-amber-400 text-xs px-2 py-1 rounded-full font-medium">
+                                {match.round}
+                              </span>
+                            )}
                             {postponed && (
                               <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full font-medium">
                                 延期
@@ -903,6 +913,11 @@ function ScheduleContent() {
                           {match.division && (
                             <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
                               {match.division}
+                            </span>
+                          )}
+                          {match.round && (
+                            <span className="border border-amber-500 text-amber-400 text-xs px-2 py-1 rounded-full font-medium">
+                              {match.round}
                             </span>
                           )}
                           {postponed && (

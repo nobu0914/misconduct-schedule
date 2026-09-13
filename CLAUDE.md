@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1641`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1651`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -103,7 +103,14 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - 取得状態を可視化: `/api/schedule` `/api/rental` が `sources[]`（取得元ごとの status / 件数 / error）を返す。トップページは取得失敗時に警告バナーを出し「試合なし」と区別する。
 - `/api/cron/schedule` を実監視に変更。公式サイトを `no-store` で直接検証し、0件・今後の予定0件・404以外の失敗があれば HTTP 503。その後 `revalidatePath` + 再取得でキャッシュを更新する（従来の `?cron=` は静的ISRルートには効いていなかった）。
 - 内部 fetch のキャッシュをルートのISRと同じ値に統一（standings は 48h対72h の逆転で最大5日古くなり得た）。
-- 未確認: 実サイトに到達できない環境で作業したため、プレイオフ表の列構造は月別表と同じ前提。違っていれば cron の `warnings` に「試合行が0件」と出る。
+- プレイオフ表の実構造を確認（ローカルから実サイト取得）。**月別表と構造が違った**:
+  - 論理**14列**（月別表は10列）。`vs` の位置も [6] ではなく **[8]**
+  - `[0]no("PO1") [1]start [2]～ [3]end [4]awaySeed [5]awayName [6]awaySub [8]vs [10]homeSub [11]homeName [12]homeSeed [13]division`
+  - Division 欄は `Brass Quarter Finals` のように回戦名込み → `splitDivision()` で `division` と `round` に分離。
+    `35 & Over` は月別表の `35&Over` に合わせて空白を詰める（フィルタが分裂しないように）
+  - 回戦名は `round` として琥珀色のバッジで表示（カード2箇所＋モーダル）
+  - 催し物（Pick Up Hockey 等）・時間調整・対戦カード未定の行は取り込まない
+- cron の `failedSources` が status だけで判定しており、「200だが解析0件」を正常扱いしていたのを修正（`error` の有無でも拾う）。
 - 未対応（9/11から継続）: standings / scores / player-stats は 53rd 固定、prev-season は 52nd のまま。10/3 の 54th 開幕後に更新が必要。
 
 ### 2026-09-11

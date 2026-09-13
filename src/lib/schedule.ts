@@ -11,6 +11,8 @@ export interface Match {
   division: string;
   status: "scheduled" | "postponed";
   statusLabel?: string;
+  /** プレイオフの回戦名（"Quarter Finals" 等）。レギュラーシーズンは undefined */
+  round?: string;
   month: string;
   sourceUrl: string;
 }
@@ -117,6 +119,17 @@ export function monthLabel(date: string, now: Date = new Date()): string {
   return y === jstYearMonth(now).year ? `${m}月` : `${y}年${m}月`;
 }
 
+/**
+ * プレイオフ表の Division 欄は "Brass Quarter Finals" のように回戦名込みで入る。
+ * フィルタ・色分け（division.includes("Brass") 方式）と噛み合うよう基本名を切り出す。
+ * "35 & Over" は月別表では "35&Over" 表記なので空白も詰めて揃える。
+ */
+export function splitDivision(raw: string): { division: string; round?: string } {
+  const m = raw.match(/^(.*?)\s*((?:quarter\s*|semi\s*)?finals?)$/i);
+  if (!m || !m[1]) return { division: raw };
+  return { division: m[1].replace(/\s*&\s*/g, "&").trim(), round: m[2] };
+}
+
 function cleanText(text: string): string {
   return text
     .replace(/ /g, " ")  // &nbsp;
@@ -125,8 +138,11 @@ function cleanText(text: string): string {
     .trim();
 }
 
-// 行の構造 (10列):
-// [0]no  [1]start  [2]〜  [3]end  [4]awayName  [5]awaySub  [6]vs  [7]homeSub  [8]homeName  [9]division
+// 月別表 (論理10列):
+// [0]no [1]start [2]〜 [3]end [4]awayName [5]awaySub [6]vs [7]homeSub [8]homeName [9]division
+// プレイオフ表 (論理14列): 列数も vs の位置も違う
+// [0]no [1]start [2]～ [3]end [4]awaySeed [5]awayName [6]awaySub [7] [8]vs [9]
+// [10]homeSub [11]homeName [12]homeSeed [13]division
 export async function fetchAndParseSchedule(
   label: string,
   url: string,
@@ -195,26 +211,39 @@ export async function fetchAndParseSchedule(
       // ビジター枠(colspan=3)があっても論理10列になる
       const cells = expandCells(row);
 
-      // 試合行: 論理10列以上 & col[1]が時刻
       if (cells.length < 10) return;
 
       const timeStart = cells[1];
       const timeEnd = cells[3];
       if (!/^\d{1,2}:\d{2}$/.test(timeStart)) return;
 
-      // 通常の月別表は col[0] が連番。プレイオフ表は "SF1" や空欄など
-      // 連番でない場合があるため、その場合は col[6]="vs"（対戦カード）で判定する
-      if (!/^\d+$/.test(cells[0]) && cells[6] !== "vs") return;
+      const withSub = (name: string, sub: string) => (sub ? `${name} (${sub})` : name);
+      const vsIdx = cells.indexOf("vs");
+      // プレイオフ表は14列で vs が [8]。月別表は10列で vs が [6]
+      const isPlayoff = cells.length >= 14 && vsIdx === 8;
 
-      // col[6]="vs"なら通常試合、それ以外(ビジター等)はサブ情報なしとして扱う
-      const isNormal = cells[6] === "vs";
-      const awaySub = isNormal && cells[5] ? `(${cells[5]})` : "";
-      const awayTeam = [cells[4], awaySub].filter(Boolean).join(" ");
-      const homeSub = isNormal && cells[7] ? `(${cells[7]})` : "";
-      const homeTeam = [cells[8], homeSub].filter(Boolean).join(" ");
-      const division = cells[9];
-      const statusText = cells.slice(5, 8).join(" ");
-      const isPostponed = statusText.includes("延期");
+      let awayTeam: string;
+      let homeTeam: string;
+      let rawDivision: string;
+
+      if (isPlayoff) {
+        // 試合番号が "PO1" 等で連番にならないため、vs の位置を試合行の条件にする
+        awayTeam = withSub(cells[5], cells[6]);
+        homeTeam = withSub(cells[11], cells[10]);
+        rawDivision = cells[13];
+        // 対戦カードが未定の行（両チーム空欄）は取り込まない
+        if (!cells[5] && !cells[11]) return;
+      } else {
+        if (!/^\d+$/.test(cells[0])) return;
+        // col[6]="vs"なら通常試合、それ以外(ビジター等)はサブ情報なしとして扱う
+        const isNormal = vsIdx === 6;
+        awayTeam = withSub(cells[4], isNormal ? cells[5] : "");
+        homeTeam = withSub(cells[8], isNormal ? cells[7] : "");
+        rawDivision = cells[9];
+      }
+
+      const { division, round } = splitDivision(rawDivision);
+      const isPostponed = cells.join(" ").includes("延期");
 
       matches.push({
         no: cells[0],
@@ -226,6 +255,7 @@ export async function fetchAndParseSchedule(
         division,
         status: isPostponed ? "postponed" : "scheduled",
         statusLabel: isPostponed ? "延期" : undefined,
+        round,
         // 月ラベルはURLではなくページ内の実日付から作る（URLと中身のズレを防ぐ）
         month: monthLabel(currentDate, now),
         sourceUrl: url,
