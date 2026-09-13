@@ -108,7 +108,7 @@ export async function fetchAndParseStandings(
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 172800 }, // ルートのISR(48h)と揃える
+      next: { revalidate: 86400 }, // ルートのISR(1日)と揃える
     });
     result.status = res.status;
     if (!res.ok) return result;

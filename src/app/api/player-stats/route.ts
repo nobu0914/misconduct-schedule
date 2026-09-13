@@ -4,7 +4,7 @@ import iconv from "iconv-lite";
 import { buildStandingsSources } from "@/lib/standings";
 import { currentSeasonNumber, seasonOrdinal } from "@/lib/schedule";
 
-export const revalidate = 259200; // 3日
+export const revalidate = 86400; // 1日（cronで毎日再生成する）
 
 export interface PlayerStat {
   name: string;
@@ -32,7 +32,7 @@ async function fetchDivisionPlayers(divisionLabel: string, url: string): Promise
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 259200 }, // ルートのISR(3日)と揃える
+      next: { revalidate: 86400 }, // ルートのISR(1日)と揃える
     });
     if (!res.ok) return [];
 

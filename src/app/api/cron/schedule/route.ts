@@ -65,15 +65,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     warnings.push(`取得失敗 ${s.label}: ${s.error ?? `HTTP ${s.status}`}`);
   }
 
-  // 公開APIのISRキャッシュを破棄し、その場で再生成させる（利用者が古い値を踏まないように）
+  // 公開APIのISRキャッシュを破棄し、その場で再生成させる（利用者が古い値を踏まないように）。
+  // 順位表・スコア・個人成績もここで再生成する。これが無いと「誰かがアクセスして、かつ
+  // キャッシュ期限が切れていたら更新」頼みになり、公式の更新が何日も反映されない
+  const WARM_PATHS = [
+    "/api/schedule",
+    "/api/rental",
+    "/api/standings",
+    "/api/scores",
+    "/api/player-stats",
+  ];
   let warmed = false;
+  const warmedCounts: Record<string, number> = {};
   try {
-    revalidatePath("/api/schedule");
-    revalidatePath("/api/rental");
-    await Promise.all([
-      fetch(new URL("/api/schedule", request.url), { cache: "no-store" }),
-      fetch(new URL("/api/rental", request.url), { cache: "no-store" }),
-    ]);
+    for (const path of WARM_PATHS) revalidatePath(path);
+    await Promise.all(
+      WARM_PATHS.map(async (path) => {
+        const res = await fetch(new URL(path, request.url), { cache: "no-store" });
+        if (!res.ok) {
+          warnings.push(`${path} の再生成に失敗: HTTP ${res.status}`);
+          return;
+        }
+        // 再生成後の件数を控えておく（0件ならどこかで壊れている）
+        const body = await res.json().catch(() => null);
+        const items = body?.matches ?? body?.entries ?? body?.standings ?? body?.games ?? body?.players;
+        warmedCounts[path] = Array.isArray(items) ? items.length : 0;
+        if (warmedCounts[path] === 0) warnings.push(`${path} が0件`);
+      })
+    );
     warmed = true;
   } catch (e) {
     warnings.push(`キャッシュ再生成に失敗: ${e instanceof Error ? e.message : String(e)}`);
@@ -85,6 +104,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     checkedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     warmed,
+    warmedCounts,
     warnings,
     schedule: {
       totalMatches: schedule.matches.length,

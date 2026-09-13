@@ -5,7 +5,7 @@ import type { TeamStanding } from "@/lib/standings";
 
 export type { TeamStanding };
 
-export const revalidate = 172800; // 2日（48時間）
+export const revalidate = 86400; // 1日（cronで毎日再生成する）
 
 interface StandingsData {
   standings: TeamStanding[];
@@ -36,6 +36,6 @@ export async function GET(): Promise<NextResponse> {
 
   return NextResponse.json(
     { standings: allStandings, season, lastUpdated: new Date().toISOString() } satisfies StandingsData,
-    { headers: { "Cache-Control": "s-maxage=172800, stale-while-revalidate=86400" } }
+    { headers: { "Cache-Control": "s-maxage=86400, stale-while-revalidate=3600" } }
   );
 }

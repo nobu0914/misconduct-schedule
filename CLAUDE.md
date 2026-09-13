@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-2015`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-2128`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -55,9 +55,17 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/rental`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
 - `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）。公式サイトを直接（`no-store`）叩いて取得可否を検証し、その後 ISR キャッシュを破棄＋再生成する
 - `/api/cron/verify`: Vercel Cron で週1回（月曜 03:00 UTC / 12:00 JST）。スケジュール・レンタル・スコアを `no-store` で取得し、保存済みスナップショットと突き合わせる
-- `/api/standings`: `revalidate=172800`（48時間）+ `s-maxage=172800, stale-while-revalidate=86400`
+- `/api/standings` / `/api/scores` / `/api/player-stats`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
 - `/api/prev-season`: `revalidate=86400`（1日）
 - `/api/events`: `revalidate=86400`（1日）
+
+**cron で毎日再生成する対象**（`/api/cron/schedule` の `WARM_PATHS`）:
+`/api/schedule` `/api/rental` `/api/standings` `/api/scores` `/api/player-stats`
+
+これが無いと「誰かがアクセスして、かつキャッシュ期限が切れていたら更新」頼みになる。
+さらに `stale-while-revalidate` のため**期限切れ後の最初のアクセスには古い値が返る**（再生成は裏で走る）ので、
+アクセスが多くないサイトでは公式の更新が何日も反映されない。新しい取得系APIを足したら必ずここにも追加すること。
+再生成後の件数は cron のレスポンスの `warmedCounts` に出る（0件なら `warnings` に載る）。
 - `/api/standings-debug`: `force-dynamic`（デバッグ専用、常にリアルタイム）
 
 **重要**: ルートの `revalidate` と、その中の `fetch(..., { next: { revalidate } })` は必ず同じ値にする。
@@ -162,6 +170,13 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー（Shift-JISの�
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
 
 ## 作業記録
+
+### 2026-09-13（キャッシュ）
+- チームランキングが更新されないという指摘。原因は2つ重なっていた:
+  1. `/api/standings` が48時間キャッシュ（スコア・個人成績は72時間）
+  2. cron が再生成していたのは `/api/schedule` と `/api/rental` だけで、順位表は対象外だった
+  → 順位表・スコア・個人成績を1日キャッシュに統一し、cron の `WARM_PATHS` に追加。
+  これで公式の更新は毎日12:00 JSTに必ず反映される。
 
 ### 2026-09-13（全体レビュー）
 - 公開APIの入力検証が抜けており、`/api/track` の `path` と `/api/votes` の `date`/`voterId`/`attendance`/`menu` が

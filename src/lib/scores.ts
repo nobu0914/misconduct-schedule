@@ -73,7 +73,7 @@ export async function fetchAndParseScores(
       headers: { "User-Agent": "Mozilla/5.0" },
       ...(opts.noStore
         ? { cache: "no-store" as const }
-        : { next: { revalidate: 259200 } }), // ルートのISR(3日)と揃える
+        : { next: { revalidate: 86400 } }), // ルートのISR(1日)と揃える
     });
     source.status = res.status;
     if (!res.ok) {
