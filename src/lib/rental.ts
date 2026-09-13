@@ -148,8 +148,8 @@ export async function fetchAndParseRental(
       });
     });
 
+    // 公開直後で予定が0件の月は普通にあるため、0件自体は異常としない
     status.count = entries.length;
-    if (entries.length === 0) status.error = "ページは取得できたが予定が0件（構造変更の可能性）";
   } catch (e) {
     status.error = e instanceof Error ? e.message : String(e);
     console.error(`Failed to fetch/parse ${url}:`, e);

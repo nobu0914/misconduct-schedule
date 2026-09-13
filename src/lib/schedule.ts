@@ -174,6 +174,7 @@ export async function fetchAndParseSchedule(
 
     const $ = cheerio.load(text);
     let currentDate = "";
+    let dateRowCount = 0;
 
     // colspanを展開して論理列配列を返す
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,7 +202,10 @@ export async function fetchAndParseSchedule(
       const dateCell = rawCells.find((c) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(c));
       if (dateCell) {
         const m = dateCell.match(/(\d{4}\/\d{1,2}\/\d{1,2})/);
-        if (m) currentDate = m[1];
+        if (m) {
+          currentDate = m[1];
+          dateRowCount++;
+        }
         return;
       }
 
@@ -263,7 +267,11 @@ export async function fetchAndParseSchedule(
     });
 
     source.count = matches.length;
-    if (matches.length === 0) source.error = "ページは取得できたが試合行が0件（構造変更の可能性）";
+    // 日付行すらない＝枠だけ先に公開された未記入ページ。異常ではないので警告しない。
+    // 日付行があるのに試合行が取れない場合だけ、構造変更を疑う。
+    if (matches.length === 0 && dateRowCount > 0) {
+      source.error = `日付行は${dateRowCount}件あるが試合行が0件（構造変更の可能性）`;
+    }
   } catch (e) {
     source.error = e instanceof Error ? e.message : String(e);
     console.error(`Failed to fetch/parse ${url}:`, e);
