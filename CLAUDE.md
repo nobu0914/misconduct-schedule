@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1744`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-2015`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -124,6 +124,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
   （既知ページはそのまま、未知は形式検証＋長さ制限）。`event` は `EVENT_TYPES` のみ受け付ける
 - `/api/votes`: `date`（`YYYY/M/D`）・`voterId`（英数64文字以内）・`attendance`（yes/maybe/no）・
   `menu`（`MENU_ITEMS` に含まれるものだけ）を検証。例外の詳細は利用者に返さずログにだけ出す
+  （検証ロジックは `src/lib/votes.ts` の `validateVoteInput()`）
 - `/api/contact`: 名前100・メール200・本文5000文字で切り詰め、同一IPから1時間5通まで。
   Resend のエラー詳細は返さない。`Resend` はモジュール読み込み時ではなくハンドラ内で生成する
   （`RESEND_API_KEY` なしでも `npm run build` が通る）
@@ -132,6 +133,28 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/cron/*`: `CRON_SECRET` **未設定なら誰でも叩ける**。1回で公式サイトへ数十件アクセスするため、
   認証が無い場合だけ最短実行間隔を設けている（schedule 5分 / verify 10分、`src/lib/cronGuard.ts`）。
   **本番では `CRON_SECRET` を設定するのが本筋**（設定すれば認証必須になり、Vercel Cron は自動でヘッダーを付ける）
+
+### 投票の集計方式（`src/lib/votes.ts`）
+旧実装は `vote:{date}` に集計オブジェクトをまるごと保存し、読み込み→加算→書き戻ししていたため、
+**2人が同時に投票すると片方の票が失われた**。現在は次の形。
+
+- `vote:{date}:attend` / `vote:{date}:menu` のハッシュに対し `hincrby` で**原子的に**増減する
+- 投票のやり直しは `getset` で直前の記録を原子的に取り出して置き換え、その差分だけを反映する
+  （同じ人が二重送信しても二重計上しない）
+- 旧形式のデータは初回アクセス時にハッシュへ移行する。同時アクセスで二重計上しないよう
+  `vote:{date}:migrating` を `nx` で取れた1リクエストだけが書き込む
+- KV操作は `VoteStore` インターフェース越しに呼ぶ（テストでメモリ実装に差し替えるため）
+
+### テスト
+テストランナーは導入していない。`tests/*.mts` を tsx で直接実行する。
+
+```bash
+npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
+npx tsx tests/data-sources.mts  # URL自動生成・パーサー（Shift-JISのダミーページ使用、39項目）
+```
+
+どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
+オフラインでもそのまま動く。パーサーやシーズン判定を変えたら必ず両方を通すこと。
 
 ### イベントプログラム連携
 - `/api/events` がタイトルに「イベント・プログラム」を含む記事の詳細をスクレイピングし `programs` フィールドで返す
@@ -149,8 +172,12 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/cron/*`: `CRON_SECRET` 未設定時のみ最短実行間隔を設け、公式サイトへの連打を防止。
 - `/api/events` に `revalidate` が無く毎リクエスト動的実行だったのでISR化（1日）。
 - `next.config.js` に `X-Content-Type-Options` と `Referrer-Policy` を追加。
-- 既知の未修正: `/api/votes` の集計は read-modify-write のため、同時投票が競合すると1票落ちる可能性がある
-  （水曜練習会の出欠用途では実害が小さいため保留）。
+- `/api/votes` の集計を `hincrby` による原子的な増減に変更し、同時投票で票が落ちる問題を解消。
+  投票ロジックを `src/lib/votes.ts` に切り出し、KV操作を差し替え可能にしてテストを追加（`tests/votes.mts`、20項目）。
+  旧形式のデータは初回アクセス時に自動移行する（移行時の二重計上も排他制御で防止）。
+- 投票者IDの生成が `crypto.randomUUID()` 直呼びで、使えない環境（古いブラウザ・https以外）では
+  投票できなくなるため、フォールバックを追加。
+- `tests/` を追加し、テストの実行方法を CLAUDE.md に記載。
 
 ### 2026-09-13（続き）
 - スコアの点数が全件 null に見えたのは調査コマンド側の不具合（日付を文字列比較して、まだ結果が入っていない直近の試合を「最新」として拾っていた）。パーサーの列位置（`[5]`=awayScore / `[7]`=homeScore）は実物と一致していた。

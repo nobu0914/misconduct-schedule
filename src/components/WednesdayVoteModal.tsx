@@ -20,7 +20,10 @@ function getVoterId(): string {
   const key = "wednesday_voter_id";
   let id = localStorage.getItem(key);
   if (!id) {
-    id = crypto.randomUUID();
+    // randomUUID は古いブラウザやhttps以外だと使えないことがある
+    id = typeof crypto?.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
     localStorage.setItem(key, id);
   }
   return id;

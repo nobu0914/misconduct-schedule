@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
-    version: "Ver.1-260913-1744",
+    version: "Ver.1-260913-2015",
     date: "2026-09-13",
     changes: [
       "プレイオフ日程（53rd_schedule_playoff.htm）を取得対象に追加",
@@ -22,6 +22,7 @@ const VERSIONS = [
       "APIの入力検証を強化（不正なデータでの集計汚染を防止）",
       "お問い合わせフォームに文字数上限と連投制限を追加",
       "管理画面のパスコード認証を強化（総当たり対策）",
+      "水曜練習会の投票で、同時に投票すると票が反映されないことがある問題を修正",
     ],
   },
   {
