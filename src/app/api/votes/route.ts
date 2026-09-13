@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
-import type { Attendance } from "@/lib/voteConstants";
+import { MENU_ITEMS, type Attendance } from "@/lib/voteConstants";
 
 interface VoterRecord {
   attendance: Attendance;
@@ -11,6 +11,32 @@ interface VoteResult {
   attend: { yes: number; maybe: number; no: number };
   menu: Record<string, number>;
   myVote: VoterRecord | null;
+}
+
+const ATTENDANCE_VALUES: Attendance[] = ["yes", "maybe", "no"];
+
+/**
+ * 受け取った値はそのままKVのキーや集計キーになるため、既知の形・既知の値だけを通す。
+ * （検証しないと任意のキーを作られ、集計データを際限なく膨らませられる）
+ */
+function validate(input: {
+  date: unknown; voterId: unknown; attendance: unknown; menu: unknown;
+}): { date: string; voterId: string; attendance: Attendance; menu: string[] } | null {
+  const { date, voterId, attendance, menu } = input;
+  if (typeof date !== "string" || !/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(date)) return null;
+  if (typeof voterId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(voterId)) return null;
+  if (!ATTENDANCE_VALUES.includes(attendance as Attendance)) return null;
+  if (menu !== undefined && !Array.isArray(menu)) return null;
+  const known: readonly string[] = MENU_ITEMS;
+  const items = (menu ?? []) as unknown[];
+  if (items.length > MENU_ITEMS.length) return null;
+  if (!items.every((m) => typeof m === "string" && known.includes(m))) return null;
+  return {
+    date,
+    voterId,
+    attendance: attendance as Attendance,
+    menu: Array.from(new Set(items as string[])),
+  };
 }
 
 function dateKey(date: string) {
@@ -45,17 +71,14 @@ export async function GET(req: NextRequest): Promise<NextResponse<VoteResult>> {
   }
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> {
-  const { date, voterId, attendance, menu } = await req.json() as {
-    date: string;
-    voterId: string;
-    attendance: Attendance;
-    menu: string[];
-  };
+const EMPTY_RESULT: VoteResult = { attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null };
 
-  if (!date || !voterId || !attendance) {
-    return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null }, { status: 400 });
+export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> {
+  const input = validate(await req.json());
+  if (!input) {
+    return NextResponse.json(EMPTY_RESULT, { status: 400 });
   }
+  const { date, voterId, attendance, menu } = input;
 
   try {
     const key = dateKey(date);
@@ -90,8 +113,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<VoteResult>> 
 
     return NextResponse.json({ attend, menu: menuCounts, myVote: newRecord });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("votes POST error:", msg);
-    return NextResponse.json({ attend: { yes: 0, maybe: 0, no: 0 }, menu: {}, myVote: null, error: msg }, { status: 500 });
+    // 例外の中身はログにだけ出す（利用者に内部情報を返さない）
+    console.error("votes POST error:", e instanceof Error ? e.message : String(e));
+    return NextResponse.json(EMPTY_RESULT, { status: 500 });
   }
 }

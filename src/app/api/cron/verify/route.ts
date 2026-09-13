@@ -4,6 +4,7 @@ import { fetchAllMatches, type SourceStatus } from "@/lib/schedule";
 import { fetchAllRentalEntries } from "@/lib/rental";
 import { fetchAllScores } from "@/lib/scores";
 import { listArchived, loadArchive } from "@/lib/archive";
+import { isThrottled } from "@/lib/cronGuard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -82,6 +83,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (auth !== `Bearer ${expectedSecret}`) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+  }
+
+  if (!expectedSecret && (await isThrottled("verify", 600))) {
+    // 認証なしで誰でも叩ける状態なので、連打で公式サイトに負荷をかけさせない。
+    // 直近の結果が残っていればそれを返す
+    const last = await kv.get(LAST_KEY).catch(() => null);
+    return NextResponse.json(
+      { throttled: true, message: "直近に実行済みのため保存済みの結果を返しました", last },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   }
 
   const startedAt = Date.now();

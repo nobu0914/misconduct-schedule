@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1724`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1744`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -57,6 +57,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/cron/verify`: Vercel Cron で週1回（月曜 03:00 UTC / 12:00 JST）。スケジュール・レンタル・スコアを `no-store` で取得し、保存済みスナップショットと突き合わせる
 - `/api/standings`: `revalidate=172800`（48時間）+ `s-maxage=172800, stale-while-revalidate=86400`
 - `/api/prev-season`: `revalidate=86400`（1日）
+- `/api/events`: `revalidate=86400`（1日）
 - `/api/standings-debug`: `force-dynamic`（デバッグ専用、常にリアルタイム）
 
 **重要**: ルートの `revalidate` と、その中の `fetch(..., { next: { revalidate } })` は必ず同じ値にする。
@@ -115,12 +116,41 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 ファイル名スラッグはスコア表と綴りが違う（Women Gold = `wg`、スコアは `womengold`）。Women Bronze は `wb` と想定（未公開なら404でスキップ）。
 `/api/standings` と `/api/player-stats` は実際に使ったシーズンを `season` で返し、ランキングページの「今シーズン（53rd）」表記はこれを使う。
 
+### 入力検証とレート制限（重要）
+公開APIが受け取った値は**そのままKVのキーや集計キーになる**ため、検証しないと任意のキーを作られて
+集計データを際限なく膨らませられる。以下は必ず検証してから使う。
+
+- `/api/track`: `path` は `src/lib/analyticsConstants.ts` の `normalizeTrackedPath()` を通す
+  （既知ページはそのまま、未知は形式検証＋長さ制限）。`event` は `EVENT_TYPES` のみ受け付ける
+- `/api/votes`: `date`（`YYYY/M/D`）・`voterId`（英数64文字以内）・`attendance`（yes/maybe/no）・
+  `menu`（`MENU_ITEMS` に含まれるものだけ）を検証。例外の詳細は利用者に返さずログにだけ出す
+- `/api/contact`: 名前100・メール200・本文5000文字で切り詰め、同一IPから1時間5通まで。
+  Resend のエラー詳細は返さない。`Resend` はモジュール読み込み時ではなくハンドラ内で生成する
+  （`RESEND_API_KEY` なしでも `npm run build` が通る）
+- `/api/admin/*`: パスコードは `src/lib/adminAuth.ts` の `verifyAdminPasscode()` で照合。
+  ハッシュ同士の定数時間比較 + IPごとの失敗回数制限（15分で20回）
+- `/api/cron/*`: `CRON_SECRET` **未設定なら誰でも叩ける**。1回で公式サイトへ数十件アクセスするため、
+  認証が無い場合だけ最短実行間隔を設けている（schedule 5分 / verify 10分、`src/lib/cronGuard.ts`）。
+  **本番では `CRON_SECRET` を設定するのが本筋**（設定すれば認証必須になり、Vercel Cron は自動でヘッダーを付ける）
+
 ### イベントプログラム連携
 - `/api/events` がタイトルに「イベント・プログラム」を含む記事の詳細をスクレイピングし `programs` フィールドで返す
 - `/events` ページ: 該当記事クリックでモーダル表示
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
 
 ## 作業記録
+
+### 2026-09-13（全体レビュー）
+- 公開APIの入力検証が抜けており、`/api/track` の `path` と `/api/votes` の `date`/`voterId`/`attendance`/`menu` が
+  未検証のままKVのキーになっていた（任意のキーを作れる状態）。いずれも検証を追加。
+- `/api/contact`: 文字数上限なし・回数制限なし・Resendのエラー本文をそのまま返却していたのを修正。
+  `Resend` の生成をハンドラ内に移し、`RESEND_API_KEY` なしでもビルドが通るようになった。
+- `/api/admin/*`: パスコード比較を定数時間に変更し、IPごとの失敗回数制限を追加。
+- `/api/cron/*`: `CRON_SECRET` 未設定時のみ最短実行間隔を設け、公式サイトへの連打を防止。
+- `/api/events` に `revalidate` が無く毎リクエスト動的実行だったのでISR化（1日）。
+- `next.config.js` に `X-Content-Type-Options` と `Referrer-Policy` を追加。
+- 既知の未修正: `/api/votes` の集計は read-modify-write のため、同時投票が競合すると1票落ちる可能性がある
+  （水曜練習会の出欠用途では実害が小さいため保留）。
 
 ### 2026-09-13（続き）
 - スコアの点数が全件 null に見えたのは調査コマンド側の不具合（日付を文字列比較して、まだ結果が入っていない直近の試合を「最新」として拾っていた）。パーサーの列位置（`[5]`=awayScore / `[7]`=homeScore）は実物と一致していた。

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { fetchAllMatches } from "@/lib/schedule";
 import { fetchAllRentalEntries } from "@/lib/rental";
+import { isThrottled } from "@/lib/cronGuard";
 import type { SourceStatus } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (auth !== `Bearer ${expectedSecret}`) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+  } else if (await isThrottled("schedule", 300)) {
+    // 認証なしで誰でも叩ける状態なので、連打で公式サイトに負荷をかけさせない
+    return NextResponse.json(
+      { ok: true, throttled: true, message: "直近に実行済みのためスキップしました" },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   }
 
   const startedAt = Date.now();
