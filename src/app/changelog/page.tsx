@@ -6,11 +6,12 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
-    version: "Ver.1-260913-1457",
+    version: "Ver.1-260913-1641",
     date: "2026-09-13",
     changes: [
       "プレイオフ日程（53rd_schedule_playoff.htm）を取得対象に追加",
       "試合番号が連番でない行（プレイオフの SF1・空欄など）も試合として取り込むよう修正",
+      "シーズン判定を10月開幕基準に修正し、53rd/54th を自動で切り替えるよう変更",
     ],
   },
   {

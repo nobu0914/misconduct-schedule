@@ -52,10 +52,20 @@ const MONTH_SLUGS = [
  */
 const EXTRA_SCHEDULE_SLUGS = ["playoff", "playoffs", "final"];
 
-// 53rd シーズン = 2026年3月開幕。以降は年ごとに繰り上がる想定。
-const BASE_SEASON = 53;
+// 54th シーズン = 2026年10月3日開幕（9/10発表）。シーズンは10月〜翌3月。
+// 53rd は2026年9月で終了（+ プレイオフ）。以降は年ごとに繰り上がる。
+const BASE_SEASON = 54;
 const BASE_SEASON_START_YEAR = 2026;
-const SEASON_START_MONTH = 3;
+const SEASON_START_MONTH = 10;
+
+/**
+ * Vercel の実行環境は UTC のため、年月の判定は JST に寄せる。
+ * 月初の 00:00-09:00 JST に UTC だと前月扱いになるのを防ぐ。
+ */
+function jstYearMonth(now: Date): { year: number; month: number } {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return { year: jst.getUTCFullYear(), month: jst.getUTCMonth() + 1 };
+}
 
 /** 53 -> "53rd" のような序数表記に変換 */
 export function seasonOrdinal(n: number): string {
@@ -69,10 +79,10 @@ export function seasonOrdinal(n: number): string {
   }
 }
 
-/** 指定日時点で進行中のシーズン番号 */
+/** 指定日時点で進行中のシーズン番号（JST基準） */
 export function currentSeasonNumber(now: Date = new Date()): number {
-  const seasonYear =
-    now.getMonth() + 1 >= SEASON_START_MONTH ? now.getFullYear() : now.getFullYear() - 1;
+  const { year, month } = jstYearMonth(now);
+  const seasonYear = month >= SEASON_START_MONTH ? year : year - 1;
   return BASE_SEASON + (seasonYear - BASE_SEASON_START_YEAR);
 }
 
@@ -85,6 +95,8 @@ export function currentSeasonNumber(now: Date = new Date()): number {
 export function buildScheduleSources(
   now: Date = new Date()
 ): { label: string; url: string }[] {
+  // 進行中シーズン＋次シーズンを見る。シーズンは10月開幕なので、
+  // 9月時点では「53rd の残り試合＋プレイオフ」と「10/3開幕の54th」が同時に必要になる
   const season = currentSeasonNumber(now);
   const sources: { label: string; url: string }[] = [];
   for (const s of [season, season + 1]) {
@@ -102,7 +114,7 @@ export function buildScheduleSources(
  */
 export function monthLabel(date: string, now: Date = new Date()): string {
   const [y, m] = date.split("/").map(Number);
-  return y === now.getFullYear() ? `${m}月` : `${y}年${m}月`;
+  return y === jstYearMonth(now).year ? `${m}月` : `${y}年${m}月`;
 }
 
 function cleanText(text: string): string {

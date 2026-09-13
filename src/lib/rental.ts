@@ -37,10 +37,12 @@ export function buildRentalSources(
   now: Date = new Date()
 ): { year: number; monthNum: number; label: string; url: string }[] {
   const sources: { year: number; monthNum: number; label: string; url: string }[] = [];
+  // サーバーはUTCで動くため JST 基準の年月を起点にする
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   for (let offset = -MONTHS_BACK; offset <= MONTHS_AHEAD; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const year = d.getFullYear();
-    const monthNum = d.getMonth() + 1;
+    const d = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() + offset, 1));
+    const year = d.getUTCFullYear();
+    const monthNum = d.getUTCMonth() + 1;
     const ym = `${year}${String(monthNum).padStart(2, "0")}`;
     sources.push({ year, monthNum, label: ym, url: `${BASE}rent_${ym}.htm` });
   }

@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1457`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1641`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -68,7 +68,9 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 `src/lib/schedule.ts` / `src/lib/rental.ts` が現在日付から候補URLを組み立てる。
 
 - スケジュール: `{シーズン}_schedule_{月名}.htm` を、進行中シーズンと次シーズンの全12か月分
-  - シーズン番号は「53rd = 2026年3月開幕」を基準に年ごとに繰り上げ（`currentSeasonNumber()`）
+  - シーズンは**10月開幕〜翌3月**。「54th = 2026年10月3日開幕」を基準に年ごとに繰り上げ（`currentSeasonNumber()`）
+  - 進行中シーズン＋次シーズンの両方を見る（9月時点では「53rd の残り＋プレイオフ」と「10/3開幕の54th」が同時に必要なため）
+  - 年月の判定は JST 基準（Vercel は UTC で動くため、月初 00:00-09:00 JST のズレを防ぐ）
   - 月名以外のページも候補に含む（`EXTRA_SCHEDULE_SLUGS` = `playoff` / `playoffs` / `final`）。
     プレイオフ表は `53rd_schedule_playoff.htm`。新しい種類のページが増えたらここに追加する
   - 合計30件（2シーズン × 15ページ）を並列取得し、404はスキップ
@@ -89,6 +91,70 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/events` がタイトルに「イベント・プログラム」を含む記事の詳細をスクレイピングし `programs` フィールドで返す
 - `/events` ページ: 該当記事クリックでモーダル表示
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
+
+## 作業記録
+
+### 2026-09-13
+- プレイオフ日程（`53rd_schedule_playoff.htm`）が取得できていなかった。原因: URL生成が月名（january〜december）のみで、月以外のページが候補に入っていなかった。
+  - `EXTRA_SCHEDULE_SLUGS`（`playoff` / `playoffs` / `final`）を追加。
+  - 試合行の判定も緩和: 試合番号が連番でない行（プレイオフの `SF1`、空欄）は col[6]=`vs` で試合行とみなす。これを直さないとURLを足しても0件になる。
+- 9/11 の修正（53rd 9月 + 54th 10〜3月の手書きリスト）を、日付からのURL自動生成に置き換え。シーズン番号も 10月開幕基準で自動繰り上げ（`src/lib/schedule.ts` / `src/lib/rental.ts` に切り出し）。
+  - 月ラベルを実日付から生成し、当年以外は `2026年10月` 形式にしたので、3月が重複する問題は月を削らなくても解決する。
+- 取得状態を可視化: `/api/schedule` `/api/rental` が `sources[]`（取得元ごとの status / 件数 / error）を返す。トップページは取得失敗時に警告バナーを出し「試合なし」と区別する。
+- `/api/cron/schedule` を実監視に変更。公式サイトを `no-store` で直接検証し、0件・今後の予定0件・404以外の失敗があれば HTTP 503。その後 `revalidatePath` + 再取得でキャッシュを更新する（従来の `?cron=` は静的ISRルートには効いていなかった）。
+- 内部 fetch のキャッシュをルートのISRと同じ値に統一（standings は 48h対72h の逆転で最大5日古くなり得た）。
+- 未確認: 実サイトに到達できない環境で作業したため、プレイオフ表の列構造は月別表と同じ前提。違っていれば cron の `warnings` に「試合行が0件」と出る。
+- 未対応（9/11から継続）: standings / scores / player-stats は 53rd 固定、prev-season は 52nd のまま。10/3 の 54th 開幕後に更新が必要。
+
+### 2026-09-11
+- The 54th season schedule (announced 9/10, starts 10/3) wasn't showing. Cause: `SCHEDULE_URLS` in `/api/schedule` was hardcoded to 53rd 3–7月 and 9月.
+  - Changed to 53rd `september` (remaining games through 9/27) + 54th `october`–`march`. Removed 53rd 3–7月 so 2026年3月 and 2027年3月 don't collide under the same "3月" label.
+  - Unpublished months (404) are treated as empty and picked up automatically once published.
+- `/api/rental` was also hardcoded to `rent_202601`–`202609`. Changed to generate the 12 months from 8 months back to 3 months ahead automatically (JST).
+- Added the new 54th division `Women Bronze` to `DIVISION_ORDER` in `page.tsx`.
+- Checked with a local build and `next start`: 53rd Sept 41 games + 54th Oct–Jan 220 games.
+- Deployed to production with `npx vercel --prod --yes` (deployment `dpl_9pKhzcB26E5wha7RSC7iEj3FJsiF`, aliased to `mhlcxc.rinnavi.com`). To avoid shipping the uncommitted Capacitor changes, deployed from a copy of HEAD (2b42582) plus the 3 fixed files only.
+- Deploy note: deploying from a git checkout gets **BLOCKED** by Vercel because the commit author is `m5MBA32GB1TB <…@m5MBA24GB1TB.local>` (the CLI just hangs at "Building…"; the cause only shows with `--debug`). Worked around by deploying from a copy with no `.git`. `.vercel` doesn't exist at the repo root, so re-link with `npx vercel link --yes --project misconduct-schedule`.
+- At deploy time, the official site's `54th_schedule_january.htm` was temporarily 404 (it was fetchable just before). It's still linked, so it will appear automatically once restored upstream (within 1 day via ISR revalidation).
+- Not done yet: standings/scores/player-stats are still hardcoded to 53rd, and the previous-season reference is still 52nd. Needs updating after 54th opens (10/3).
+
+### 2026-06-24
+- 水曜練習会モーダルのおまけ漫画に vol4 を追加。
+  - `2026/7/1`: `/wednesday-manga-vol4.jpg`（新シリーズ「ツーブロちゃんパパ 第1話『あと23日』」）
+- `public/wednesday-manga-vol4.jpg` を追加。`WednesdayVoteModal.tsx` の `MANGA_BY_DATE` に `"2026/7/1"` を追加。
+- `RESEND_API_KEY=re_dummy npm run build` で検証済み。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_…b78vyp963…`、`mhlcxc.rinnavi.com` にエイリアス）。本番 `/wednesday-manga-vol4.jpg` は `200 image/jpeg`。
+
+### 2026-06-23
+- LINEでURLを貼った際に「変なサムネイル」が出る問題を修正。原因は `og:image` 未設定で、LINEが apple-touch-icon（`src/app/apple-icon.tsx`）を代替サムネイルとして拾っていたこと。
+- `src/app/opengraph-image.tsx` を追加し、`next/og` の `ImageResponse` でサイトロゴ調のOGP画像（1200×630・ダーク背景＋青アイコン＋「Rinnavi / MHL / CxC」）を自動生成。日本語はデフォルトフォントで豆腐化するため英字でレイアウト。
+- `src/app/layout.tsx` の `metadata` に `metadataBase`（`https://mhlcxc.rinnavi.com`）と `openGraph`（title/url/siteName/type）を追加し、`og:image` が絶対URLで出力されるよう修正。
+- `RESEND_API_KEY=re_dummy npm run build` で検証 → `npm run start` で `/opengraph-image`（200 image/png 1200×630）と `og:image` メタを目視/HTTP確認。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_DSy83kCsUqcmGfdxV45J3jF2ihAN`、`mhlcxc.rinnavi.com` にエイリアス）。本番の `og:image` 取得は `200 image/png`。
+- 注意: LINEはOGPを強くキャッシュするため、既存トークルームでは即時に変わらない場合あり。確認時は `?v=2` 等を付けた別URLで貼り直すと反映確認しやすい。
+
+### 2026-06-14
+- アクセス解析が更新されない問題を修正。`PageTracker` が未接続だったため、`src/app/layout.tsx` に追加して `/admin` 以外のページPVを `/api/track` に送るよう復元。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_AbwUpFRWCNFY97RmzsmnV4o9KySc`、`mhlcxc.rinnavi.com` にエイリアス）。本番 `/api/track` への確認POSTは `{"ok":true}`。
+- 右上ハンバーガーメニューに `/admin` への「管理者画面」導線を復元。
+- 水曜練習会モーダルのおまけ漫画を `2026/6/17` に追加。
+  - `2026/6/17`: `/wednesday-manga-vol3.jpg`
+- `public/wednesday-manga-vol3.jpg` を追加（「水曜日のツーブロちゃん vol.3」）。
+- `RESEND_API_KEY=re_dummy npm run build` で検証済み。
+- `npx vercel --prod --yes` で本番反映済み（deployment `dpl_EyyNpqEB4HTQvqXPyt5593wmRhn5`、`mhlcxc.rinnavi.com` にエイリアス）。
+- 管理者画面導線復元後、`npx vercel --prod --yes` で本番反映済み（deployment `dpl_CUR5r8uPzPPJssGr4sk8xkekGsjs`、`mhlcxc.rinnavi.com` にエイリアス）。
+
+### 2026-05-31
+- 水曜練習会モーダルのおまけ漫画を日付別に表示するよう更新。
+  - `2026/5/27`: `/wednesday-manga-vol1.jpg`
+  - `2026/6/3`: `/wednesday-manga-vol2.jpg`
+- `public/wednesday-manga-vol2.jpg` を追加（「水曜日のツーブロちゃん vol.2」）。
+- `WednesdayVoteModal` の `localStorage` 参照をマウント後に実行するよう修正し、`/rental?practice=2026%2F6%2F3` のサーバー描画時エラーを回避。
+- 水曜練習会の参加費表示を `大人 3,000円` に変更。
+  - `/rental` ページ内の説明
+  - 投票モーダル内の説明
+- `RESEND_API_KEY=re_dummy npm run build` で検証済み。
+- `npx vercel --prod` で本番反映済み（`mhlcxc.rinnavi.com` にエイリアス）。
 
 ---
 
