@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { reconcileWithArchive } from "./archive";
 
 export interface Match {
   no: string;
@@ -22,8 +23,10 @@ export interface SourceStatus {
   label: string;
   url: string;
   status: number; // HTTPステータス（0 = 例外で到達不可）
-  count: number;  // パースできた試合数
+  count: number;  // パースできた件数
   error?: string;
+  /** 公式ページが消えていたため保存済みデータで補完した場合、その保存時刻 */
+  fromArchive?: string;
 }
 
 export interface ScheduleResult {
@@ -305,10 +308,19 @@ export async function fetchAllMatches(
     )
   );
 
+  // 公開が終わったページは保存済みデータで補完する。
+  // 月ラベルは「当年かどうか」で変わるので、保存時のものは使わず付け直す
+  const perSource = await reconcileWithArchive(
+    "schedule",
+    results.map((r) => ({ items: r.matches, source: r.source })),
+    (items) => items.map((m) => ({ ...m, month: monthLabel(m.date, now) })),
+    opts.noStore === true
+  );
+
   // 同一試合が複数ファイルに載っていても1件に寄せる
   const seen = new Set<string>();
   const matches: Match[] = [];
-  for (const { matches: found } of results) {
+  for (const found of perSource) {
     for (const m of found) {
       const key = `${m.date}|${m.timeStart}|${m.awayTeam}|${m.homeTeam}|${m.division}`;
       if (seen.has(key)) continue;

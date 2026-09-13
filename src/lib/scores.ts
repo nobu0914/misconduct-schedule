@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { currentSeasonNumber, seasonOrdinal, type SourceStatus } from "./schedule";
+import { reconcileWithArchive } from "./archive";
 
 export interface GameScore {
   gameNo: number;
@@ -63,13 +64,16 @@ const DATE_RE = /^(\d{4}\/\d{1,2}\/\d{1,2})\s+(\S+)$/;
 export async function fetchAndParseScores(
   divisionLabel: string,
   url: string,
-  season = ""
+  season = "",
+  opts: { noStore?: boolean } = {}
 ): Promise<{ games: GameScore[]; source: SourceStatus }> {
   const source: SourceStatus = { label: `${season}/${divisionLabel}`, url, status: 0, count: 0 };
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 259200 }, // ルートのISR(3日)と揃える
+      ...(opts.noStore
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: 259200 } }), // ルートのISR(3日)と揃える
     });
     source.status = res.status;
     if (!res.ok) {
@@ -151,15 +155,23 @@ export async function fetchAndParseScores(
 
 /** 全スコア表を取得し、日付の新しい順に並べて返す */
 export async function fetchAllScores(
-  now: Date = new Date()
+  opts: { noStore?: boolean; now?: Date } = {}
 ): Promise<{ games: GameScore[]; sources: SourceStatus[] }> {
+  const now = opts.now ?? new Date();
   const results = await Promise.all(
     buildScoreSources(now).map(({ label, season, url }) =>
-      fetchAndParseScores(label, url, season)
+      fetchAndParseScores(label, url, season, opts)
     )
   );
+  const perSource = await reconcileWithArchive(
+    "scores",
+    results.map((r) => ({ items: r.games, source: r.source })),
+    undefined,
+    opts.noStore === true
+  );
+
   return {
-    games: results.flatMap((r) => r.games),
+    games: perSource.flat(),
     sources: results.map((r) => r.source),
   };
 }

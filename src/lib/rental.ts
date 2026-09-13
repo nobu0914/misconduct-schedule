@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { monthLabel, type SourceStatus } from "./schedule";
+import { reconcileWithArchive } from "./archive";
 
 export interface RentalEntry {
   date: string;
@@ -173,7 +174,14 @@ export async function fetchAllRentalEntries(
     buildRentalSources(now).map((source) => fetchAndParseRental(source, { ...opts, now }))
   );
 
-  const entries = results.flatMap((r) => r.entries);
+  const perSource = await reconcileWithArchive(
+    "rental",
+    results.map((r) => ({ items: r.entries, source: r.source })),
+    (items) => items.map((e) => ({ ...e, month: monthLabel(e.date, now) })),
+    opts.noStore === true
+  );
+
+  const entries = perSource.flat();
   entries.sort((a, b) => dateTimeToMs(a.date, a.timeStart) - dateTimeToMs(b.date, b.timeStart));
 
   return {

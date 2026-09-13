@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1705`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1712`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -54,6 +54,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/schedule`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
 - `/api/rental`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
 - `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）。公式サイトを直接（`no-store`）叩いて取得可否を検証し、その後 ISR キャッシュを破棄＋再生成する
+- `/api/cron/verify`: Vercel Cron で週1回（月曜 03:00 UTC / 12:00 JST）。スケジュール・レンタル・スコアを `no-store` で取得し、保存済みスナップショットと突き合わせる
 - `/api/standings`: `revalidate=172800`（48時間）+ `s-maxage=172800, stale-while-revalidate=86400`
 - `/api/prev-season`: `revalidate=86400`（1日）
 - `/api/standings-debug`: `force-dynamic`（デバッグ専用、常にリアルタイム）
@@ -84,6 +85,26 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - トップページは、取得0件や失敗があると警告バナーを表示する（「該当する試合がありません」と区別）
 - `/api/cron/schedule` は 0件・今後の予定0件・404以外の失敗を `warnings[]` にまとめ、異常時は HTTP 503 を返す（Vercel Cron のログで失敗として見える）
 
+### データ保存とフォールバック（Vercel KV）
+公式サイトのページはシーズンが終わると**予告なく非公開になる**ため、取得できたデータを KV に残して補完する（`src/lib/archive.ts`）。
+
+- キー: `archive:{group}:{label}`（例 `archive:schedule:53rd/march`）。ラベル一覧は `archive:index:{group}` の set で管理（KVのSCANを避けるため）
+- group は `schedule` / `rental` / `scores`
+- **保存は cron のときだけ**（`noStore: true` の経路）。公開APIの描画ごとに書き込むと無駄なので、公開側は読み取り補完のみ
+- 取得0件かつ保存実績がある取得元は、スナップショットで補完し `SourceStatus.fromArchive` に保存時刻が入る
+- 空配列では上書きしない（公式側の一時的な不調でアーカイブを壊さないため）
+- 月ラベルは「当年かどうか」で表記が変わるので、補完時に付け直す
+- KV 未設定・不通でも通常の取得は動く（すべて握りつぶして no-op）
+
+### 週1回の整合性チェック
+`/api/cron/verify`（月曜 12:00 JST）。公式サイトを直接取得し、保存済みと突き合わせて次を報告する。
+
+- `problems`（要対応 → HTTP 503 で Vercel Cron のログに失敗として出る）
+  - 解析エラー、404以外のHTTPエラー、件数が保存時の80%未満に減少、区分ごと全滅
+- `notices`（想定内 → 正常終了）
+  - 公式ページが消えて保存データで表示中（シーズン終了後の非公開はここに出る）
+- 結果は KV の `verify:last` と `verify:history`（12週分）に保存
+
 ### standings 共通モジュール
 パース関数は `src/lib/standings.ts` に切り出し済み。`/api/standings`（キャッシュ有効）と `/api/standings-debug`（動的）の両方から利用。`/api/standings` は `GET()` に `req: Request` を受け取らないことでISRを有効化している。
 
@@ -93,6 +114,11 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
 
 ## 作業記録
+
+### 2026-09-13（続き）
+- スコアの点数が全件 null に見えたのは調査コマンド側の不具合（日付を文字列比較して、まだ結果が入っていない直近の試合を「最新」として拾っていた）。パーサーの列位置（`[5]`=awayScore / `[7]`=homeScore）は実物と一致していた。
+- 週1回の整合性チェック（`/api/cron/verify`）とデータ保存（`src/lib/archive.ts`）を追加。
+  古いシーズンのページが非公開になっても表示を維持できる。
 
 ### 2026-09-13
 - プレイオフ日程（`53rd_schedule_playoff.htm`）が取得できていなかった。原因: URL生成が月名（january〜december）のみで、月以外のページが候補に入っていなかった。
