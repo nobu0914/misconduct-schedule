@@ -19,7 +19,7 @@ const DIVISION_COLORS: Record<string, string> = {
   "35": "bg-blue-500",
 };
 
-const DIVISIONS = ["Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "35&Over"];
+const DIVISIONS = ["Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over"];
 
 function getDivisionColor(division: string): string {
   for (const [key, color] of Object.entries(DIVISION_COLORS)) {
@@ -138,12 +138,26 @@ function PlayerRankingContent() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(g);
     }
+    // 最新の日付が上に来るよう降順に並べる
     return Array.from(map.entries()).sort((a, b) => {
       const da = new Date(a[0].split(" ")[0]).getTime();
       const db = new Date(b[0].split(" ")[0]).getTime();
-      return da - db;
+      return db - da;
     });
   }, [divisionGames]);
+
+  // 「公式サイトで見る」の遷移先は、実際に表示しているスコア表のURLを使う
+  const officialScoreUrl = useMemo(() => {
+    const fromGames = divisionGames[0]?.sourceUrl;
+    if (fromGames) return fromGames;
+    const season = games[0]?.season || "53rd";
+    const slug =
+      selectedDivision === "Women Gold" ? "womengold"
+      : selectedDivision === "Women Bronze" ? "womenbronze"
+      : selectedDivision === "35&Over" ? "35over"
+      : selectedDivision.toLowerCase();
+    return `https://misconduct.co.jp/wordpress/wp-content/uploads/${season}_score_${slug}.htm`;
+  }, [divisionGames, games, selectedDivision]);
 
   const results = season === "current" ? currentResults : prevResults;
   const noResults = !loading && query.trim() && results.length === 0;
@@ -525,7 +539,7 @@ function PlayerRankingContent() {
                   <div className="text-xs text-gray-400 mb-2 font-medium">{dateKey}</div>
                   <div className="space-y-2">
                     {gs.map((g) => (
-                      <div key={`${g.divisionLabel}-${g.gameNo}`} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5">
+                      <div key={`${g.sourceUrl}-${g.gameNo}`} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5">
                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-1.5">
                           <span>#{g.gameNo}</span>
                           <span>{g.timeStart}〜{g.timeEnd}</span>
@@ -561,9 +575,7 @@ function PlayerRankingContent() {
 
             <div className="mt-6 text-center">
               <a
-                href={`https://misconduct.co.jp/wordpress/wp-content/uploads/53rd_score_${
-                  selectedDivision === "Women Gold" ? "womengold" : selectedDivision === "35&Over" ? "35over" : selectedDivision.toLowerCase()
-                }.htm`}
+                href={officialScoreUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-gray-500 hover:text-gray-300 transition-colors"

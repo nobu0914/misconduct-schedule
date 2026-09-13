@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1659`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1705`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -116,7 +116,14 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
   判定を **「時刻があり、かつ試合番号か `vs` を持つ行（＝対戦カードのはず）が1件以上あるのに、1件も解釈できない」** に変更。
   列構成の変化も拾えるよう、この判定は列数チェックより前に行う。催し物・時間調整・対戦カード未定の枠は数えない。
   レンタルは公開直後に予定0件が普通にあるので0件では警告しない。
-- 未対応（9/11から継続）: standings / scores / player-stats は 53rd 固定、prev-season は 52nd のまま。10/3 の 54th 開幕後に更新が必要。
+- スコア（`/api/scores`）も 53rd 固定だったので、スケジュールと同じ日付ベースのURL自動生成に変更。
+  進行中＋次シーズンの2シーズンを取得するので、10/3の54th開幕後も53rdの結果が消えない。
+  54th新設の **Women Bronze** をスコアのディビジョン一覧とランキングページの `DIVISIONS` に追加。
+  `GameScore` に `season` / `sourceUrl` を追加し、「公式サイトで見る」のリンクと React key に使う
+  （2シーズン混在時に `gameNo` が衝突するため）。
+- スコア表示を**日付の新しい順**に変更（従来は古い順）。
+- 未対応（9/11から継続）: standings / player-stats は 53rd 固定、prev-season は 52nd のまま。
+  10/3 の 54th 開幕後に更新が必要（`src/lib/scores.ts` の `buildScoreSources()` と同じ方式に寄せられる）。
 
 ### 2026-09-11
 - The 54th season schedule (announced 9/10, starts 10/3) wasn't showing. Cause: `SCHEDULE_URLS` in `/api/schedule` was hardcoded to 53rd 3–7月 and 9月.

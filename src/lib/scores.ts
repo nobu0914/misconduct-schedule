@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { currentSeasonNumber, seasonOrdinal, type SourceStatus } from "./schedule";
 
 export interface GameScore {
   gameNo: number;
@@ -13,20 +14,45 @@ export interface GameScore {
   homeScore: number | null;
   divisionLabel: string;
   played: boolean;
+  season: string;     // "53rd" / "54th"
+  sourceUrl: string;  // 掲載元の公式スコア表URL
 }
 
 const BASE = "https://misconduct.co.jp/wordpress/wp-content/uploads/";
-export const SCORE_URLS: { label: string; url: string }[] = [
-  { label: "Platinum",   url: `${BASE}53rd_score_platinum.htm` },
-  { label: "Gold",       url: `${BASE}53rd_score_gold.htm` },
-  { label: "Silver",     url: `${BASE}53rd_score_silver.htm` },
-  { label: "Bronze",     url: `${BASE}53rd_score_bronze.htm` },
-  { label: "Brass",      url: `${BASE}53rd_score_brass.htm` },
-  { label: "Copper",     url: `${BASE}53rd_score_copper.htm` },
-  { label: "Iron",       url: `${BASE}53rd_score_iron.htm` },
-  { label: "Women Gold", url: `${BASE}53rd_score_womengold.htm` },
-  { label: "35&Over",    url: `${BASE}53rd_score_35over.htm` },
+
+/** ディビジョン表示名 → ファイル名スラッグ */
+export const SCORE_DIVISIONS: { label: string; slug: string }[] = [
+  { label: "Platinum",     slug: "platinum" },
+  { label: "Gold",         slug: "gold" },
+  { label: "Silver",       slug: "silver" },
+  { label: "Bronze",       slug: "bronze" },
+  { label: "Brass",        slug: "brass" },
+  { label: "Copper",       slug: "copper" },
+  { label: "Iron",         slug: "iron" },
+  { label: "Women Gold",   slug: "womengold" },
+  { label: "Women Bronze", slug: "womenbronze" }, // 54thで新設
+  { label: "35&Over",      slug: "35over" },
 ];
+
+/**
+ * スコア表URLを日付から生成する。
+ * スケジュールと同じく、進行中シーズンと次シーズンの両方を見る
+ * （シーズン切替直後に前シーズンの結果が消えないようにするため）。
+ * 存在しないファイルは404でスキップされる。
+ */
+export function buildScoreSources(
+  now: Date = new Date()
+): { label: string; season: string; url: string }[] {
+  const season = currentSeasonNumber(now);
+  const sources: { label: string; season: string; url: string }[] = [];
+  for (const s of [season, season + 1]) {
+    const slug = seasonOrdinal(s);
+    for (const d of SCORE_DIVISIONS) {
+      sources.push({ label: d.label, season: slug, url: `${BASE}${slug}_score_${d.slug}.htm` });
+    }
+  }
+  return sources;
+}
 
 function cleanText(text: string): string {
   return text.replace(/ /g, " ").replace(/　/g, " ").replace(/\s+/g, " ").trim();
@@ -34,13 +60,23 @@ function cleanText(text: string): string {
 
 const DATE_RE = /^(\d{4}\/\d{1,2}\/\d{1,2})\s+(\S+)$/;
 
-export async function fetchAndParseScores(divisionLabel: string, url: string): Promise<GameScore[]> {
+export async function fetchAndParseScores(
+  divisionLabel: string,
+  url: string,
+  season = ""
+): Promise<{ games: GameScore[]; source: SourceStatus }> {
+  const source: SourceStatus = { label: `${season}/${divisionLabel}`, url, status: 0, count: 0 };
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       next: { revalidate: 259200 }, // ルートのISR(3日)と揃える
     });
-    if (!res.ok) return [];
+    source.status = res.status;
+    if (!res.ok) {
+      // 未公開のシーズン・ディビジョンは404になる
+      if (res.status !== 404) source.error = `HTTP ${res.status}`;
+      return { games: [], source };
+    }
 
     const buffer = await res.arrayBuffer();
     const buf = Buffer.from(buffer);
@@ -100,11 +136,30 @@ export async function fetchAndParseScores(divisionLabel: string, url: string): P
         homeScore,
         divisionLabel,
         played: awayScore !== null && homeScore !== null,
+        season,
+        sourceUrl: url,
       });
     });
 
-    return games;
-  } catch {
-    return [];
+    source.count = games.length;
+    return { games, source };
+  } catch (e) {
+    source.error = e instanceof Error ? e.message : String(e);
+    return { games: [], source };
   }
+}
+
+/** 全スコア表を取得し、日付の新しい順に並べて返す */
+export async function fetchAllScores(
+  now: Date = new Date()
+): Promise<{ games: GameScore[]; sources: SourceStatus[] }> {
+  const results = await Promise.all(
+    buildScoreSources(now).map(({ label, season, url }) =>
+      fetchAndParseScores(label, url, season)
+    )
+  );
+  return {
+    games: results.flatMap((r) => r.games),
+    sources: results.map((r) => r.source),
+  };
 }
