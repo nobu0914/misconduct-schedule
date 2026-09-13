@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260913-1712`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260913-1724`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -108,6 +108,13 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 ### standings 共通モジュール
 パース関数は `src/lib/standings.ts` に切り出し済み。`/api/standings`（キャッシュ有効）と `/api/standings-debug`（動的）の両方から利用。`/api/standings` は `GET()` に `req: Request` を受け取らないことでISRを有効化している。
 
+**シーズンの選び方（スケジュール・スコアと違う）**: 順位表は「今の順位」なので複数シーズンを混ぜられない（同じディビジョンの行が二重になる）。
+`fetchCurrentStandings()` は進行中シーズンを取り、**1件も取れなければ前シーズンにフォールバック**する（開幕直後の空白期間対策）。
+`/api/player-stats` は順位表ページから個人成績を読むため、`buildStandingsSources()` を共有して同じ判定をする。
+順位変動の比較用スナップショットは `standings:last:{season}` とシーズン別に分ける（切替時に変動表示が壊れないように）。
+ファイル名スラッグはスコア表と綴りが違う（Women Gold = `wg`、スコアは `womengold`）。Women Bronze は `wb` と想定（未公開なら404でスキップ）。
+`/api/standings` と `/api/player-stats` は実際に使ったシーズンを `season` で返し、ランキングページの「今シーズン（53rd）」表記はこれを使う。
+
 ### イベントプログラム連携
 - `/api/events` がタイトルに「イベント・プログラム」を含む記事の詳細をスクレイピングし `programs` フィールドで返す
 - `/events` ページ: 該当記事クリックでモーダル表示
@@ -148,8 +155,11 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
   `GameScore` に `season` / `sourceUrl` を追加し、「公式サイトで見る」のリンクと React key に使う
   （2シーズン混在時に `gameNo` が衝突するため）。
 - スコア表示を**日付の新しい順**に変更（従来は古い順）。
-- 未対応（9/11から継続）: standings / player-stats は 53rd 固定、prev-season は 52nd のまま。
-  10/3 の 54th 開幕後に更新が必要（`src/lib/scores.ts` の `buildScoreSources()` と同じ方式に寄せられる）。
+- standings / player-stats もシーズン自動判定に変更（進行中→取れなければ前シーズン）。
+  UIの「今シーズン（53rd）」表記もAPIの `season` から出すようにした。
+- **未対応**: `/api/prev-season` と `/api/prev-season-players` は 52nd のハードコード
+  （公式ページが消えたため Wayback Machine から採取したもの）。53rd 終了後は「昨シーズン＝53rd」に
+  更新が必要。今は `src/lib/archive.ts` に 53rd のデータが貯まるので、次はそこから生成できる。
 
 ### 2026-09-11
 - The 54th season schedule (announced 9/10, starts 10/3) wasn't showing. Cause: `SCHEDULE_URLS` in `/api/schedule` was hardcoded to 53rd 3–7月 and 9月.

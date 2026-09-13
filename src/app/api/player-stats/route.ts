@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { buildStandingsSources } from "@/lib/standings";
+import { currentSeasonNumber, seasonOrdinal } from "@/lib/schedule";
 
 export const revalidate = 259200; // 3日
 
@@ -19,18 +21,8 @@ export interface PlayerStat {
   sourceUrl: string;    // ディビジョンのランキングページURL
 }
 
-const BASE = "https://misconduct.co.jp/wordpress/wp-content/uploads/";
-const STANDINGS_URLS: { label: string; url: string }[] = [
-  { label: "Platinum",   url: `${BASE}53rd_standings_platinum.htm` },
-  { label: "Gold",       url: `${BASE}53rd_standings_gold.htm` },
-  { label: "Silver",     url: `${BASE}53rd_standings_silver.htm` },
-  { label: "Bronze",     url: `${BASE}53rd_standings_bronze.htm` },
-  { label: "Brass",      url: `${BASE}53rd_standings_brass.htm` },
-  { label: "Copper",     url: `${BASE}53rd_standings_copper.htm` },
-  { label: "Iron",       url: `${BASE}53rd_standings_iron.htm` },
-  { label: "Women Gold", url: `${BASE}53rd_standings_wg.htm` },
-  { label: "35&Over",    url: `${BASE}53rd_standings_35over.htm` },
-];
+// 取得元は順位表ページ（個人成績は順位表の中に載っている）。
+// URLは src/lib/standings.ts のシーズン自動判定と共通。
 
 function cleanText(text: string): string {
   return text.replace(/\u00a0/g, " ").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
@@ -129,10 +121,26 @@ async function fetchDivisionPlayers(divisionLabel: string, url: string): Promise
   }
 }
 
-export async function GET(): Promise<NextResponse> {
+async function fetchSeasonPlayers(season: number): Promise<PlayerStat[]> {
   const results = await Promise.all(
-    STANDINGS_URLS.map(({ label, url }) => fetchDivisionPlayers(label, url))
+    buildStandingsSources(season).map(({ label, url }) => fetchDivisionPlayers(label, url))
   );
-  const allPlayers = results.flat();
-  return NextResponse.json({ players: allPlayers, lastUpdated: new Date().toISOString() });
+  return results.flat();
+}
+
+export async function GET(): Promise<NextResponse> {
+  // 順位表と同じく、進行中シーズンが未公開なら前シーズンにフォールバックする
+  const season = currentSeasonNumber();
+  let used = season;
+  let players = await fetchSeasonPlayers(season);
+  if (players.length === 0) {
+    used = season - 1;
+    players = await fetchSeasonPlayers(used);
+  }
+
+  return NextResponse.json({
+    players,
+    season: seasonOrdinal(used),
+    lastUpdated: new Date().toISOString(),
+  });
 }

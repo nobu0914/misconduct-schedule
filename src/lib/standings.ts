@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { currentSeasonNumber, seasonOrdinal } from "./schedule";
 
 export interface TeamStanding {
   rank: number;
@@ -27,17 +28,59 @@ export interface ParseResult {
 }
 
 const BASE = "https://misconduct.co.jp/wordpress/wp-content/uploads/";
-export const STANDINGS_URLS: { label: string; url: string }[] = [
-  { label: "Platinum",   url: `${BASE}53rd_standings_platinum.htm` },
-  { label: "Gold",       url: `${BASE}53rd_standings_gold.htm` },
-  { label: "Silver",     url: `${BASE}53rd_standings_silver.htm` },
-  { label: "Bronze",     url: `${BASE}53rd_standings_bronze.htm` },
-  { label: "Brass",      url: `${BASE}53rd_standings_brass.htm` },
-  { label: "Copper",     url: `${BASE}53rd_standings_copper.htm` },
-  { label: "Iron",       url: `${BASE}53rd_standings_iron.htm` },
-  { label: "Women Gold", url: `${BASE}53rd_standings_wg.htm` },
-  { label: "35&Over",    url: `${BASE}53rd_standings_35over.htm` },
+
+/** ディビジョン表示名 → 順位表のファイル名スラッグ（スコア表とは綴りが違う: Women Gold = wg） */
+export const STANDINGS_DIVISIONS: { label: string; slug: string }[] = [
+  { label: "Platinum",     slug: "platinum" },
+  { label: "Gold",         slug: "gold" },
+  { label: "Silver",       slug: "silver" },
+  { label: "Bronze",       slug: "bronze" },
+  { label: "Brass",        slug: "brass" },
+  { label: "Copper",       slug: "copper" },
+  { label: "Iron",         slug: "iron" },
+  { label: "Women Gold",   slug: "wg" },
+  { label: "Women Bronze", slug: "wb" }, // 54thで新設（未公開なら404でスキップ）
+  { label: "35&Over",      slug: "35over" },
 ];
+
+export function buildStandingsSources(season: number): { label: string; url: string }[] {
+  const slug = seasonOrdinal(season);
+  return STANDINGS_DIVISIONS.map((d) => ({
+    label: d.label,
+    url: `${BASE}${slug}_standings_${d.slug}.htm`,
+  }));
+}
+
+/**
+ * 順位表は「今の順位」なので、スケジュールやスコアと違い複数シーズンを混ぜられない
+ * （同じディビジョンの行が二重になる）。進行中シーズンを見て、まだ公開されていなければ
+ * 前シーズンにフォールバックする。開幕直後の空白期間を埋めるための処理。
+ */
+export async function fetchCurrentStandings(
+  debugMode = false,
+  now: Date = new Date()
+): Promise<{ season: string; results: ParseResult[] }> {
+  const season = currentSeasonNumber(now);
+
+  for (const candidate of [season, season - 1]) {
+    const results = await Promise.all(
+      buildStandingsSources(candidate).map(({ label, url }) =>
+        fetchAndParseStandings(label, url, debugMode)
+      )
+    );
+    if (results.some((r) => r.standings.length > 0)) {
+      return { season: seasonOrdinal(candidate), results };
+    }
+  }
+
+  // どちらも取れない場合は進行中シーズンの結果（空）をそのまま返す
+  const results = await Promise.all(
+    buildStandingsSources(season).map(({ label, url }) =>
+      fetchAndParseStandings(label, url, debugMode)
+    )
+  );
+  return { season: seasonOrdinal(season), results };
+}
 
 function cleanText(text: string): string {
   return text

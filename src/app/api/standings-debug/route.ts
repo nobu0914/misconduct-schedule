@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { fetchAndParseStandings, STANDINGS_URLS } from "@/lib/standings";
+import { fetchCurrentStandings } from "@/lib/standings";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
-  const results = await Promise.all(
-    STANDINGS_URLS.map(({ label, url }) =>
-      fetchAndParseStandings(label, url, true)
-    )
-  );
-
+  const { season, results } = await fetchCurrentStandings(true);
   const allStandings = results.flatMap((r) => r.standings);
 
   return NextResponse.json({
@@ -23,6 +18,7 @@ export async function GET(): Promise<NextResponse> {
       found: r.standings.length,
       error: r.error,
     })),
+    season,
     standings: allStandings,
     lastUpdated: new Date().toISOString(),
   });

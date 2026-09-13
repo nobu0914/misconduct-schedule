@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
-    version: "Ver.1-260913-1712",
+    version: "Ver.1-260913-1724",
     date: "2026-09-13",
     changes: [
       "プレイオフ日程（53rd_schedule_playoff.htm）を取得対象に追加",
@@ -18,6 +18,7 @@ const VERSIONS = [
       "54th新設の Women Bronze ディビジョンをランキング・スコアに追加",
       "取得したデータを保存し、公式ページが非公開になっても表示を維持するよう変更",
       "週1回の整合性チェックを追加（取得元の消失・件数減少を自動検知）",
+      "順位表・個人成績もシーズンを自動判定（54th開幕後も自動で切り替わる）",
     ],
   },
   {

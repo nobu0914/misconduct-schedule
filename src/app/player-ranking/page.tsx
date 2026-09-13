@@ -42,6 +42,8 @@ function PlayerRankingContent() {
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [scoresLoading, setScoresLoading] = useState(false);
+  // 実際に取得できたシーズン（"53rd" など）。APIが返すので表記を固定しない
+  const [currentSeasonLabel, setCurrentSeasonLabel] = useState("");
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
@@ -64,6 +66,7 @@ function PlayerRankingContent() {
     ])
       .then(([d, prev]) => {
         setPlayers(d.players ?? []);
+        setCurrentSeasonLabel(d.season ?? "");
         setPrevPlayers(prev.players ?? []);
         setLoading(false);
       })
@@ -208,7 +211,7 @@ function PlayerRankingContent() {
                     : "bg-gray-800 text-gray-400 border border-gray-700"
                 }`}
               >
-                今シーズン（53rd）
+                {currentSeasonLabel ? `今シーズン（${currentSeasonLabel}）` : "今シーズン"}
               </button>
               <button
                 onClick={() => setSeason("prev")}
