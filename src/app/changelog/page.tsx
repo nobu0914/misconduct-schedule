@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
-    version: "Ver.1-260913-1654",
+    version: "Ver.1-260913-1659",
     date: "2026-09-13",
     changes: [
       "プレイオフ日程（53rd_schedule_playoff.htm）を取得対象に追加",

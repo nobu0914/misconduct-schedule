@@ -174,7 +174,8 @@ export async function fetchAndParseSchedule(
 
     const $ = cheerio.load(text);
     let currentDate = "";
-    let dateRowCount = 0;
+    // 「試合行のはずなのに読めなかった行」の数。構造変更の検知に使う
+    let unparsedGameRows = 0;
 
     // colspanを展開して論理列配列を返す
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,10 +203,7 @@ export async function fetchAndParseSchedule(
       const dateCell = rawCells.find((c) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(c));
       if (dateCell) {
         const m = dateCell.match(/(\d{4}\/\d{1,2}\/\d{1,2})/);
-        if (m) {
-          currentDate = m[1];
-          dateRowCount++;
-        }
+        if (m) currentDate = m[1];
         return;
       }
 
@@ -215,11 +213,19 @@ export async function fetchAndParseSchedule(
       // ビジター枠(colspan=3)があっても論理10列になる
       const cells = expandCells(row);
 
-      if (cells.length < 10) return;
-
+      // 時刻があり、かつ試合番号か "vs" を持つ行＝対戦カードのはず。
+      // 催し物（Pick Up Hockey 等）や時間調整の行、対戦カード未定の枠はここに入らない。
+      // 列構成が変わった場合も拾えるよう、列数チェックより前に数える
       const timeStart = cells[1];
-      const timeEnd = cells[3];
+      const looksLikeGame =
+        /^\d{1,2}:\d{2}$/.test(timeStart) &&
+        (/^\d+$/.test(cells[0]) || cells.includes("vs"));
+      if (looksLikeGame) unparsedGameRows++;
+
+      if (cells.length < 10) return;
       if (!/^\d{1,2}:\d{2}$/.test(timeStart)) return;
+
+      const timeEnd = cells[3];
 
       const withSub = (name: string, sub: string) => (sub ? `${name} (${sub})` : name);
       const vsIdx = cells.indexOf("vs");
@@ -264,13 +270,15 @@ export async function fetchAndParseSchedule(
         month: monthLabel(currentDate, now),
         sourceUrl: url,
       });
+      unparsedGameRows--;
     });
 
     source.count = matches.length;
-    // 日付行すらない＝枠だけ先に公開された未記入ページ。異常ではないので警告しない。
-    // 日付行があるのに試合行が取れない場合だけ、構造変更を疑う。
-    if (matches.length === 0 && dateRowCount > 0) {
-      source.error = `日付行は${dateRowCount}件あるが試合行が0件（構造変更の可能性）`;
+    // 「日程だけ決まっていて対戦カードが未定」のページ（54th_schedule_march.htm など）は
+    // 対戦カードらしき行が存在しないので警告しない。
+    // 対戦カードらしき行があるのに1件も解釈できなかった場合だけ構造変更を疑う。
+    if (matches.length === 0 && unparsedGameRows > 0) {
+      source.error = `対戦カードらしき行が${unparsedGameRows}件あるが解釈できない（構造変更の可能性）`;
     }
   } catch (e) {
     source.error = e instanceof Error ? e.message : String(e);
