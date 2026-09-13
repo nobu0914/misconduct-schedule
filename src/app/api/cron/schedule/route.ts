@@ -7,9 +7,13 @@ import type { SourceStatus } from "@/lib/schedule";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/** 404（未公開の月）以外の失敗、または取得0件を異常とみなす */
+/**
+ * 異常とみなす取得元: 404（未公開の月）以外の失敗に加えて、
+ * 200で返ってきたのに解析結果が0件のもの（構造変更の可能性）も含める。
+ * 後者は status が 200 なので、error の有無で拾う必要がある。
+ */
 function failedSources(sources: SourceStatus[]): SourceStatus[] {
-  return sources.filter((s) => s.status !== 200 && s.status !== 404);
+  return sources.filter((s) => (s.status !== 200 && s.status !== 404) || Boolean(s.error));
 }
 
 function isUpcoming(date: string, today: Date): boolean {
