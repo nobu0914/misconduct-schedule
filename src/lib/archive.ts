@@ -60,6 +60,33 @@ export async function loadArchive<T>(group: string, label: string): Promise<Arch
   }
 }
 
+export interface ArchivedEntry<T> {
+  label: string;
+  savedAt: string;
+  items: T[];
+}
+
+/**
+ * 指定した接頭辞を持つ保存済みデータをまとめて読み出す。
+ * 終わったシーズン（取得候補から外れたページ）を表示し続けるために使う。
+ * 公式サイトへは一切アクセスしない。
+ */
+export async function loadArchivedByPrefix<T>(
+  group: string,
+  prefix: string
+): Promise<ArchivedEntry<T>[]> {
+  const labels = [...(await listArchived(group))].filter((l) => l.startsWith(prefix));
+  const entries = await Promise.all(
+    labels.map(async (label) => {
+      const snapshot = await loadArchive<T>(group, label);
+      return snapshot?.items?.length
+        ? { label, savedAt: snapshot.savedAt, items: snapshot.items }
+        : null;
+    })
+  );
+  return entries.filter((e): e is ArchivedEntry<T> => e !== null);
+}
+
 /**
  * 取得結果をアーカイブと突き合わせる共通処理。
  * - 取得できたものは保存（アーカイブを更新）

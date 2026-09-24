@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260924-0200",
+    date: "2026-09-24",
+    changes: [
+      "シーズンが切り替わっても前シーズンの試合・スコアが消えないよう修正（保存データから表示）",
+    ],
+  },
+  {
     version: "Ver.1-260913-2128",
     date: "2026-09-13",
     changes: [

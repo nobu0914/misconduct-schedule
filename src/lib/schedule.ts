@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
-import { reconcileWithArchive } from "./archive";
+import { loadArchivedByPrefix, reconcileWithArchive, type ArchivedEntry } from "./archive";
 
 export interface Match {
   no: string;
@@ -298,6 +298,34 @@ function dateToMs(date: string, time: string): number {
 }
 
 /** 全取得対象を並列に取得し、日時順に整列して返す */
+/**
+ * 取得候補に無い（＝終わったシーズンの）保存済みデータを、取得結果に足す。
+ * シーズンが切り替わると `buildScheduleSources()` の対象から前シーズンが外れるため、
+ * これが無いと過去の試合・プレイオフがサイトから消える。
+ * 同じラベルが取得候補にもある場合は、取得できた方を優先する。
+ */
+export function withArchivedSeasons(
+  live: { items: Match[]; source: SourceStatus }[],
+  archived: ArchivedEntry<Match>[],
+  now: Date
+): { items: Match[]; source: SourceStatus }[] {
+  const liveLabels = new Set(live.map((r) => r.source.label));
+  const extra = archived
+    .filter((entry) => !liveLabels.has(entry.label))
+    .map((entry) => ({
+      // 月ラベルは「当年かどうか」で変わるので保存時のものは使わず付け直す
+      items: entry.items.map((m) => ({ ...m, month: monthLabel(m.date, now) })),
+      source: {
+        label: entry.label,
+        url: entry.items[0]?.sourceUrl ?? "",
+        status: 0,
+        count: entry.items.length,
+        fromArchive: entry.savedAt,
+      } satisfies SourceStatus,
+    }));
+  return [...live, ...extra];
+}
+
 export async function fetchAllMatches(
   opts: { noStore?: boolean; now?: Date } = {}
 ): Promise<ScheduleResult> {
@@ -317,10 +345,18 @@ export async function fetchAllMatches(
     opts.noStore === true
   );
 
+  // 終わったシーズンは取得候補から外れるので、保存済みデータから足す（HTTP取得はしない）
+  const prevSeason = seasonOrdinal(currentSeasonNumber(now) - 1);
+  const combined = withArchivedSeasons(
+    perSource.map((items, i) => ({ items, source: results[i].source })),
+    await loadArchivedByPrefix<Match>("schedule", `${prevSeason}/`),
+    now
+  );
+
   // 同一試合が複数ファイルに載っていても1件に寄せる
   const seen = new Set<string>();
   const matches: Match[] = [];
-  for (const found of perSource) {
+  for (const { items: found } of combined) {
     for (const m of found) {
       const key = `${m.date}|${m.timeStart}|${m.awayTeam}|${m.homeTeam}|${m.division}`;
       if (seen.has(key)) continue;
@@ -333,7 +369,7 @@ export async function fetchAllMatches(
 
   return {
     matches,
-    sources: results.map((r) => r.source),
+    sources: combined.map((r) => r.source),
     fetchedAt: new Date().toISOString(),
   };
 }

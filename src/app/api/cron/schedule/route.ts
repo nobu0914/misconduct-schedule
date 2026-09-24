@@ -14,7 +14,11 @@ export const revalidate = 0;
  * 後者は status が 200 なので、error の有無で拾う必要がある。
  */
 function failedSources(sources: SourceStatus[]): SourceStatus[] {
-  return sources.filter((s) => (s.status !== 200 && s.status !== 404) || Boolean(s.error));
+  return sources.filter(
+    (s) =>
+      // 保存済みデータで表示しているものは公式ページが無くて当然なので除く
+      !s.fromArchive && ((s.status !== 200 && s.status !== 404) || Boolean(s.error))
+  );
 }
 
 function isUpcoming(date: string, today: Date): boolean {

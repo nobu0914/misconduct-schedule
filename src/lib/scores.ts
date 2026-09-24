@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { currentSeasonNumber, seasonOrdinal, type SourceStatus } from "./schedule";
-import { reconcileWithArchive } from "./archive";
+import { loadArchivedByPrefix, reconcileWithArchive, type ArchivedEntry } from "./archive";
 
 export interface GameScore {
   gameNo: number;
@@ -154,6 +154,31 @@ export async function fetchAndParseScores(
 }
 
 /** 全スコア表を取得し、日付の新しい順に並べて返す */
+/**
+ * 取得候補に無い（＝終わったシーズンの）保存済みスコアを足す。
+ * シーズンが切り替わると `buildScoreSources()` の対象から前シーズンが外れるため、
+ * これが無いと前シーズンの結果がサイトから消える。
+ */
+export function withArchivedScoreSeasons(
+  live: { items: GameScore[]; source: SourceStatus }[],
+  archived: ArchivedEntry<GameScore>[]
+): { items: GameScore[]; source: SourceStatus }[] {
+  const liveLabels = new Set(live.map((r) => r.source.label));
+  const extra = archived
+    .filter((entry) => !liveLabels.has(entry.label))
+    .map((entry) => ({
+      items: entry.items,
+      source: {
+        label: entry.label,
+        url: entry.items[0]?.sourceUrl ?? "",
+        status: 0,
+        count: entry.items.length,
+        fromArchive: entry.savedAt,
+      } satisfies SourceStatus,
+    }));
+  return [...live, ...extra];
+}
+
 export async function fetchAllScores(
   opts: { noStore?: boolean; now?: Date } = {}
 ): Promise<{ games: GameScore[]; sources: SourceStatus[] }> {
@@ -170,8 +195,26 @@ export async function fetchAllScores(
     opts.noStore === true
   );
 
+  const prevSeason = seasonOrdinal(currentSeasonNumber(now) - 1);
+  const combined = withArchivedScoreSeasons(
+    perSource.map((items, i) => ({ items, source: results[i].source })),
+    await loadArchivedByPrefix<GameScore>("scores", `${prevSeason}/`)
+  );
+
+  // 同じ試合が複数シーズンのファイルに載ることは無いが、念のため出典＋試合番号で重複を除く
+  const seen = new Set<string>();
+  const games: GameScore[] = [];
+  for (const { items } of combined) {
+    for (const g of items) {
+      const key = `${g.sourceUrl}|${g.gameNo}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      games.push(g);
+    }
+  }
+
   return {
-    games: perSource.flat(),
-    sources: results.map((r) => r.source),
+    games,
+    sources: combined.map((r) => r.source),
   };
 }

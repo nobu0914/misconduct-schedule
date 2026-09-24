@@ -1,7 +1,9 @@
 import iconv from "iconv-lite";
 import {
   buildScheduleSources, currentSeasonNumber, seasonOrdinal, monthLabel, fetchAllMatches,
+  withArchivedSeasons, type Match,
 } from "../src/lib/schedule";
+import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
 const NOW = new Date(2026, 8, 11); // 2026/9/11
@@ -145,6 +147,52 @@ async function main() {
 
   assert(s.sources.filter((x) => x.status === 404).length === 25, `404はエラー扱いせずスキップ (=${s.sources.filter((x) => x.status === 404).length})`);
   assert(s.sources.every((x) => x.status === 200 || x.status === 404), "想定外ステータスなし");
+
+  // --- 終わったシーズンを保存済みデータで表示し続ける ---
+  {
+    const archivedMatch = (date: string): Match => ({
+      no: "PO1", date, timeStart: "12:30", timeEnd: "13:30",
+      awayTeam: "team TOKO (A)", homeTeam: "Early Bird (B)",
+      division: "Brass", round: "Quarter Finals", status: "scheduled",
+      month: "9月", sourceUrl: "https://example.test/53rd_schedule_playoff.htm",
+    });
+    const live = [
+      { items: [], source: { label: "54th/october", url: "u1", status: 404, count: 0 } },
+      { items: [archivedMatch("2026/9/19")], source: { label: "53rd/playoff", url: "u2", status: 200, count: 1 } },
+    ];
+    const archived = [
+      { label: "53rd/playoff", savedAt: "2026-09-13T08:00:00Z", items: [archivedMatch("2026/9/19")] },
+      { label: "53rd/september", savedAt: "2026-09-13T08:00:00Z", items: [archivedMatch("2026/9/6")] },
+    ];
+    const merged = withArchivedSeasons(live, archived, new Date(Date.UTC(2027, 0, 15)));
+
+    assert(merged.length === 3, `取得候補2件＋保存済み1件になる (=${merged.length})`);
+    assert(!merged.some((r, i) => i !== 1 && r.source.label === "53rd/playoff" && !r.source.fromArchive),
+      "取得できたラベルは保存済みで上書きしない");
+    const restored = merged.find((r) => r.source.label === "53rd/september")!;
+    assert(restored.source.fromArchive === "2026-09-13T08:00:00Z", "保存時刻が付く");
+    assert(restored.items[0].month === "2026年9月",
+      `月ラベルは表示時点の年で付け直す (=${restored.items[0].month})`);
+    assert(merged.filter((r) => r.source.label === "53rd/playoff").length === 1,
+      "取得済みのラベルは二重に足さない");
+  }
+
+  // --- スコアも同様 ---
+  {
+    const game = (gameNo: number) => ({
+      gameNo, date: "2026/9/6", dayOfWeek: "Sun", timeStart: "12:30", timeEnd: "13:30",
+      awayTeam: "A", awayScore: 3, homeTeam: "B", homeScore: 1,
+      divisionLabel: "Bronze", played: true, season: "53rd",
+      sourceUrl: "https://example.test/53rd_score_bronze.htm",
+    });
+    const merged = withArchivedScoreSeasons(
+      [{ items: [], source: { label: "54th/Bronze", url: "u", status: 404, count: 0 } }],
+      [{ label: "53rd/Bronze", savedAt: "2026-09-13T08:00:00Z", items: [game(1), game(2)] }]
+    );
+    assert(merged.length === 2 && merged[1].items.length === 2,
+      `前シーズンのスコアが足される (=${merged.length}/${merged[1]?.items.length})`);
+    assert(merged[1].source.fromArchive === "2026-09-13T08:00:00Z", "スコアにも保存時刻が付く");
+  }
 
   const r = await fetchAllRentalEntries({ now: NOW });
   assert(r.entries.length === 2, `レンタル2件をパース (=${r.entries.length})`);
