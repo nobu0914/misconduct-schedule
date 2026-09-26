@@ -240,12 +240,20 @@ export async function fetchAndParseSchedule(
       let rawDivision: string;
 
       if (isPlayoff) {
-        // 試合番号が "PO1" 等で連番にならないため、vs の位置を試合行の条件にする
-        awayTeam = withSub(cells[5], cells[6]);
-        homeTeam = withSub(cells[11], cells[10]);
+        // 試合番号が "PO1" 等で連番にならないため、vs の位置を試合行の条件にする。
+        //
+        // 勝ち上がり待ちの回戦（決勝・準決勝）は、前の回戦が終わるまでチーム名欄が空で、
+        // 順位表記（"Brass 1st" 等）だけが入る。日時は確定しているので、
+        // チーム名が無い側は順位表記を代わりに使って取り込む。
+        // これをしないと「Brass 決勝」のような未確定の試合が一覧から丸ごと欠ける。
+        const awayName = cells[5] || cells[4];
+        const homeName = cells[11] || cells[12];
+        // 名前も順位表記も無い行は枠だけなので取り込まない
+        if (!awayName && !homeName) return;
+        // ベンチ表記はチーム名が確定している側にだけ付ける
+        awayTeam = withSub(awayName, cells[5] ? cells[6] : "");
+        homeTeam = withSub(homeName, cells[11] ? cells[10] : "");
         rawDivision = cells[13];
-        // 対戦カードが未定の行（両チーム空欄）は取り込まない
-        if (!cells[5] && !cells[11]) return;
       } else {
         if (!/^\d+$/.test(cells[0])) return;
         // col[6]="vs"なら通常試合、それ以外(ビジター等)はサブ情報なしとして扱う

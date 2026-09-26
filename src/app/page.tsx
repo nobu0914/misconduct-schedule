@@ -58,18 +58,12 @@ function isToday(dateStr: string): boolean {
   );
 }
 
-// 終わった直後の試合まで消えると、週末に行われた試合をすぐ見失うため、
-// 「直近・今後」でも過去この日数分は残す。
-// プレイオフはシーズンの締めくくりで本数も少ないので長めに残す
-const RECENT_DAYS = 7;
-const RECENT_PLAYOFF_DAYS = 30;
-
-function isUpcoming(dateStr: string, isPlayoff = false): boolean {
-  const from = new Date();
-  from.setHours(0, 0, 0, 0);
-  from.setDate(from.getDate() - (isPlayoff ? RECENT_PLAYOFF_DAYS : RECENT_DAYS));
+function isUpcoming(dateStr: string): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const [year, month, day] = dateStr.split("/").map(Number);
-  return new Date(year, month - 1, day) >= from;
+  const d = new Date(year, month - 1, day);
+  return d >= today;
 }
 
 const DIVISION_ORDER = [
@@ -333,7 +327,7 @@ function ScheduleContent() {
     return matches.filter((m) => {
       if (selectedDivisions.length > 0 && !selectedDivisions.includes(m.division)) return false;
       if (selectedMonth !== "ALL" && m.month !== selectedMonth) return false;
-      if (showUpcomingOnly && !isUpcoming(m.date, Boolean(m.round))) return false;
+      if (showUpcomingOnly && !isUpcoming(m.date)) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (
@@ -672,7 +666,7 @@ function ScheduleContent() {
               showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
           >
-            直近・今後
+            今後のみ
           </button>
 
           {/* Rentals toggle */}

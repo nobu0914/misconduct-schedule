@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260926-0017",
+    date: "2026-09-26",
+    changes: [
+      "プレイオフの決勝・準決勝が一覧に出ない問題を修正（対戦相手が未定でも順位表記で表示）",
+      "一覧の初期表示を当日以降のみに戻した",
+    ],
+  },
+  {
     version: "Ver.1-260924-0222",
     date: "2026-09-24",
     changes: [

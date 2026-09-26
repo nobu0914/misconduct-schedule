@@ -67,6 +67,7 @@ ${row("PO1", "12:30", "～", "13:30", "Brass 5th", "team TOKO", "A", "", "vs", "
 ${row("PO2", "13:30", "～", "14:30", "35 &amp; Over 3rd", "STIGA 35", "C", "", "vs", "", "D", "Flying Penguins 35", "35 &amp; Over 2nd", "35 &amp; Over Semi Final")}
 ${row("PO5", "16:30", "～", "17:30", "Platinum 2nd", "TEAM I", "A", "", "vs", "", "B", "TEAM K", "Platinum 1st", "Platinum Final")}
 ${row("PO6", "17:30", "～", "18:30", "Gold 1st", "", "", "", "vs", "", "", "", "Gold 2nd", "Gold Final")}
+${row("PO7", "18:30", "～", "19:30", "", "", "", "", "vs", "", "", "", "", "Iron Final")}
 ${row("-", "17:30", "～", "18:30", "53期 レギュラーシーズン試合", "", "", "", "", "", "", "", "", "-")}
 </table></body></html>`;
 
@@ -117,9 +118,9 @@ const calls: string[] = [];
 
 async function main() {
   const s = await fetchAllMatches({ now: NOW });
-  assert(s.matches.length === 5, `10月2件＋プレイオフ3件をパース (=${s.matches.length})`);
+  assert(s.matches.length === 6, `10月2件＋プレイオフ4件をパース (=${s.matches.length})`);
   const po = s.matches.filter((m) => m.sourceUrl.endsWith("playoff.htm"));
-  assert(po.length === 3, `プレイオフを3件取得 (=${po.length})`);
+  assert(po.length === 4, `プレイオフを4件取得 (=${po.length})`);
   assert(po[0].no === "PO1" && po[0].awayTeam === "team TOKO (A)" && po[0].homeTeam === "Early Bird (B)",
     `PO1: ${po[0].no} ${po[0].awayTeam} vs ${po[0].homeTeam}`);
   assert(po[0].division === "Brass" && po[0].round === "Quarter Finals",
@@ -131,7 +132,12 @@ async function main() {
   assert(po.every((m) => m.month === "9月"), "プレイオフの月ラベルは9月");
   assert(!s.matches.some((m) => m.awayTeam.includes("Pick Up") || m.awayTeam.includes("時間調整")
     || m.awayTeam.includes("レギュラーシーズン試合")), "催し物・時間調整の行は取り込まない");
-  assert(!s.matches.some((m) => m.no === "PO6"), "対戦カード未定（両チーム空欄）の行は取り込まない");
+  // 勝ち上がり待ちの回戦は、チーム名が無くても順位表記で取り込む（決勝が一覧から消えないように）
+  const pendingRound = po.find((m) => m.no === "PO6");
+  assert(pendingRound?.awayTeam === "Gold 1st" && pendingRound?.homeTeam === "Gold 2nd",
+    `対戦相手未定でも順位表記で出す (=${pendingRound?.awayTeam} vs ${pendingRound?.homeTeam})`);
+  assert(pendingRound?.division === "Gold" && pendingRound?.round === "Final", "未確定でも回戦名は付く");
+  assert(!s.matches.some((m) => m.no === "PO7"), "名前も順位表記も無い枠だけの行は取り込まない");
   assert(s.matches.filter((m) => !m.sourceUrl.endsWith("playoff.htm")).every((m) => m.round === undefined),
     "月別表の試合に round は付かない");
 
