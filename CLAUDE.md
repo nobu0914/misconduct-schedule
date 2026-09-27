@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260928-0139`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260928-0303`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -59,6 +59,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/prev-season`: `revalidate=86400`（1日）。進行中・前・前々シーズンの保存済み最終順位を `seasons` で返す
 - `/api/prev-season-players`: 動的（`?season=N`）+ `s-maxage=3600`。指定シーズンの保存済み個人成績と、
   データがある過去シーズンの一覧 `available`（個人ランクの「過去シーズン」選択肢）
+- `/api/past-standings`: 動的（`?season=N`）+ `s-maxage=3600`。過去シーズンの保存済み最終順位と `available`
 - `/api/events`: `revalidate=86400`（1日）
 
 **cron で毎日再生成する対象**（`/api/cron/schedule` の `WARM_PATHS`）:
@@ -128,18 +129,21 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 パース関数は `src/lib/standings.ts` に切り出し済み。`/api/standings`（キャッシュ有効）と `/api/standings-debug`（動的）の両方から利用。`/api/standings` は `GET()` に `req: Request` を受け取らないことでISRを有効化している。
 
 **シーズンの選び方（スケジュール・スコアと違う）**: 順位表は「今の順位」なので複数シーズンを混ぜられない（同じディビジョンの行が二重になる）。
-`fetchCurrentStandings()` は進行中シーズンを取り、**1件も取れなければ前シーズンにフォールバック**する（開幕直後の空白期間対策）。
-`/api/player-stats` は順位表ページから個人成績を読むため `buildStandingsSources()` を共有するが、
-**前シーズンにはフォールバックしない**（個人ランクは「今シーズン」と「過去シーズン」を分けて持つ）。
-開幕直後で今シーズンが空の間は `players: []` / `pending: true` を返し、cron の0件チェックは `pending` を想定内として扱う。
-その間も前シーズンの公式ページが残っていれば取り直して `season:{N-1}:players` を更新する（表示には使わない）。
+`fetchCurrentStandings()` は進行中シーズンだけを取り、**前シーズンにはフォールバックしない**
+（チームランキング・個人ランクとも「今シーズン」と「過去シーズン（保存済み）」を分けて持つ）。
+`/api/player-stats` も順位表ページから個人成績を読むので `buildStandingsSources()` を共有し、同じ扱い。
+開幕直後で今シーズンが空の間は `/api/standings` / `/api/player-stats` とも空配列と `pending: true` を返し、
+cron の0件チェックは `pending` を想定内として扱う。その間も前シーズンの公式ページが残っていれば取り直して
+`season:{N-1}:data` / `season:{N-1}:players` を更新する（最終更新を取り逃さないため。表示には使わない）。
 順位変動の比較用スナップショットは `standings:last:{season}` とシーズン別に分ける（切替時に変動表示が壊れないように）。
 ファイル名スラッグはスコア表と綴りが違う（Women Gold = `wg`、スコアは `womengold`）。Women Bronze は `wb` と想定（未公開なら404でスキップ）。
-`/api/standings` と `/api/player-stats` は実際に使ったシーズンを `season` で返し、ランキングページの「今シーズン（53rd）」表記はこれを使う。
+`/api/standings` と `/api/player-stats` は今シーズンを `season` で返し、ランキングページの「今シーズン（54th）」表記はこれを使う。
+過去シーズンの最終順位は `/api/past-standings?season=N`、個人成績は `/api/prev-season-players?season=N`（どちらも保存済みデータ、`available` に選べるシーズン一覧）。
+52nd の固定データと保存データの読み出しは `src/lib/pastStandings.ts`（TOP用の `/api/prev-season` と共有）。
 
 ### シーズンを混ぜない（重要）
 9月は「前シーズンの残り＋プレイオフ」と「次シーズンの日程」が並び、開幕後は保存済みの前シーズン分も一覧に出る。
-順位表は開幕直後に前シーズンへフォールバックする。**成績・順位は必ず同じシーズン同士で突き合わせる**。
+**成績・順位は必ず同じシーズン同士で突き合わせる**。
 
 - 試合（`Match.season`）は取得元ラベル（`53rd/march`）から付ける。スコアは `GameScore.season`
 - TOP の順位・勝敗は `Match.season` と順位表の `season` が一致するときだけ出す（`findStanding()`）
@@ -219,6 +223,9 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
   旧実装はチーム名だけをキーにした map で、同名チームが別ディビジョンにいると上書きされて見つからなかった。
 - 個人ランクを「今シーズン」と「過去シーズン」に分けた。今シーズンは前シーズンで代用しない（未掲載なら空欄）。
   過去シーズンは保存済みのシーズン（`available`）から選ぶ。URLは `?season=53`（旧 `?season=prev` は前シーズン扱い）。
+- チームランキングも同様に分けた。`/api/standings` の前シーズンへのフォールバックを廃止し、過去シーズンは
+  `/api/past-standings`。シーズンの選択は個人ランクとチームランキングで共通（URLの `season`）。
+  あわせて、ランキング・スコアの初回取得が「件数0」で取得済み判定していたため、空だと取り直し続ける不具合を修正。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlayerStat } from "../api/player-stats/route";
 import type { PrevPlayerStat } from "../api/prev-season-players/route";
+import type { PrevSeasonEntry } from "../api/prev-season/route";
 import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
@@ -43,15 +44,20 @@ function PlayerRankingContent() {
   // データがある過去シーズン（新しい順）
   const [pastSeasonList, setPastSeasonList] = useState<number[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
+  // チームランキング: 今シーズン（公式ページから取得、開幕直後は空）と過去シーズン（保存済み）
   const [standings, setStandings] = useState<TeamStanding[]>([]);
+  const [pastTeams, setPastTeams] = useState<Record<number, PrevSeasonEntry[]>>({});
+  const [pastTeamSeasonList, setPastTeamSeasonList] = useState<number[]>([]);
+  const [pastTeamsLoading, setPastTeamsLoading] = useState(false);
   const [games, setGames] = useState<GameScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(false);
+  // 0件でも取得済みとして扱う（件数で判定すると、開幕直後の空の順位表を取り直し続ける）
+  const [standingsLoaded, setStandingsLoaded] = useState(false);
   const [scoresLoading, setScoresLoading] = useState(false);
+  const [scoresLoaded, setScoresLoaded] = useState(false);
   // 今シーズン（"54th" など）。APIが返すので表記を固定しない
   const [currentSeasonLabel, setCurrentSeasonLabel] = useState("");
-  // チームランキングが実際にどのシーズンのものか（個人成績とは別にフォールバックしうる）
-  const [standingsSeason, setStandingsSeason] = useState("");
   // スコアタブで表示するシーズン（"" = 自動: 結果が出ている最新シーズン）
   const [scoreSeason, setScoreSeason] = useState("");
 
@@ -111,28 +117,54 @@ function PlayerRankingContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPastSeason, pastPlayers, pastLoading]);
 
-  // ranking モード初回ロード時に取得
+  async function loadPastTeams(n?: number) {
+    const d = await fetch(`/api/past-standings${n !== undefined ? `?season=${n}` : ""}`)
+      .then((r) => r.json())
+      .catch(() => ({ data: [] }));
+    if (typeof d.season === "number") setPastTeams((cur) => ({ ...cur, [d.season]: d.data ?? [] }));
+    if (Array.isArray(d.available)) setPastTeamSeasonList(d.available);
+  }
+
+  // ranking モード初回ロード時に取得（今シーズンの順位表と、過去シーズンの一覧）
   useEffect(() => {
-    if (mode === "ranking" && standings.length === 0 && !standingsLoading) {
+    if (mode === "ranking" && !standingsLoaded && !standingsLoading) {
       setStandingsLoading(true);
-      fetch("/api/standings")
-        .then((r) => r.json())
-        .then((d) => {
-          setStandings(d.standings ?? []);
-          setStandingsSeason(d.season ?? "");
-        })
-        .catch(() => {})
-        .finally(() => setStandingsLoading(false));
+      Promise.all([
+        fetch("/api/standings")
+          .then((r) => r.json())
+          .then((d) => {
+            setStandings(d.standings ?? []);
+            if (d.season) setCurrentSeasonLabel(d.season);
+          })
+          .catch(() => {}),
+        loadPastTeams(),
+      ]).finally(() => {
+        setStandingsLoading(false);
+        setStandingsLoaded(true);
+      });
     }
-    if (mode === "score" && games.length === 0 && !scoresLoading) {
+    if (mode === "score" && !scoresLoaded && !scoresLoading) {
       setScoresLoading(true);
       fetch("/api/scores")
         .then((r) => r.json())
         .then((d) => setGames(d.games ?? []))
         .catch(() => {})
-        .finally(() => setScoresLoading(false));
+        .finally(() => {
+          setScoresLoading(false);
+          setScoresLoaded(true);
+        });
     }
-  }, [mode, standings.length, games.length, standingsLoading, scoresLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, standingsLoaded, scoresLoaded, standingsLoading, scoresLoading]);
+
+  // 過去シーズンの順位を選んだら、まだ読んでいなければ取得する
+  useEffect(() => {
+    if (mode !== "ranking" || selectedPastSeason === undefined) return;
+    if (pastTeams[selectedPastSeason] || pastTeamsLoading) return;
+    setPastTeamsLoading(true);
+    loadPastTeams(selectedPastSeason).finally(() => setPastTeamsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedPastSeason, pastTeams, pastTeamsLoading]);
 
   function findPrevPlayer(name: string, divisionLabel: string): PrevPlayerStat | undefined {
     // シーズンによって表記が微妙に違う（空白・全角・記号）ので正規化して比べる
@@ -146,10 +178,11 @@ function PlayerRankingContent() {
     if (mode !== "ranking") params.set("mode", mode);
     if (mode === "search") {
       if (query) params.set("q", query);
-      if (selectedPastSeason !== undefined) params.set("season", String(selectedPastSeason));
     } else {
       if (selectedDivision !== "Platinum") params.set("div", selectedDivision);
     }
+    // シーズンの選択は個人ランクとチームランキングで共通（スコアは独自に切り替える）
+    if (mode !== "score" && selectedPastSeason !== undefined) params.set("season", String(selectedPastSeason));
     const qs = params.toString();
     router.replace(`/player-ranking${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [mode, query, selectedPastSeason, selectedDivision, router]);
@@ -169,6 +202,17 @@ function PlayerRankingContent() {
   const divisionStandings = useMemo(
     () => standings.filter((s) => s.divisionLabel === selectedDivision).sort((a, b) => a.rank - b.rank),
     [standings, selectedDivision]
+  );
+
+  // 過去シーズンの順位（保存済み）。52nd は勝敗・勝点が無く順位だけ
+  const pastDivisionStandings = useMemo(
+    () =>
+      selectedPastSeason === undefined
+        ? []
+        : (pastTeams[selectedPastSeason] ?? [])
+            .filter((s) => s.divisionLabel === selectedDivision)
+            .sort((a, b) => a.rank - b.rank),
+    [pastTeams, selectedPastSeason, selectedDivision]
   );
 
   // スコアは前・今・次シーズンが混在して返るので、シーズンを選んで1つずつ表示する
@@ -228,6 +272,44 @@ function PlayerRankingContent() {
   const results = showingCurrent ? currentResults : pastResults;
   const noResults = !loading && !pastLoading && !currentEmpty && query.trim() && results.length === 0;
 
+  // 「今シーズン」と「過去シーズン（保存済み）」の切り替え。個人ランク・チームランキング共通
+  function renderSeasonPicker(pastList: number[]) {
+    return (
+      <div className="mt-3 space-y-2">
+        <button
+          onClick={() => setSeason("current")}
+          className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+            showingCurrent
+              ? "bg-blue-600 text-white"
+              : "bg-gray-800 text-gray-400 border border-gray-700"
+          }`}
+        >
+          {currentSeasonLabel ? `今シーズン（${currentSeasonLabel}）` : "今シーズン"}
+        </button>
+        {pastSeasonList.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 flex-shrink-0">過去シーズン</span>
+            <div className="flex flex-wrap gap-2">
+              {pastSeasonList.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setSeason(n)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    selectedPastSeason === n
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-800 text-gray-400 border border-gray-700"
+                  }`}
+                >
+                  {seasonOrdinal(n)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       <div className="max-w-2xl mx-auto px-4 py-6">
@@ -265,38 +347,7 @@ function PlayerRankingContent() {
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-base"
             />
 
-            <div className="mt-3 space-y-2">
-              <button
-                onClick={() => setSeason("current")}
-                className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-                  showingCurrent
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-800 text-gray-400 border border-gray-700"
-                }`}
-              >
-                {currentSeasonLabel ? `今シーズン（${currentSeasonLabel}）` : "今シーズン"}
-              </button>
-              {pastSeasonList.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 flex-shrink-0">過去シーズン</span>
-                  <div className="flex flex-wrap gap-2">
-                    {pastSeasonList.map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setSeason(n)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          selectedPastSeason === n
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-800 text-gray-400 border border-gray-700"
-                        }`}
-                      >
-                        {seasonOrdinal(n)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            {renderSeasonPicker(pastSeasonList)}
 
             {selectedPastSeason === 52 && (
               <p className="text-xs text-gray-500 mt-2">※ 過去データの履歴が一部破損しており、検索しても出てこない場合があります</p>
@@ -512,10 +563,9 @@ function PlayerRankingContent() {
           <>
             <h1 className="text-xl font-bold text-white mb-3">
               {mode === "ranking" ? "チームランキング" : "スコア"}
-              {mode === "ranking" && standingsSeason && (
-                <span className="text-sm text-gray-400 font-normal ml-2">{standingsSeason} シーズン</span>
-              )}
             </h1>
+
+            {mode === "ranking" && <div className="mb-3">{renderSeasonPicker(pastTeamSeasonList)}</div>}
 
             {/* ディビジョン選択 */}
             <div className="flex flex-wrap gap-2 pb-2">
@@ -538,18 +588,68 @@ function PlayerRankingContent() {
 
         {mode === "ranking" && (
           <div className="mt-4">
-            {standingsLoading && standings.length === 0 && (
+            {((showingCurrent && !standingsLoaded) ||
+              (!showingCurrent && pastTeamsLoading && !pastTeams[selectedPastSeason!])) && (
               <div className="flex items-center justify-center py-16 gap-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
                 <span className="text-gray-400">ランキング取得中...</span>
               </div>
             )}
 
-            {!standingsLoading && divisionStandings.length === 0 && standings.length > 0 && (
+            {showingCurrent && standingsLoaded && standings.length === 0 && (
+              <p className="text-center py-12 text-gray-500 text-sm">
+                {currentSeasonLabel || "今シーズン"} の順位はまだありません。<br />
+                公式サイトに掲載されると表示されます。
+              </p>
+            )}
+
+            {showingCurrent && divisionStandings.length === 0 && standings.length > 0 && (
               <p className="text-center py-12 text-gray-500">このディビジョンのデータはありません</p>
             )}
 
-            {divisionStandings.length > 0 && (
+            {!showingCurrent && pastTeams[selectedPastSeason!] && pastDivisionStandings.length === 0 && (
+              <p className="text-center py-12 text-gray-500">
+                {seasonOrdinal(selectedPastSeason!)} のこのディビジョンのデータはありません
+              </p>
+            )}
+
+            {!showingCurrent && pastDivisionStandings.length > 0 && (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-800">
+                  {seasonOrdinal(selectedPastSeason!)} シーズン 最終順位
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-800 border-b border-gray-700">
+                        <th className="py-2 px-2 text-center text-xs text-gray-400 font-medium w-10">順位</th>
+                        <th className="py-2 px-2 text-left text-xs text-gray-400 font-medium">チーム</th>
+                        <th className="py-2 px-2 text-center text-xs text-gray-400 font-medium">GP</th>
+                        <th className="py-2 px-1 text-center text-xs text-gray-400 font-medium">W</th>
+                        <th className="py-2 px-1 text-center text-xs text-gray-400 font-medium">L</th>
+                        <th className="py-2 px-1 text-center text-xs text-gray-400 font-medium">T</th>
+                        <th className="py-2 px-2 text-center text-xs text-gray-400 font-medium">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pastDivisionStandings.map((s) => (
+                        <tr key={`${s.divisionLabel}-${s.team}`} className="border-b border-gray-800 last:border-b-0">
+                          <td className="py-2 px-2 text-center text-white font-semibold">{s.rank}</td>
+                          <td className="py-2 px-2 text-white">{s.team}</td>
+                          <td className="py-2 px-2 text-center text-gray-300">{s.gp ?? "-"}</td>
+                          <td className="py-2 px-1 text-center text-green-400">{s.wins ?? "-"}</td>
+                          <td className="py-2 px-1 text-center text-red-400">{s.losses ?? "-"}</td>
+                          <td className="py-2 px-1 text-center text-gray-400">{s.ties ?? "-"}</td>
+                          <td className="py-2 px-2 text-center text-white font-bold">{s.points ?? "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showingCurrent && divisionStandings.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -595,7 +695,7 @@ function PlayerRankingContent() {
               >
                 個人ランクを検索する →
               </button>
-              {divisionStandings[0]?.sourceUrl && (
+              {showingCurrent && divisionStandings[0]?.sourceUrl && (
                 <a
                   href={divisionStandings[0].sourceUrl}
                   target="_blank"

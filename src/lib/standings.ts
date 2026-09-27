@@ -53,34 +53,31 @@ export function buildStandingsSources(season: number): { label: string; url: str
 }
 
 /**
- * 順位表は「今の順位」なので、スケジュールやスコアと違い複数シーズンを混ぜられない
- * （同じディビジョンの行が二重になる）。進行中シーズンを見て、まだ公開されていなければ
- * 前シーズンにフォールバックする。開幕直後の空白期間を埋めるための処理。
+ * 指定シーズンの順位表を全ディビジョン分取得する。
+ * 順位表は「今の順位」なので複数シーズンを混ぜない（同じディビジョンの行が二重になる）。
  */
-export async function fetchCurrentStandings(
-  debugMode = false,
-  now: Date = new Date()
+export async function fetchSeasonStandings(
+  season: number,
+  debugMode = false
 ): Promise<{ season: string; results: ParseResult[] }> {
-  const season = currentSeasonNumber(now);
-
-  for (const candidate of [season, season - 1]) {
-    const results = await Promise.all(
-      buildStandingsSources(candidate).map(({ label, url }) =>
-        fetchAndParseStandings(label, url, debugMode)
-      )
-    );
-    if (results.some((r) => r.standings.length > 0)) {
-      return { season: seasonOrdinal(candidate), results };
-    }
-  }
-
-  // どちらも取れない場合は進行中シーズンの結果（空）をそのまま返す
   const results = await Promise.all(
     buildStandingsSources(season).map(({ label, url }) =>
       fetchAndParseStandings(label, url, debugMode)
     )
   );
   return { season: seasonOrdinal(season), results };
+}
+
+/**
+ * 進行中シーズンの順位表。前シーズンにはフォールバックしない
+ * （チームランキングは「今シーズン」と「過去シーズン（保存済み）」を分けて持つ）。
+ * 開幕直後は全ディビジョン空になる。
+ */
+export async function fetchCurrentStandings(
+  debugMode = false,
+  now: Date = new Date()
+): Promise<{ season: string; results: ParseResult[] }> {
+  return fetchSeasonStandings(currentSeasonNumber(now), debugMode);
 }
 
 function cleanText(text: string): string {
