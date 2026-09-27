@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
+import { RENTAL_CACHE_TAG } from "@/lib/cacheTags";
 
 export interface RentalEntry {
   date: string;
@@ -28,6 +29,9 @@ const RENT_URLS: { month: string; year: number; monthNum: number; url: string }[
   { month: "7月", year: 2026, monthNum: 7, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202607.htm" },
   { month: "8月", year: 2026, monthNum: 8, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202608.htm" },
   { month: "9月", year: 2026, monthNum: 9, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202609.htm" },
+  { month: "10月", year: 2026, monthNum: 10, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202610.htm" },
+  { month: "11月", year: 2026, monthNum: 11, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202611.htm" },
+  { month: "12月", year: 2026, monthNum: 12, url: "https://misconduct.co.jp/wordpress/wp-content/uploads/rent_202612.htm" },
 ];
 
 // CSSから特定背景色のクラス名を抽出
@@ -63,7 +67,7 @@ async function fetchAndParseRental(
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 259200 },
+      next: { revalidate: 259200, tags: [RENTAL_CACHE_TAG] },
     });
     if (!res.ok) return entries;
 
