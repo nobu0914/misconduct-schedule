@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Match } from "./api/schedule/route";
+import type { Match, SourceStatus } from "./api/schedule/route";
 import type { TeamStanding } from "./api/standings/route";
 import type { PrevSeasonEntry } from "./api/prev-season/route";
 import type { DayForecast } from "./api/weather/route";
@@ -67,7 +67,7 @@ function isUpcoming(dateStr: string): boolean {
 }
 
 const DIVISION_ORDER = [
-  "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "35&Over",
+  "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over",
 ];
 
 interface SavedFilter {
@@ -87,6 +87,19 @@ function parseTeamName(name: string): { base: string; bench: string | null } {
   return { base: name, bench: null };
 }
 
+// 取得元の状態から警告文を組み立てる（0件＝「試合なし」なのか「取れていない」のかを区別する）
+function describeSourceIssue(data: { matches?: Match[]; sources?: SourceStatus[] }): string | null {
+  const sources = data.sources ?? [];
+  const failed = sources.filter((s) => s.status !== 200 && s.status !== 404);
+  if ((data.matches ?? []).length === 0) {
+    return "公式サイトから試合日程を取得できませんでした。時間をおいて再読み込みしてください。";
+  }
+  if (failed.length > 0) {
+    return `一部の日程を取得できませんでした（${failed.length}件）。表示が最新でない可能性があります。`;
+  }
+  return null;
+}
+
 function ScheduleContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -99,6 +112,7 @@ function ScheduleContent() {
   const [standingsLoading, setStandingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [sourceIssue, setSourceIssue] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [weatherMap, setWeatherMap] = useState<Record<string, DayForecast>>({});
@@ -249,6 +263,7 @@ function ScheduleContent() {
     setMatches(schedData.matches ?? []);
     setRentals(rentData.entries ?? []);
     setLastUpdated(schedData.lastUpdated ?? "");
+    setSourceIssue(describeSourceIssue(schedData));
     setStandings(buildStandingsMap(stData.standings ?? []));
     setStandingsLoading(false);
   }, []);
@@ -277,6 +292,7 @@ function ScheduleContent() {
         setMatches(schedData.matches ?? []);
         setRentals(rentData.entries ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
+        setSourceIssue(describeSourceIssue(schedData));
         setStandings(buildStandingsMap(stData.standings ?? []));
         setPrevSeason(buildPrevSeasonMap(prevData.data ?? []));
         // 天気マップ構築（"月/日" → DayForecast）
@@ -472,6 +488,11 @@ function ScheduleContent() {
                 {selectedMatch.division && (
                   <span className={`${getDivisionColor(selectedMatch.division)} text-white text-xs px-2 py-0.5 rounded-full font-medium`}>
                     {selectedMatch.division}
+                  </span>
+                )}
+                {selectedMatch.round && (
+                  <span className="border border-amber-500 text-amber-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                    {selectedMatch.round}
                   </span>
                 )}
                 {isPostponedMatch(selectedMatch) && (
@@ -742,9 +763,15 @@ function ScheduleContent() {
           </div>
         )}
 
+        {!loading && !error && sourceIssue && (
+          <div className="bg-amber-900/30 border border-amber-700 rounded-lg p-3 text-amber-300 text-sm text-center">
+            {sourceIssue}
+          </div>
+        )}
+
         {!loading && !error && grouped.length === 0 && (
           <div className="text-center py-20 text-gray-500">
-            該当する試合がありません
+            {matches.length === 0 ? "試合日程を表示できません" : "該当する試合がありません"}
           </div>
         )}
 
@@ -825,6 +852,11 @@ function ScheduleContent() {
                                 {match.division}
                               </span>
                             )}
+                            {match.round && (
+                              <span className="border border-amber-500 text-amber-400 text-xs px-2 py-1 rounded-full font-medium">
+                                {match.round}
+                              </span>
+                            )}
                             {postponed && (
                               <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full font-medium">
                                 延期
@@ -881,6 +913,11 @@ function ScheduleContent() {
                           {match.division && (
                             <span className={`${getDivisionColor(match.division)} text-white text-xs px-2 py-1 rounded-full font-medium`}>
                               {match.division}
+                            </span>
+                          )}
+                          {match.round && (
+                            <span className="border border-amber-500 text-amber-400 text-xs px-2 py-1 rounded-full font-medium">
+                              {match.round}
                             </span>
                           )}
                           {postponed && (

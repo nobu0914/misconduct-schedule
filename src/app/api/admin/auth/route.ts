@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
+import { verifyAdminPasscode } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const { passcode } = await req.json();
-  const expected = process.env.ADMIN_PASSCODE;
-  if (!expected) return NextResponse.json({ ok: false, error: "not configured" }, { status: 500 });
-  if (typeof passcode !== "string" || passcode.toUpperCase() !== expected.toUpperCase()) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const result = await verifyAdminPasscode(req, body.passcode);
+
+  if (!result.ok) {
+    const error =
+      result.status === 500 ? "not configured"
+      : result.status === 429 ? "試行回数が多すぎます。しばらく待ってください。"
+      : undefined;
+    return NextResponse.json({ ok: false, error }, { status: result.status });
   }
   return NextResponse.json({ ok: true });
 }

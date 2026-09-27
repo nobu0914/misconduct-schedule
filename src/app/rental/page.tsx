@@ -28,8 +28,6 @@ function isToday(dateStr: string): boolean {
   return today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === day;
 }
 
-const MONTH_ORDER = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
-
 function RentalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -112,8 +110,10 @@ function RentalContent() {
   }, []);
 
   const months = useMemo(() => {
+    // entries は日付順に並んでいるので、出現順がそのまま時系列になる
+    // （年をまたぐと "1月" が重複しうるため固定の月順では並べ替えない）
     const set = new Set(entries.map((e) => e.month));
-    return Array.from(set).sort((a, b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b));
+    return Array.from(set);
   }, [entries]);
 
   const filtered = useMemo(() => {
@@ -333,7 +333,7 @@ function RentalContent() {
                       </a>
                     </p>
                     <p>🕗 時間：20:00〜22:00</p>
-                    <p>💴 参加費：大人 2,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
+                    <p>💴 参加費：大人 3,000円　・学生 1,500円　・GK 無料（PayPay支払い可）</p>
                     <p>🎯 対象：初心者〜ブロンズ・ブラス級程度の大人プレーヤー</p>
                     <p className="text-gray-400">✨ 上級者の場合、周囲のレベルに合わせてプレーいただける方</p>
                   </div>
