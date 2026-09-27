@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { loadArchivedByPrefix, reconcileWithArchive, type ArchivedEntry } from "./archive";
+import { seasonOrdinal, parseSeasonNumber } from "./season";
 
 export interface Match {
   no: string;
@@ -16,6 +17,11 @@ export interface Match {
   round?: string;
   month: string;
   sourceUrl: string;
+  /**
+   * どのシーズンの試合か（"53rd" など）。9月は前シーズンの残り＋次シーズンの日程が並び、
+   * 開幕後は保存済みの前シーズン分も混ざるため、順位・成績はこれで同じシーズン同士だけ突き合わせる
+   */
+  season?: string;
 }
 
 /** 取得元ごとの取得結果（監視・デバッグ用） */
@@ -72,17 +78,7 @@ function jstYearMonth(now: Date): { year: number; month: number } {
   return { year: jst.getUTCFullYear(), month: jst.getUTCMonth() + 1 };
 }
 
-/** 53 -> "53rd" のような序数表記に変換 */
-export function seasonOrdinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
-}
+export { seasonOrdinal, parseSeasonNumber };
 
 /** 指定日時点で進行中のシーズン番号（JST基準） */
 export function currentSeasonNumber(now: Date = new Date()): number {
@@ -111,6 +107,12 @@ export function buildScheduleSources(
     }
   }
   return sources;
+}
+
+/** 取得元ラベル（"53rd/march"）からシーズン表記（"53rd"）を取り出す */
+export function seasonFromLabel(label: string): string | undefined {
+  const head = label.split("/")[0];
+  return parseSeasonNumber(head) !== undefined ? head : undefined;
 }
 
 /**
@@ -364,12 +366,14 @@ export async function fetchAllMatches(
   // 同一試合が複数ファイルに載っていても1件に寄せる
   const seen = new Set<string>();
   const matches: Match[] = [];
-  for (const { items: found } of combined) {
+  for (const { items: found, source } of combined) {
+    // 取得元ラベルは "53rd/march" の形（保存済みデータも同じ）。先頭がシーズン
+    const season = seasonFromLabel(source.label);
     for (const m of found) {
       const key = `${m.date}|${m.timeStart}|${m.awayTeam}|${m.homeTeam}|${m.division}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      matches.push(m);
+      matches.push(season && !m.season ? { ...m, season } : m);
     }
   }
 

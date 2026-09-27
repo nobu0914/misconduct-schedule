@@ -12,6 +12,7 @@ type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
 const DIVISION_COLORS: Record<string, string> = {
@@ -107,7 +108,10 @@ function ScheduleContent() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [rentals, setRentals] = useState<RentalEntry[]>([]);
   const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
-  const [prevSeason, setPrevSeason] = useState<Record<string, PrevSeasonEntry>>({});
+  // 順位表が実際にどのシーズンのものか（"53rd" など）。開幕直後は前シーズンにフォールバックする
+  const [standingsSeason, setStandingsSeason] = useState<string>("");
+  // シーズン番号 → 最終順位（保存済み）。「前シーズン」は表示中のシーズン − 1 を選ぶ
+  const [pastSeasons, setPastSeasons] = useState<Record<string, Record<string, PrevSeasonEntry>>>({});
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,9 +207,26 @@ function ScheduleContent() {
     return TEAM_ALIASES[name] ?? Object.entries(TEAM_ALIASES).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
   }
 
-  // 52ndシーズンデータとの照合（大文字小文字・括弧・エイリアスを考慮、ディビジョン一致のみ）
-  function findPrevSeason(scheduleName: string, currentDivision?: string): PrevSeasonEntry | undefined {
-    if (!scheduleName) return undefined;
+  function buildPastSeasonsMap(prevData: {
+    seasons?: Record<string, PrevSeasonEntry[]>;
+    season?: number;
+    data?: PrevSeasonEntry[];
+  }): Record<string, Record<string, PrevSeasonEntry>> {
+    const bySeason = prevData.seasons ?? (prevData.season ? { [String(prevData.season)]: prevData.data ?? [] } : {});
+    const out: Record<string, Record<string, PrevSeasonEntry>> = {};
+    for (const [n, list] of Object.entries(bySeason)) out[n] = buildPrevSeasonMap(list);
+    return out;
+  }
+
+  // 指定シーズンの保存済み順位との照合（大文字小文字・括弧・エイリアスを考慮、ディビジョン一致のみ）
+  function findPrevSeason(
+    scheduleName: string,
+    currentDivision: string | undefined,
+    targetSeason: number | undefined
+  ): PrevSeasonEntry | undefined {
+    if (!scheduleName || targetSeason === undefined) return undefined;
+    const prevSeason = pastSeasons[String(targetSeason)];
+    if (!prevSeason) return undefined;
     const { base } = parseTeamName(scheduleName);
 
     function matchesDivision(entry: PrevSeasonEntry): boolean {
@@ -230,9 +251,12 @@ function ScheduleContent() {
     return undefined;
   }
 
-  // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合
-  function findStanding(scheduleName: string, currentDivision?: string): TeamStanding | undefined {
+  // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合。
+  // 試合のシーズンと順位表のシーズンが違うときは出さない（前シーズンの試合に新シーズンの
+  // 順位を付けたり、次シーズンの日程に前シーズンの順位を付けたりしないため）
+  function findStanding(scheduleName: string, currentDivision?: string, matchSeason?: string): TeamStanding | undefined {
     if (!scheduleName) return undefined;
+    if (matchSeason && standingsSeason && matchSeason !== standingsSeason) return undefined;
 
     function matchesDivision(entry: TeamStanding): boolean {
       if (!currentDivision) return true;
@@ -265,6 +289,7 @@ function ScheduleContent() {
     setLastUpdated(schedData.lastUpdated ?? "");
     setSourceIssue(describeSourceIssue(schedData));
     setStandings(buildStandingsMap(stData.standings ?? []));
+    setStandingsSeason(stData.season ?? "");
     setStandingsLoading(false);
   }, []);
 
@@ -294,7 +319,8 @@ function ScheduleContent() {
         setLastUpdated(schedData.lastUpdated ?? "");
         setSourceIssue(describeSourceIssue(schedData));
         setStandings(buildStandingsMap(stData.standings ?? []));
-        setPrevSeason(buildPrevSeasonMap(prevData.data ?? []));
+        setStandingsSeason(stData.season ?? "");
+        setPastSeasons(buildPastSeasonsMap(prevData));
         // 天気マップ構築（"月/日" → DayForecast）
         const wMap: Record<string, DayForecast> = {};
         for (const f of (weatherData.forecasts ?? []) as DayForecast[]) {
@@ -396,8 +422,11 @@ function ScheduleContent() {
 
   // 比較モーダル用ヘルパー
   function TeamCompareCol({ name, role }: { name: string; role: "away" | "home" }) {
-    const s = findStanding(name, selectedMatch?.division);
+    const s = findStanding(name, selectedMatch?.division, selectedMatch?.season);
     const { base, bench } = parseTeamName(name);
+    // この試合のシーズン（不明なら順位表のシーズン）。前シーズンはその1つ前
+    const matchSeasonNum = parseSeasonNumber(selectedMatch?.season) ?? parseSeasonNumber(standingsSeason);
+    const prevSeasonNum = matchSeasonNum !== undefined ? matchSeasonNum - 1 : undefined;
     return (
       <div className="flex-1 flex flex-col gap-3 p-4 min-w-0">
         <div>
@@ -415,6 +444,9 @@ function ScheduleContent() {
           </div>
         ) : s ? (
           <>
+            {standingsSeason && (
+              <p className="text-xs text-gray-500 text-center">{standingsSeason} シーズン</p>
+            )}
             <div className="text-center flex items-baseline justify-center gap-1">
               <span className="text-2xl font-bold text-white">{s.rank}</span>
               <span className="text-gray-400 text-sm">位</span>
@@ -449,13 +481,13 @@ function ScheduleContent() {
         ) : (
           <p className="text-gray-600 text-xs text-center">データなし</p>
         )}
-        {/* 前シーズン（52nd）情報 */}
+        {/* 前シーズン情報（この試合のシーズンの1つ前） */}
         {(() => {
-          const p = findPrevSeason(name, selectedMatch?.division);
-          if (!p) return null;
+          const p = findPrevSeason(name, selectedMatch?.division, prevSeasonNum);
+          if (!p || prevSeasonNum === undefined) return null;
           return (
             <div className="pt-3 border-t border-gray-800">
-              <p className="text-xs text-gray-500 mb-1.5 text-center">前シーズン（52nd）</p>
+              <p className="text-xs text-gray-500 mb-1.5 text-center">前シーズン（{seasonOrdinal(prevSeasonNum)}）</p>
               <div className="flex items-center justify-center gap-2">
                 <span className="text-base font-bold text-gray-300">{p.rank}位</span>
                 <span className="text-gray-600 text-xs">/ {p.totalTeams}チーム</span>
@@ -881,7 +913,7 @@ function ScheduleContent() {
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-medium truncate">{parseTeamName(match.awayTeam).base || "─"}</span>
                             {(() => {
-                              const s = findStanding(match.awayTeam, match.division);
+                              const s = findStanding(match.awayTeam, match.division, match.season);
                               if (!s) return null;
                               const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
                               return (
@@ -897,7 +929,7 @@ function ScheduleContent() {
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-medium truncate">{parseTeamName(match.homeTeam).base || "─"}</span>
                             {(() => {
-                              const s = findStanding(match.homeTeam, match.division);
+                              const s = findStanding(match.homeTeam, match.division, match.season);
                               if (!s) return null;
                               const arrow = s.rankChange > 0 ? `↑${s.rankChange}` : s.rankChange < 0 ? `↓${Math.abs(s.rankChange)}` : "";
                               return (

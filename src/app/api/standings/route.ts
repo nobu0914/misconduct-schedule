@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
 import { fetchCurrentStandings } from "@/lib/standings";
 import type { TeamStanding } from "@/lib/standings";
+import { parseSeasonNumber } from "@/lib/season";
+import { saveSeasonTeams, toSeasonTeamEntries } from "@/lib/seasonSnapshot";
 
 export type { TeamStanding };
 
@@ -33,6 +35,10 @@ export async function GET(): Promise<NextResponse> {
   } catch {
     // KV エラーは無視（rankChange=0 のまま返す）
   }
+
+  // シーズン番号付きで保存しておく（公式ページが消えた後の「前シーズン」表示に使う）
+  const seasonNum = parseSeasonNumber(season);
+  if (seasonNum !== undefined) await saveSeasonTeams(seasonNum, toSeasonTeamEntries(allStandings));
 
   return NextResponse.json(
     { standings: allStandings, season, lastUpdated: new Date().toISOString() } satisfies StandingsData,

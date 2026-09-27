@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260926-0017`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260928-0045`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -56,7 +56,8 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/cron/schedule`: Vercel Cron で1日1回（03:00 UTC / 12:00 JST）。公式サイトを直接（`no-store`）叩いて取得可否を検証し、その後 ISR キャッシュを破棄＋再生成する
 - `/api/cron/verify`: Vercel Cron で週1回（月曜 03:00 UTC / 12:00 JST）。スケジュール・レンタル・スコアを `no-store` で取得し、保存済みスナップショットと突き合わせる
 - `/api/standings` / `/api/scores` / `/api/player-stats`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
-- `/api/prev-season`: `revalidate=86400`（1日）
+- `/api/prev-season`: `revalidate=86400`（1日）。進行中・前・前々シーズンの保存済み最終順位を `seasons` で返す
+- `/api/prev-season-players`: 動的（`?season=N`）+ `s-maxage=86400`。指定シーズンの保存済み個人成績
 - `/api/events`: `revalidate=86400`（1日）
 
 **cron で毎日再生成する対象**（`/api/cron/schedule` の `WARM_PATHS`）:
@@ -132,6 +133,22 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 ファイル名スラッグはスコア表と綴りが違う（Women Gold = `wg`、スコアは `womengold`）。Women Bronze は `wb` と想定（未公開なら404でスキップ）。
 `/api/standings` と `/api/player-stats` は実際に使ったシーズンを `season` で返し、ランキングページの「今シーズン（53rd）」表記はこれを使う。
 
+### シーズンを混ぜない（重要）
+9月は「前シーズンの残り＋プレイオフ」と「次シーズンの日程」が並び、開幕後は保存済みの前シーズン分も一覧に出る。
+順位表は開幕直後に前シーズンへフォールバックする。**成績・順位は必ず同じシーズン同士で突き合わせる**。
+
+- 試合（`Match.season`）は取得元ラベル（`53rd/march`）から付ける。スコアは `GameScore.season`
+- TOP の順位・勝敗は `Match.season` と順位表の `season` が一致するときだけ出す（`findStanding()`）
+- 「前シーズン」は**表示しているシーズン − 1** を選ぶ。決め打ち（旧: 52nd固定）にすると2シーズン前のデータを
+  前シーズン・前年比として出してしまう。TOP は試合のシーズン − 1、ランキングは個人成績の `season` − 1
+- スコアタブはシーズンを切り替えて1つずつ表示（既定は結果が出ている最新シーズン）
+- シーズン表記の変換は `src/lib/season.ts`（依存なし。ページ側から `schedule.ts` を import しない）
+
+**シーズン別の最終順位・個人成績の保存**（`src/lib/seasonSnapshot.ts`）: 順位表ページもシーズン後に消えるため、
+`/api/standings` / `/api/player-stats` が取得のたびに `season:{N}:data` / `season:{N}:players` へ保存する。
+ディビジョン単位で差し替えるので、一部のページが先に消えても残りは失わない。空では上書きしない。
+52nd は公式ページが既に無いため Wayback Machine 由来の固定データ（KVに無いときの控え）。
+
 ### 入力検証とレート制限（重要）
 公開APIが受け取った値は**そのままKVのキーや集計キーになる**ため、検証しないと任意のキーを作られて
 集計データを際限なく膨らませられる。以下は必ず検証してから使う。
@@ -166,7 +183,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ```bash
 npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
-npx tsx tests/data-sources.mts  # URL自動生成・パーサー（Shift-JISのダミーページ使用、39項目）
+npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定（Shift-JISのダミーページ使用、56項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -178,6 +195,15 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー（Shift-JISの�
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
 
 ## 作業記録
+
+### 2026-09-28
+- 本番が `main` ではなく `claude/latest-data-fetch-check-ie1hqs` からデプロイされていたため、`main` に取り込んで揃えた
+  （`main` を push すると本番に自動デプロイされる。**本番より古い `main` を push すると巻き戻る**ので注意）。
+- 「前シーズン」が 52nd 固定だった問題を解消。54th 開幕後に 52nd を前シーズン・前年比として出すところだった。
+  - 順位表・個人成績をシーズン番号付きで KV に保存（53rd の最終順位を公式ページが消える前に確保するため）
+  - 前シーズンは「表示中のシーズン − 1」から選ぶ
+  - 試合にシーズンを持たせ、順位・勝敗は同じシーズンの試合にだけ付ける
+  - ランキング・スコアにシーズン表記、スコアはシーズン切替
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。
@@ -255,9 +281,8 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー（Shift-JISの�
 - スコア表示を**日付の新しい順**に変更（従来は古い順）。
 - standings / player-stats もシーズン自動判定に変更（進行中→取れなければ前シーズン）。
   UIの「今シーズン（53rd）」表記もAPIの `season` から出すようにした。
-- **未対応**: `/api/prev-season` と `/api/prev-season-players` は 52nd のハードコード
-  （公式ページが消えたため Wayback Machine から採取したもの）。53rd 終了後は「昨シーズン＝53rd」に
-  更新が必要。今は `src/lib/archive.ts` に 53rd のデータが貯まるので、次はそこから生成できる。
+- ~~**未対応**: `/api/prev-season` と `/api/prev-season-players` は 52nd のハードコード~~ → 2026-09-28 に対応
+  （シーズン別に保存し、表示中のシーズン − 1 を選ぶ）。
 
 ### 2026-09-11
 - The 54th season schedule (announced 9/10, starts 10/3) wasn't showing. Cause: `SCHEDULE_URLS` in `/api/schedule` was hardcoded to 53rd 3–7月 and 9月.

@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
+import { currentSeasonNumber } from "@/lib/schedule";
+import { loadSeasonSnapshot, seasonTeamsKey, type SeasonTeamEntry } from "@/lib/seasonSnapshot";
 
-export interface PrevSeasonEntry {
-  team: string;
-  divisionLabel: string;
-  rank: number;
-  totalTeams: number;
-}
-
-const KV_KEY = "season:52:data";
+export type PrevSeasonEntry = SeasonTeamEntry;
 
 // 52ndシーズン確定データ（Wayback Machine より取得・KVにバックアップ）
 // 出典: https://web.archive.org/web/2025-2026/
@@ -96,23 +91,43 @@ const SEASON_52_DATA: PrevSeasonEntry[] = [
   { team: "Individuals 35",        divisionLabel: "35&Over", rank: 5, totalTeams: 5 },
 ];
 
-export const revalidate = 86400; // 1日キャッシュ（静的データのため長め）
+export const revalidate = 86400; // 1日（保存データは順位表の取得のたびに更新される）
 
+/** KV に無いときの控え（公式ページが消えたシーズンを手で復元したもの） */
+const STATIC_SEASONS: Record<number, PrevSeasonEntry[]> = { 52: SEASON_52_DATA };
+
+async function loadSeasonTeams(season: number): Promise<PrevSeasonEntry[]> {
+  const saved = await loadSeasonSnapshot<PrevSeasonEntry>(seasonTeamsKey(season));
+  if (saved.length > 0) return saved;
+  const fallback = STATIC_SEASONS[season];
+  if (!fallback) return [];
+  try {
+    await kv.set(seasonTeamsKey(season), fallback); // 次回からKVで返す
+  } catch {}
+  return fallback;
+}
+
+/**
+ * シーズン別の最終順位（保存済み）。進行中・前・前々シーズンの3つを返す。
+ *
+ * 画面側は「表示している試合／順位表のシーズン − 1」を選んで前シーズンとして使う。
+ * 決め打ちにすると、9月（次シーズンの日程が並ぶ）や開幕直後（順位表が前シーズンに
+ * フォールバック中）に、2シーズン前のデータを「前シーズン」と表示してしまう。
+ */
 export async function GET(): Promise<NextResponse> {
   const headers = { "Cache-Control": "s-maxage=86400, stale-while-revalidate=43200" };
+  const current = currentSeasonNumber();
+  const numbers = [current, current - 1, current - 2];
+  const loaded = await Promise.all(numbers.map(loadSeasonTeams));
 
-  // KVキャッシュを確認（ページが消えた後もデータを保持するためのバックアップ）
-  try {
-    const cached = await kv.get<PrevSeasonEntry[]>(KV_KEY);
-    if (cached && cached.length > 0) {
-      return NextResponse.json({ season: 52, data: cached }, { headers });
-    }
-  } catch {}
+  const seasons: Record<string, PrevSeasonEntry[]> = {};
+  numbers.forEach((n, i) => {
+    if (loaded[i].length > 0) seasons[String(n)] = loaded[i];
+  });
 
-  // KVに保存（初回または再保存）
-  try {
-    await kv.set(KV_KEY, SEASON_52_DATA);
-  } catch {}
-
-  return NextResponse.json({ season: 52, data: SEASON_52_DATA }, { headers });
+  // season / data は旧クライアント向け（読み込み済みの古い画面がそのまま動くように）
+  return NextResponse.json(
+    { season: current - 1, data: seasons[String(current - 1)] ?? [], seasons },
+    { headers }
+  );
 }

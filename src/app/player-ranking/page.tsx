@@ -6,6 +6,7 @@ import type { PlayerStat } from "../api/player-stats/route";
 import type { PrevPlayerStat } from "../api/prev-season-players/route";
 import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
+import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -44,6 +45,12 @@ function PlayerRankingContent() {
   const [scoresLoading, setScoresLoading] = useState(false);
   // 実際に取得できたシーズン（"53rd" など）。APIが返すので表記を固定しない
   const [currentSeasonLabel, setCurrentSeasonLabel] = useState("");
+  // 比較・「昨シーズン」検索に使うシーズン。今シーズン側（フォールバック含む）の1つ前
+  const [prevSeasonLabel, setPrevSeasonLabel] = useState("");
+  // チームランキングが実際にどのシーズンのものか（個人成績とは別にフォールバックしうる）
+  const [standingsSeason, setStandingsSeason] = useState("");
+  // スコアタブで表示するシーズン（"" = 自動: 結果が出ている最新シーズン）
+  const [scoreSeason, setScoreSeason] = useState("");
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
@@ -60,14 +67,21 @@ function PlayerRankingContent() {
   });
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/player-stats").then((r) => r.json()),
-      fetch("/api/prev-season-players").then((r) => r.json()).catch(() => ({ players: [] })),
-    ])
-      .then(([d, prev]) => {
+    fetch("/api/player-stats")
+      .then((r) => r.json())
+      .then(async (d) => {
         setPlayers(d.players ?? []);
         setCurrentSeasonLabel(d.season ?? "");
-        setPrevPlayers(prev.players ?? []);
+        // 前シーズンは「今シーズンとして表示するシーズン − 1」。決め打ちにすると
+        // 2シーズン離れたデータを前年比として出してしまう
+        const current = parseSeasonNumber(d.season);
+        if (current !== undefined) {
+          const prev = await fetch(`/api/prev-season-players?season=${current - 1}`)
+            .then((r) => r.json())
+            .catch(() => ({ players: [] }));
+          setPrevPlayers(prev.players ?? []);
+          setPrevSeasonLabel(seasonOrdinal(current - 1));
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -79,7 +93,10 @@ function PlayerRankingContent() {
       setStandingsLoading(true);
       fetch("/api/standings")
         .then((r) => r.json())
-        .then((d) => setStandings(d.standings ?? []))
+        .then((d) => {
+          setStandings(d.standings ?? []);
+          setStandingsSeason(d.season ?? "");
+        })
         .catch(() => {})
         .finally(() => setStandingsLoading(false));
     }
@@ -129,9 +146,26 @@ function PlayerRankingContent() {
     [standings, selectedDivision]
   );
 
-  const divisionGames = useMemo(
+  // スコアは前・今・次シーズンが混在して返るので、シーズンを選んで1つずつ表示する
+  const allDivisionGames = useMemo(
     () => games.filter((g) => g.divisionLabel === selectedDivision),
     [games, selectedDivision]
+  );
+
+  const scoreSeasons = useMemo(() => {
+    const set = new Set(allDivisionGames.map((g) => g.season).filter(Boolean));
+    return Array.from(set).sort((a, b) => (parseSeasonNumber(b) ?? 0) - (parseSeasonNumber(a) ?? 0));
+  }, [allDivisionGames]);
+
+  const shownScoreSeason = useMemo(() => {
+    if (scoreSeason && scoreSeasons.includes(scoreSeason)) return scoreSeason;
+    // 既定は結果が出ている最新シーズン（9月に未消化の次シーズンだけが並ぶのを避ける）
+    return scoreSeasons.find((s) => allDivisionGames.some((g) => g.season === s && g.played)) ?? scoreSeasons[0] ?? "";
+  }, [scoreSeason, scoreSeasons, allDivisionGames]);
+
+  const divisionGames = useMemo(
+    () => allDivisionGames.filter((g) => !shownScoreSeason || g.season === shownScoreSeason),
+    [allDivisionGames, shownScoreSeason]
   );
 
   const gamesByDate = useMemo(() => {
@@ -153,14 +187,15 @@ function PlayerRankingContent() {
   const officialScoreUrl = useMemo(() => {
     const fromGames = divisionGames[0]?.sourceUrl;
     if (fromGames) return fromGames;
-    const season = games[0]?.season || "53rd";
+    const season = shownScoreSeason || currentSeasonLabel || games[0]?.season;
+    if (!season) return "https://misconduct.co.jp/";
     const slug =
       selectedDivision === "Women Gold" ? "womengold"
       : selectedDivision === "Women Bronze" ? "womenbronze"
       : selectedDivision === "35&Over" ? "35over"
       : selectedDivision.toLowerCase();
     return `https://misconduct.co.jp/wordpress/wp-content/uploads/${season}_score_${slug}.htm`;
-  }, [divisionGames, games, selectedDivision]);
+  }, [divisionGames, games, selectedDivision, shownScoreSeason, currentSeasonLabel]);
 
   const results = season === "current" ? currentResults : prevResults;
   const noResults = !loading && query.trim() && results.length === 0;
@@ -221,11 +256,11 @@ function PlayerRankingContent() {
                     : "bg-gray-800 text-gray-400 border border-gray-700"
                 }`}
               >
-                昨シーズン（52nd）
+                {prevSeasonLabel ? `昨シーズン（${prevSeasonLabel}）` : "昨シーズン"}
               </button>
             </div>
 
-            {season === "prev" && (
+            {season === "prev" && prevSeasonLabel === "52nd" && (
               <p className="text-xs text-gray-500 mt-2">※ 過去データの履歴が一部破損しており、検索しても出てこない場合があります</p>
             )}
 
@@ -330,7 +365,7 @@ function PlayerRankingContent() {
                         const rankDiff = prev.divisionRank - p.divisionRank;
                         return (
                           <div className="bg-gray-800/50 rounded-lg px-3 py-2.5 space-y-2">
-                            <p className="text-gray-400 text-xs">前シーズン（52nd）</p>
+                            <p className="text-gray-400 text-xs">前シーズン（{prevSeasonLabel}）</p>
                             <div className="w-full border border-gray-700 rounded-lg overflow-hidden">
                               <table className="w-full text-sm">
                                 <thead>
@@ -429,6 +464,9 @@ function PlayerRankingContent() {
           <>
             <h1 className="text-xl font-bold text-white mb-3">
               {mode === "ranking" ? "チームランキング" : "スコア"}
+              {mode === "ranking" && standingsSeason && (
+                <span className="text-sm text-gray-400 font-normal ml-2">{standingsSeason} シーズン</span>
+              )}
             </h1>
 
             {/* ディビジョン選択 */}
@@ -525,6 +563,26 @@ function PlayerRankingContent() {
 
         {mode === "score" && (
           <div className="mt-4">
+            {scoreSeasons.length > 1 && (
+              <div className="flex gap-2 mb-4">
+                {scoreSeasons.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setScoreSeason(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      shownScoreSeason === s
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-800 text-gray-400 border border-gray-700"
+                    }`}
+                  >
+                    {s} シーズン
+                  </button>
+                ))}
+              </div>
+            )}
+            {scoreSeasons.length === 1 && (
+              <p className="text-xs text-gray-500 mb-3">{scoreSeasons[0]} シーズン</p>
+            )}
             {scoresLoading && games.length === 0 && (
               <div className="flex items-center justify-center py-16 gap-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />

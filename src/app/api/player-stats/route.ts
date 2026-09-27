@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { buildStandingsSources } from "@/lib/standings";
 import { currentSeasonNumber, seasonOrdinal } from "@/lib/schedule";
+import { saveSeasonPlayers } from "@/lib/seasonSnapshot";
 
 export const revalidate = 86400; // 1日（cronで毎日再生成する）
 
@@ -137,6 +138,14 @@ export async function GET(): Promise<NextResponse> {
     used = season - 1;
     players = await fetchSeasonPlayers(used);
   }
+
+  // シーズン番号付きで保存しておく（次シーズンの「昨シーズン」検索・前年比に使う）
+  await saveSeasonPlayers(
+    used,
+    players.map(({ name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim }) => ({
+      name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim,
+    }))
+  );
 
   return NextResponse.json({
     players,

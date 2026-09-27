@@ -1,8 +1,10 @@
 import iconv from "iconv-lite";
 import {
   buildScheduleSources, currentSeasonNumber, seasonOrdinal, monthLabel, fetchAllMatches,
-  withArchivedSeasons, type Match,
+  withArchivedSeasons, seasonFromLabel, type Match,
 } from "../src/lib/schedule";
+import { parseSeasonNumber } from "../src/lib/season";
+import { mergeByDivision, toSeasonTeamEntries } from "../src/lib/seasonSnapshot";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
@@ -153,6 +155,36 @@ async function main() {
 
   assert(s.sources.filter((x) => x.status === 404).length === 25, `404はエラー扱いせずスキップ (=${s.sources.filter((x) => x.status === 404).length})`);
   assert(s.sources.every((x) => x.status === 200 || x.status === 404), "想定外ステータスなし");
+  assert(s.matches.every((m) => m.season !== undefined && m.sourceUrl.includes(`/${m.season}_schedule_`)),
+    `試合に取得元のシーズンが付く (${[...new Set(s.matches.map((m) => m.season))].join(",")})`);
+
+  // --- シーズン表記 ---
+  assert(parseSeasonNumber("53rd") === 53 && parseSeasonNumber("61st") === 61, "シーズン表記→番号");
+  assert(parseSeasonNumber("") === undefined && parseSeasonNumber("march") === undefined, "シーズン表記でないものは undefined");
+  assert(seasonFromLabel("53rd/playoff") === "53rd" && seasonFromLabel("54th/october") === "54th",
+    "取得元ラベルからシーズンを取り出す");
+  assert(seasonFromLabel("Bronze") === undefined, "シーズンの無いラベルは undefined");
+
+  // --- シーズン別の順位・個人成績の保存 ---
+  {
+    const saved = [
+      { team: "A", divisionLabel: "Gold", rank: 1, totalTeams: 2 },
+      { team: "B", divisionLabel: "Gold", rank: 2, totalTeams: 2 },
+      { team: "C", divisionLabel: "Iron", rank: 1, totalTeams: 1 },
+    ];
+    const fresh = [{ team: "B", divisionLabel: "Gold", rank: 1, totalTeams: 2 }, { team: "A", divisionLabel: "Gold", rank: 2, totalTeams: 2 }];
+    const merged = mergeByDivision(saved, fresh);
+    assert(merged.length === 3 && merged.find((x) => x.team === "B")?.rank === 1,
+      "取れたディビジョンは最新で差し替える");
+    assert(merged.some((x) => x.divisionLabel === "Iron"), "今回取れなかったディビジョンは前回保存分を残す");
+
+    const entries = toSeasonTeamEntries([
+      { team: "A", divisionLabel: "Gold", rank: 1, gp: 3, wins: 3, losses: 0, ties: 0, points: 6 },
+      { team: "B", divisionLabel: "Gold", rank: 2, gp: 3, wins: 0, losses: 3, ties: 0, points: 0 },
+      { team: "C", divisionLabel: "Iron", rank: 1, gp: 2, wins: 1, losses: 0, ties: 1, points: 3 },
+    ]);
+    assert(entries[0].totalTeams === 2 && entries[2].totalTeams === 1, "ディビジョン内のチーム数を付ける");
+  }
 
   // --- 終わったシーズンを保存済みデータで表示し続ける ---
   {
