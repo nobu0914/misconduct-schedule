@@ -13,6 +13,7 @@ type TimelineItem =
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
+import { findTeam } from "@/lib/teamName";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
 const DIVISION_COLORS: Record<string, string> = {
@@ -107,11 +108,11 @@ function ScheduleContent() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [rentals, setRentals] = useState<RentalEntry[]>([]);
-  const [standings, setStandings] = useState<Record<string, TeamStanding>>({});
+  const [standings, setStandings] = useState<TeamStanding[]>([]);
   // 順位表が実際にどのシーズンのものか（"53rd" など）。開幕直後は前シーズンにフォールバックする
   const [standingsSeason, setStandingsSeason] = useState<string>("");
   // シーズン番号 → 最終順位（保存済み）。「前シーズン」は表示中のシーズン − 1 を選ぶ
-  const [pastSeasons, setPastSeasons] = useState<Record<string, Record<string, PrevSeasonEntry>>>({});
+  const [pastSeasons, setPastSeasons] = useState<Record<string, PrevSeasonEntry[]>>({});
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,99 +184,30 @@ function ScheduleContent() {
     setShowUpcomingOnly(f.upcomingOnly);
   }
 
-  function buildStandingsMap(list: TeamStanding[]): Record<string, TeamStanding> {
-    const map: Record<string, TeamStanding> = {};
-    for (const s of list) map[s.team] = s;
-    return map;
-  }
-
-  function buildPrevSeasonMap(list: PrevSeasonEntry[]): Record<string, PrevSeasonEntry> {
-    const map: Record<string, PrevSeasonEntry> = {};
-    for (const s of list) map[s.team] = s;
-    return map;
-  }
-
-  // チーム名のエイリアス（スケジュール表記 → 順位表/前シーズン表記）
-  const TEAM_ALIASES: Record<string, string> = {
-    "伊王島": "伊王島観光協会",
-    "NANASHI Boyz": "名無しBoyz",
-    "青学 Quzilax": "青学Quzilax",
-    "武田園35+": "武田園",
-  };
-
-  function resolveTeamAlias(name: string): string | undefined {
-    return TEAM_ALIASES[name] ?? Object.entries(TEAM_ALIASES).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
-  }
-
   function buildPastSeasonsMap(prevData: {
     seasons?: Record<string, PrevSeasonEntry[]>;
     season?: number;
     data?: PrevSeasonEntry[];
-  }): Record<string, Record<string, PrevSeasonEntry>> {
-    const bySeason = prevData.seasons ?? (prevData.season ? { [String(prevData.season)]: prevData.data ?? [] } : {});
-    const out: Record<string, Record<string, PrevSeasonEntry>> = {};
-    for (const [n, list] of Object.entries(bySeason)) out[n] = buildPrevSeasonMap(list);
-    return out;
+  }): Record<string, PrevSeasonEntry[]> {
+    return prevData.seasons ?? (prevData.season ? { [String(prevData.season)]: prevData.data ?? [] } : {});
   }
 
-  // 指定シーズンの保存済み順位との照合（大文字小文字・括弧・エイリアスを考慮、ディビジョン一致のみ）
+  // 指定シーズンの保存済み順位から同じチームを探す（表記ゆれ・エイリアスを吸収、ディビジョン一致のみ）
   function findPrevSeason(
     scheduleName: string,
     currentDivision: string | undefined,
     targetSeason: number | undefined
   ): PrevSeasonEntry | undefined {
-    if (!scheduleName || targetSeason === undefined) return undefined;
-    const prevSeason = pastSeasons[String(targetSeason)];
-    if (!prevSeason) return undefined;
-    const { base } = parseTeamName(scheduleName);
-
-    function matchesDivision(entry: PrevSeasonEntry): boolean {
-      if (!currentDivision) return true;
-      return entry.divisionLabel === currentDivision;
-    }
-
-    const candidates = [
-      prevSeason[base],
-      base !== scheduleName ? prevSeason[scheduleName] : undefined,
-      resolveTeamAlias(base) ? prevSeason[resolveTeamAlias(base)!] : undefined,
-    ].filter((c): c is PrevSeasonEntry => !!c);
-
-    for (const c of candidates) {
-      if (matchesDivision(c)) return c;
-    }
-
-    const baseLower = base.toLowerCase();
-    for (const val of Object.values(prevSeason)) {
-      if (val.team.toLowerCase() === baseLower && matchesDivision(val)) return val;
-    }
-    return undefined;
+    if (targetSeason === undefined) return undefined;
+    return findTeam(pastSeasons[String(targetSeason)] ?? [], scheduleName, currentDivision);
   }
 
-  // スケジュール側のチーム名（例: "SAKURA (A)"）を standings のチーム名と照合。
+  // スケジュール側のチーム名（例: "SAKURA (A)"）を順位表のチームと照合。
   // 試合のシーズンと順位表のシーズンが違うときは出さない（前シーズンの試合に新シーズンの
   // 順位を付けたり、次シーズンの日程に前シーズンの順位を付けたりしないため）
   function findStanding(scheduleName: string, currentDivision?: string, matchSeason?: string): TeamStanding | undefined {
-    if (!scheduleName) return undefined;
     if (matchSeason && standingsSeason && matchSeason !== standingsSeason) return undefined;
-
-    function matchesDivision(entry: TeamStanding): boolean {
-      if (!currentDivision) return true;
-      return entry.divisionLabel === currentDivision;
-    }
-
-    // 完全一致
-    if (standings[scheduleName] && matchesDivision(standings[scheduleName])) return standings[scheduleName];
-    // 括弧内のサブ情報を除いた名前で照合（例: "Dark Sales (B)" → "Dark Sales"）
-    const baseName = scheduleName.replace(/\s*\(.*?\)\s*/g, "").trim();
-    if (baseName !== scheduleName && standings[baseName] && matchesDivision(standings[baseName])) return standings[baseName];
-    const alias = resolveTeamAlias(baseName);
-    if (alias && standings[alias] && matchesDivision(standings[alias])) return standings[alias];
-    // 大文字小文字を無視して照合（例: "Dark Sales" vs "Dark sales"）
-    const baseNameLower = baseName.toLowerCase();
-    for (const val of Object.values(standings)) {
-      if (val.team.toLowerCase() === baseNameLower && matchesDivision(val)) return val;
-    }
-    return undefined;
+    return findTeam(standings, scheduleName, currentDivision);
   }
 
   const refresh = useCallback(async () => {
@@ -288,7 +220,7 @@ function ScheduleContent() {
     setRentals(rentData.entries ?? []);
     setLastUpdated(schedData.lastUpdated ?? "");
     setSourceIssue(describeSourceIssue(schedData));
-    setStandings(buildStandingsMap(stData.standings ?? []));
+    setStandings(stData.standings ?? []);
     setStandingsSeason(stData.season ?? "");
     setStandingsLoading(false);
   }, []);
@@ -318,7 +250,7 @@ function ScheduleContent() {
         setRentals(rentData.entries ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
         setSourceIssue(describeSourceIssue(schedData));
-        setStandings(buildStandingsMap(stData.standings ?? []));
+        setStandings(stData.standings ?? []);
         setStandingsSeason(stData.season ?? "");
         setPastSeasons(buildPastSeasonsMap(prevData));
         // 天気マップ構築（"月/日" → DayForecast）

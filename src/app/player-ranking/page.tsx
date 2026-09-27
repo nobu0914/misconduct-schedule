@@ -7,6 +7,7 @@ import type { PrevPlayerStat } from "../api/prev-season-players/route";
 import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
+import { normalizeName } from "@/lib/teamName";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -111,9 +112,10 @@ function PlayerRankingContent() {
   }, [mode, standings.length, games.length, standingsLoading, scoresLoading]);
 
   function findPrevPlayer(name: string, divisionLabel: string): PrevPlayerStat | undefined {
-    if (!name) return undefined;
-    const nameLower = name.toLowerCase();
-    return prevPlayers.find((p) => p.name.toLowerCase() === nameLower && p.divisionLabel === divisionLabel);
+    // シーズンによって表記が微妙に違う（空白・全角・記号）ので正規化して比べる
+    const key = normalizeName(name);
+    if (!key) return undefined;
+    return prevPlayers.find((p) => normalizeName(p.name) === key && p.divisionLabel === divisionLabel);
   }
 
   useEffect(() => {
@@ -131,14 +133,14 @@ function PlayerRankingContent() {
 
   const currentResults = useMemo(() => {
     if (!query.trim()) return [];
-    const q = query.trim().toLowerCase();
-    return players.filter((p) => p.name.toLowerCase().includes(q));
+    const q = normalizeName(query);
+    return q ? players.filter((p) => normalizeName(p.name).includes(q)) : [];
   }, [players, query]);
 
   const prevResults = useMemo(() => {
     if (!query.trim()) return [];
-    const q = query.trim().toLowerCase();
-    return prevPlayers.filter((p) => p.name.toLowerCase().includes(q));
+    const q = normalizeName(query);
+    return q ? prevPlayers.filter((p) => normalizeName(p.name).includes(q)) : [];
   }, [prevPlayers, query]);
 
   const divisionStandings = useMemo(

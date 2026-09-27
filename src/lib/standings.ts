@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import { currentSeasonNumber, seasonOrdinal } from "./schedule";
+import { normalizeName } from "./teamName";
 
 export interface TeamStanding {
   rank: number;
@@ -230,7 +231,7 @@ export async function fetchAndParseStandings(
 
     for (const standing of result.standings) {
       const key = Object.keys(playersByTeam).find(
-        (k) => k.toLowerCase() === standing.team.toLowerCase()
+        (k) => normalizeName(k) === normalizeName(standing.team)
       );
       standing.topScorers = key
         ? [...playersByTeam[key]]

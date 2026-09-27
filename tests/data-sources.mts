@@ -5,6 +5,7 @@ import {
 } from "../src/lib/schedule";
 import { parseSeasonNumber } from "../src/lib/season";
 import { mergeByDivision, toSeasonTeamEntries } from "../src/lib/seasonSnapshot";
+import { normalizeName, findTeam } from "../src/lib/teamName";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
@@ -164,6 +165,29 @@ async function main() {
   assert(seasonFromLabel("53rd/playoff") === "53rd" && seasonFromLabel("54th/october") === "54th",
     "取得元ラベルからシーズンを取り出す");
   assert(seasonFromLabel("Bronze") === undefined, "シーズンの無いラベルは undefined");
+
+  // --- チーム名・選手名の表記ゆれ ---
+  {
+    assert(normalizeName("青学 Quzilax") === normalizeName("青学Quzilax"), "空白の有無を吸収");
+    assert(normalizeName("ＳＹＧＭＡ") === normalizeName("SYGMA"), "全角英字を吸収");
+    assert(normalizeName("Dark Sales (B)") === normalizeName("Dark sales"), "ベンチ表記・大文字小文字を吸収");
+    assert(normalizeName("たたかえ！！ホイジンガー") === normalizeName("たたかえ!!ホイジンガー"), "全角記号を吸収");
+    assert(normalizeName("高山 智宏") === normalizeName("高山　智宏") && normalizeName("高山 智宏") === normalizeName("高山智宏"),
+      "選手名の半角/全角スペースを吸収");
+    assert(normalizeName("日体大DREAMS WB") !== normalizeName("日体大DREAMS WG"), "別チーム（WB/WG）は別のまま");
+
+    const list = [
+      { team: "名無しBoyz", divisionLabel: "Brass" },
+      { team: "Flying Penguins", divisionLabel: "Platinum" },
+      { team: "Flying Penguins Silver", divisionLabel: "Silver" },
+      { team: "SONIDO", divisionLabel: "Gold" },
+      { team: "SONIDO", divisionLabel: "Silver" },
+    ];
+    assert(findTeam(list, "NANASHI Boyz (A)", "Brass")?.team === "名無しBoyz", "エイリアス＋ベンチ表記");
+    assert(findTeam(list, "Flying Penguins", "Silver") === undefined, "部分一致はしない（別チームを拾わない）");
+    assert(findTeam(list, "SONIDO", "Silver")?.divisionLabel === "Silver", "同名チームはディビジョンで区別");
+    assert(findTeam(list, "ＳＯＮＩＤＯ", "Iron") === undefined, "ディビジョンが違えば出さない");
+  }
 
   // --- シーズン別の順位・個人成績の保存 ---
   {

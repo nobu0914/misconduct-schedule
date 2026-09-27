@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260928-0122",
+    date: "2026-09-28",
+    changes: [
+      "チーム名・選手名の表記ゆれ（全角/半角・空白・記号・大文字小文字）を吸収して順位・前シーズンと照合",
+      "同じ名前のチームが別ディビジョンにいても取り違えないよう修正",
+    ],
+  },
+  {
     version: "Ver.1-260928-0045",
     date: "2026-09-28",
     changes: [
