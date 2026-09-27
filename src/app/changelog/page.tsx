@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260928-0139",
+    date: "2026-09-28",
+    changes: [
+      "個人ランクを「今シーズン」と「過去シーズン」に整理（今シーズンは前シーズンで代用せず、未掲載の間は空欄）",
+      "過去シーズンは保存済みのシーズンを選んで検索できるように変更",
+    ],
+  },
+  {
     version: "Ver.1-260928-0122",
     date: "2026-09-28",
     changes: [

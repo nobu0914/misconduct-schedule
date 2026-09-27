@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260928-0122`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260928-0139`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -57,7 +57,8 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/cron/verify`: Vercel Cron で週1回（月曜 03:00 UTC / 12:00 JST）。スケジュール・レンタル・スコアを `no-store` で取得し、保存済みスナップショットと突き合わせる
 - `/api/standings` / `/api/scores` / `/api/player-stats`: `revalidate=86400`（1日）+ `s-maxage=86400, stale-while-revalidate=3600`
 - `/api/prev-season`: `revalidate=86400`（1日）。進行中・前・前々シーズンの保存済み最終順位を `seasons` で返す
-- `/api/prev-season-players`: 動的（`?season=N`）+ `s-maxage=86400`。指定シーズンの保存済み個人成績
+- `/api/prev-season-players`: 動的（`?season=N`）+ `s-maxage=3600`。指定シーズンの保存済み個人成績と、
+  データがある過去シーズンの一覧 `available`（個人ランクの「過去シーズン」選択肢）
 - `/api/events`: `revalidate=86400`（1日）
 
 **cron で毎日再生成する対象**（`/api/cron/schedule` の `WARM_PATHS`）:
@@ -128,7 +129,10 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 **シーズンの選び方（スケジュール・スコアと違う）**: 順位表は「今の順位」なので複数シーズンを混ぜられない（同じディビジョンの行が二重になる）。
 `fetchCurrentStandings()` は進行中シーズンを取り、**1件も取れなければ前シーズンにフォールバック**する（開幕直後の空白期間対策）。
-`/api/player-stats` は順位表ページから個人成績を読むため、`buildStandingsSources()` を共有して同じ判定をする。
+`/api/player-stats` は順位表ページから個人成績を読むため `buildStandingsSources()` を共有するが、
+**前シーズンにはフォールバックしない**（個人ランクは「今シーズン」と「過去シーズン」を分けて持つ）。
+開幕直後で今シーズンが空の間は `players: []` / `pending: true` を返し、cron の0件チェックは `pending` を想定内として扱う。
+その間も前シーズンの公式ページが残っていれば取り直して `season:{N-1}:players` を更新する（表示には使わない）。
 順位変動の比較用スナップショットは `standings:last:{season}` とシーズン別に分ける（切替時に変動表示が壊れないように）。
 ファイル名スラッグはスコア表と綴りが違う（Women Gold = `wg`、スコアは `womengold`）。Women Bronze は `wb` と想定（未公開なら404でスキップ）。
 `/api/standings` と `/api/player-stats` は実際に使ったシーズンを `season` で返し、ランキングページの「今シーズン（53rd）」表記はこれを使う。
@@ -213,6 +217,8 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 - チーム名・選手名の表記ゆれ（全角/半角・空白・記号）で順位や前シーズンが出ないことがあるため、
   照合を `src/lib/teamName.ts` に集約して正規化してから比べるようにした。
   旧実装はチーム名だけをキーにした map で、同名チームが別ディビジョンにいると上書きされて見つからなかった。
+- 個人ランクを「今シーズン」と「過去シーズン」に分けた。今シーズンは前シーズンで代用しない（未掲載なら空欄）。
+  過去シーズンは保存済みのシーズン（`available`）から選ぶ。URLは `?season=53`（旧 `?season=prev` は前シーズン扱い）。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。

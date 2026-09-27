@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
 import { currentSeasonNumber } from "@/lib/schedule";
-import { loadSeasonSnapshot, seasonPlayersKey, type SeasonPlayerEntry } from "@/lib/seasonSnapshot";
+import { loadSeasonSnapshot, seasonPlayersKey, seasonsWithSnapshot, type SeasonPlayerEntry } from "@/lib/seasonSnapshot";
 
 export type PrevPlayerStat = SeasonPlayerEntry;
 
@@ -447,10 +447,19 @@ const STATIC_SEASONS: Record<number, PrevPlayerStat[]> = { 52: SEASON_52_PLAYERS
 /** 保存データの最古シーズン。これより前は存在しない */
 const OLDEST_SEASON = 52;
 
+/** 過去シーズン（今シーズンより前）のうち、データがあるものを新しい順に */
+async function availablePastSeasons(current: number): Promise<number[]> {
+  const candidates: number[] = [];
+  for (let n = current - 1; n >= OLDEST_SEASON; n--) candidates.push(n);
+  const saved = new Set(
+    await seasonsWithSnapshot(candidates.map((n) => ({ season: n, key: seasonPlayersKey(n) })))
+  );
+  return candidates.filter((n) => saved.has(n) || (STATIC_SEASONS[n]?.length ?? 0) > 0);
+}
+
 /**
- * シーズン別の個人成績（保存済み）。`?season=53` で指定、省略時は前シーズン。
- * 画面側は「今シーズンとして表示しているシーズン − 1」を指定する
- * （今シーズン側が前シーズンにフォールバック中でも、前年比が2シーズン離れないように）。
+ * 過去シーズン別の個人成績（保存済み）。`?season=53` で指定、省略時は前シーズン。
+ * 画面側は前年比に「今シーズン − 1」を、過去シーズン検索には `available` から選んだものを指定する。
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const current = currentSeasonNumber();
@@ -459,11 +468,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid season" }, { status: 400 });
   }
 
-  const headers = { "Cache-Control": "s-maxage=86400, stale-while-revalidate=43200" };
+  const headers = { "Cache-Control": "s-maxage=3600, stale-while-revalidate=3600" };
   const key = seasonPlayersKey(requested);
-  const saved = await loadSeasonSnapshot<PrevPlayerStat>(key);
+  const [saved, available] = await Promise.all([
+    loadSeasonSnapshot<PrevPlayerStat>(key),
+    availablePastSeasons(current),
+  ]);
   if (saved.length > 0) {
-    return NextResponse.json({ season: requested, players: saved }, { headers });
+    return NextResponse.json({ season: requested, players: saved, available }, { headers });
   }
 
   const fallback = STATIC_SEASONS[requested] ?? [];
@@ -472,5 +484,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       await kv.set(key, fallback); // 次回からKVで返す
     } catch {}
   }
-  return NextResponse.json({ season: requested, players: fallback }, { headers });
+  return NextResponse.json({ season: requested, players: fallback, available }, { headers });
 }

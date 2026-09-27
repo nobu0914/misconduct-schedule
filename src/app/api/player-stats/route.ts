@@ -129,27 +129,35 @@ async function fetchSeasonPlayers(season: number): Promise<PlayerStat[]> {
   return results.flat();
 }
 
-export async function GET(): Promise<NextResponse> {
-  // 順位表と同じく、進行中シーズンが未公開なら前シーズンにフォールバックする
-  const season = currentSeasonNumber();
-  let used = season;
-  let players = await fetchSeasonPlayers(season);
-  if (players.length === 0) {
-    used = season - 1;
-    players = await fetchSeasonPlayers(used);
-  }
+function toSnapshot(players: PlayerStat[]) {
+  return players.map(({ name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim }) => ({
+    name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim,
+  }));
+}
 
-  // シーズン番号付きで保存しておく（次シーズンの「昨シーズン」検索・前年比に使う）
-  await saveSeasonPlayers(
-    used,
-    players.map(({ name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim }) => ({
-      name, jersey, team, divisionLabel, divisionRank, gp, goals, assists, points, pim,
-    }))
-  );
+/**
+ * 今シーズンの個人成績だけを返す（前シーズンにはフォールバックしない）。
+ * 過去シーズンは /api/prev-season-players（保存済み）から別に取る。
+ * 開幕直後で今シーズンがまだ空のときは players: [] / pending: true を返す。
+ */
+export async function GET(): Promise<NextResponse> {
+  const season = currentSeasonNumber();
+  const players = await fetchSeasonPlayers(season);
+
+  // シーズン番号付きで保存しておく（次シーズンの「過去シーズン」検索・前年比に使う）
+  await saveSeasonPlayers(season, toSnapshot(players));
+
+  // 今シーズンがまだ空の間は、前シーズンの公式ページが残っていれば取り直して保存を更新する
+  // （最終更新を取り逃さないため。表示には使わない）
+  if (players.length === 0) {
+    await saveSeasonPlayers(season - 1, toSnapshot(await fetchSeasonPlayers(season - 1)));
+  }
 
   return NextResponse.json({
     players,
-    season: seasonOrdinal(used),
+    season: seasonOrdinal(season),
+    // 空なのが想定内（開幕直後で未掲載）であることを cron の0件チェックに伝える
+    pending: players.length === 0,
     lastUpdated: new Date().toISOString(),
   });
 }

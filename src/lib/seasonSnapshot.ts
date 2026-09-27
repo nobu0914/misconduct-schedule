@@ -71,6 +71,16 @@ export async function saveSeasonPlayers(season: number, players: SeasonPlayerEnt
   await saveMerged(seasonPlayersKey(season), players);
 }
 
+/** 保存データがあるシーズンだけを返す（中身は読まない） */
+export async function seasonsWithSnapshot(keys: { season: number; key: string }[]): Promise<number[]> {
+  try {
+    const found = await Promise.all(keys.map(({ key }) => kv.exists(key)));
+    return keys.filter((_, i) => found[i] > 0).map((k) => k.season);
+  } catch {
+    return [];
+  }
+}
+
 export async function loadSeasonSnapshot<T>(key: string): Promise<T[]> {
   try {
     return (await kv.get<T[]>(key)) ?? [];

@@ -94,7 +94,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const body = await res.json().catch(() => null);
         const items = body?.matches ?? body?.entries ?? body?.standings ?? body?.games ?? body?.players;
         warmedCounts[path] = Array.isArray(items) ? items.length : 0;
-        if (warmedCounts[path] === 0) warnings.push(`${path} が0件`);
+        // pending: 開幕直後で今シーズンのデータがまだ無い（想定内）
+        if (warmedCounts[path] === 0 && !body?.pending) warnings.push(`${path} が0件`);
       })
     );
     warmed = true;
