@@ -61,6 +61,72 @@ function cleanText(text: string): string {
 
 const DATE_RE = /^(\d{4}\/\d{1,2}\/\d{1,2})\s+(\S+)$/;
 
+/** 公式ページのバイト列を文字列に（BOM付きUTF-16 と Shift-JIS がある） */
+export function decodePage(buf: Buffer): string {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return iconv.decode(buf, "utf-16le");
+  if (buf[0] === 0xfe && buf[1] === 0xff) return iconv.decode(buf, "utf-16be");
+  return iconv.decode(buf, "shift_jis");
+}
+
+/**
+ * スコア表のHTMLを試合の一覧にする。取得と分けてあるのは、
+ * Wayback Machine から過去シーズンを取り直すスクリプト（scripts/fetch-wayback-scores.mts）でも使うため。
+ */
+export function parseScoresHtml(text: string, divisionLabel: string, url: string, season: string): GameScore[] {
+  const $ = cheerio.load(text);
+  const games: GameScore[] = [];
+  let currentDate = "";
+  let currentDay = "";
+
+  $("tr").each((_, row) => {
+    const tds = $(row).find("td");
+    if (tds.length === 0) return;
+    const texts = tds.map((_, td) => cleanText($(td).text())).get() as string[];
+
+    // 日付ヘッダー行: TD[1] が "YYYY/M/D Day"
+    const dateMatch = texts[1]?.match(DATE_RE);
+    if (dateMatch) {
+      currentDate = dateMatch[1];
+      currentDay = dateMatch[2];
+      return;
+    }
+
+    // 試合行: TD[0]=試合番号, TD[1]=開始, TD[3]=終了, TD[4]=away, TD[5]=awayScore, TD[7]=homeScore, TD[8]=home
+    if (texts.length < 10) return;
+    const gameNo = parseInt(texts[0], 10);
+    if (isNaN(gameNo) || gameNo <= 0 || String(gameNo) !== texts[0]) return;
+    if (!currentDate) return;
+
+    const timeStart = texts[1];
+    const timeEnd = texts[3];
+    const awayTeam = texts[4];
+    const homeTeam = texts[8];
+    if (!awayTeam || !homeTeam) return;
+
+    const awayScoreNum = parseInt(texts[5], 10);
+    const homeScoreNum = parseInt(texts[7], 10);
+    const awayScore = isNaN(awayScoreNum) ? null : awayScoreNum;
+    const homeScore = isNaN(homeScoreNum) ? null : homeScoreNum;
+
+    games.push({
+      gameNo,
+      date: currentDate,
+      dayOfWeek: currentDay,
+      timeStart,
+      timeEnd,
+      awayTeam,
+      awayScore,
+      homeTeam,
+      homeScore,
+      divisionLabel,
+      played: awayScore !== null && homeScore !== null,
+      season,
+      sourceUrl: url,
+    });
+  });
+  return games;
+}
+
 export async function fetchAndParseScores(
   divisionLabel: string,
   url: string,
@@ -82,69 +148,7 @@ export async function fetchAndParseScores(
       return { games: [], source };
     }
 
-    const buffer = await res.arrayBuffer();
-    const buf = Buffer.from(buffer);
-    let text: string;
-    if (buf[0] === 0xff && buf[1] === 0xfe) {
-      text = iconv.decode(buf, "utf-16le");
-    } else if (buf[0] === 0xfe && buf[1] === 0xff) {
-      text = iconv.decode(buf, "utf-16be");
-    } else {
-      text = iconv.decode(buf, "shift_jis");
-    }
-
-    const $ = cheerio.load(text);
-    const games: GameScore[] = [];
-    let currentDate = "";
-    let currentDay = "";
-
-    $("tr").each((_, row) => {
-      const tds = $(row).find("td");
-      if (tds.length === 0) return;
-      const texts = tds.map((_, td) => cleanText($(td).text())).get() as string[];
-
-      // 日付ヘッダー行: TD[1] が "YYYY/M/D Day"
-      const dateMatch = texts[1]?.match(DATE_RE);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-        currentDay = dateMatch[2];
-        return;
-      }
-
-      // 試合行: TD[0]=試合番号, TD[1]=開始, TD[3]=終了, TD[4]=away, TD[5]=awayScore, TD[7]=homeScore, TD[8]=home
-      if (texts.length < 10) return;
-      const gameNo = parseInt(texts[0], 10);
-      if (isNaN(gameNo) || gameNo <= 0 || String(gameNo) !== texts[0]) return;
-      if (!currentDate) return;
-
-      const timeStart = texts[1];
-      const timeEnd = texts[3];
-      const awayTeam = texts[4];
-      const homeTeam = texts[8];
-      if (!awayTeam || !homeTeam) return;
-
-      const awayScoreNum = parseInt(texts[5], 10);
-      const homeScoreNum = parseInt(texts[7], 10);
-      const awayScore = isNaN(awayScoreNum) ? null : awayScoreNum;
-      const homeScore = isNaN(homeScoreNum) ? null : homeScoreNum;
-
-      games.push({
-        gameNo,
-        date: currentDate,
-        dayOfWeek: currentDay,
-        timeStart,
-        timeEnd,
-        awayTeam,
-        awayScore,
-        homeTeam,
-        homeScore,
-        divisionLabel,
-        played: awayScore !== null && homeScore !== null,
-        season,
-        sourceUrl: url,
-      });
-    });
-
+    const games = parseScoresHtml(decodePage(Buffer.from(await res.arrayBuffer())), divisionLabel, url, season);
     source.count = games.length;
     return { games, source };
   } catch (e) {

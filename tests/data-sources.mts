@@ -6,6 +6,7 @@ import {
 import { parseSeasonNumber } from "../src/lib/season";
 import { mergeByDivision, toSeasonTeamEntries } from "../src/lib/seasonSnapshot";
 import { normalizeName, findTeam } from "../src/lib/teamName";
+import { fetchWaybackScores } from "../scripts/fetch-wayback-scores.mts";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
@@ -187,6 +188,41 @@ async function main() {
     assert(findTeam(list, "Flying Penguins", "Silver") === undefined, "部分一致はしない（別チームを拾わない）");
     assert(findTeam(list, "SONIDO", "Silver")?.divisionLabel === "Silver", "同名チームはディビジョンで区別");
     assert(findTeam(list, "ＳＯＮＩＤＯ", "Iron") === undefined, "ディビジョンが違えば出さない");
+  }
+
+  // --- 過去シーズンのスコアを Wayback Machine から取り直す ---
+  {
+    const row = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+    const page = `<html><body><table>
+      ${row(["", "2025/10/4 Sat", "", "", "", "", "", "", "", ""])}
+      ${row(["1", "12:30", "～", "13:30", "かんだ食堂", "5", "-", "3", "Flying Penguins", ""])}
+      ${row(["2", "13:30", "～", "14:30", "SONIDO", "", "-", "", "DROP HAMMER", ""])}
+    </table></body></html>`;
+    const sjis = iconv.encode(page, "shift_jis");
+    const seen: string[] = [];
+    const fakeFetch = async (url: string) => {
+      seen.push(url);
+      if (url.includes("/cdx/search/cdx")) {
+        return new Response(JSON.stringify([
+          ["timestamp", "original"],
+          ["20250901000000", "https://misconduct.co.jp/wordpress/wp-content/uploads/52nd_score_platinum.htm"],
+          ["20260401000000", "https://misconduct.co.jp/wordpress/wp-content/uploads/52nd_score_platinum.htm"],
+          ["20260401000000", "https://misconduct.co.jp/wordpress/wp-content/uploads/52nd_score_mystery.htm"],
+        ]));
+      }
+      if (url.includes("20260401000000id_/")) return new Response(sjis);
+      return new Response("", { status: 404 });
+    };
+    const { games, report } = await fetchWaybackScores(52, fakeFetch);
+    assert(seen.some((u) => u.includes("20260401000000id_/") && u.endsWith("52nd_score_platinum.htm")),
+      "最新のスナップショットを生のバイト列（id_）で取る");
+    assert(games.length === 2 && games[0].awayTeam === "かんだ食堂" && games[0].awayScore === 5 && games[0].played,
+      `Shift-JIS のスコア表を読める (=${games.length}件)`);
+    assert(games[1].played === false, "スコア空欄は未消化");
+    assert(games.every((g) => g.season === "52nd" && g.divisionLabel === "Platinum"), "シーズン・ディビジョンが付く");
+    assert(games[0].sourceUrl.startsWith("https://web.archive.org/web/20260401000000/"),
+      "リンク先は消えた公式ページではなくアーカイブ");
+    assert(report.some((r) => r.division === "mystery"), "対応するディビジョンが無いファイルは報告する");
   }
 
   // --- シーズン別の順位・個人成績の保存 ---

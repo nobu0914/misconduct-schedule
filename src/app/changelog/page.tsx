@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260929-0127",
+    date: "2026-09-29",
+    changes: [
+      "スコアの過去シーズンを保存データから選んで表示できるように変更（52nd は Wayback Machine から復元したデータに対応）",
+    ],
+  },
+  {
     version: "Ver.1-260929-0122",
     date: "2026-09-29",
     changes: [

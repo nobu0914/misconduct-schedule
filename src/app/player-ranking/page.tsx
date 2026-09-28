@@ -49,7 +49,11 @@ function PlayerRankingContent() {
   const [pastTeams, setPastTeams] = useState<Record<number, PrevSeasonEntry[]>>({});
   const [pastTeamSeasonList, setPastTeamSeasonList] = useState<number[]>([]);
   const [pastTeamsLoading, setPastTeamsLoading] = useState(false);
+  // スコア: 今シーズン（/api/scores）と過去シーズン（/api/past-scores、保存済み・52nd はアーカイブから復元）
   const [games, setGames] = useState<GameScore[]>([]);
+  const [pastScores, setPastScores] = useState<Record<number, GameScore[]>>({});
+  const [pastScoreSeasonList, setPastScoreSeasonList] = useState<number[]>([]);
+  const [pastScoresLoading, setPastScoresLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [standingsLoading, setStandingsLoading] = useState(false);
   // 0件でも取得済みとして扱う（件数で判定すると、開幕直後の空の順位表を取り直し続ける）
@@ -143,17 +147,36 @@ function PlayerRankingContent() {
     }
     if (mode === "score" && !scoresLoaded && !scoresLoading) {
       setScoresLoading(true);
-      fetch("/api/scores")
-        .then((r) => r.json())
-        .then((d) => setGames(d.games ?? []))
-        .catch(() => {})
-        .finally(() => {
-          setScoresLoading(false);
-          setScoresLoaded(true);
-        });
+      Promise.all([
+        fetch("/api/scores")
+          .then((r) => r.json())
+          .then((d) => setGames(d.games ?? []))
+          .catch(() => {}),
+        loadPastScores(),
+      ]).finally(() => {
+        setScoresLoading(false);
+        setScoresLoaded(true);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, standingsLoaded, scoresLoaded, standingsLoading, scoresLoading]);
+
+  async function loadPastScores(n?: number) {
+    const d = await fetch(`/api/past-scores${n !== undefined ? `?season=${n}` : ""}`)
+      .then((r) => r.json())
+      .catch(() => ({ games: [] }));
+    if (typeof d.season === "number") setPastScores((cur) => ({ ...cur, [d.season]: d.games ?? [] }));
+    if (Array.isArray(d.available)) setPastScoreSeasonList(d.available);
+  }
+
+  // 過去シーズンのスコアを選んだら、まだ読んでいなければ取得する
+  useEffect(() => {
+    if (mode !== "score" || selectedPastSeason === undefined) return;
+    if (pastScores[selectedPastSeason] || pastScoresLoading) return;
+    setPastScoresLoading(true);
+    loadPastScores(selectedPastSeason).finally(() => setPastScoresLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedPastSeason, pastScores, pastScoresLoading]);
 
   // 過去シーズンの順位を選んだら、まだ読んでいなければ取得する
   useEffect(() => {
@@ -213,26 +236,16 @@ function PlayerRankingContent() {
     [pastTeams, selectedPastSeason, selectedDivision]
   );
 
-  // スコアは前シーズン（保存済み）・今シーズン・次シーズンが混在して返る。
-  // 「今シーズン」は今シーズンの試合だけ、「過去シーズン」は選んだシーズンだけを出す
-  // （次シーズンの日程は、そのシーズンが始まってから今シーズンとして出る）
-  const scorePastSeasons = useMemo(() => {
-    if (currentSeasonNum === undefined) return [];
-    const set = new Set<number>();
-    for (const g of games) {
-      const n = parseSeasonNumber(g.season);
-      if (n !== undefined && n < currentSeasonNum) set.add(n);
-    }
-    return Array.from(set).sort((a, b) => b - a);
-  }, [games, currentSeasonNum]);
-
+  // /api/scores は前シーズン（保存済み）・今シーズン・次シーズンが混在して返るので、今シーズンの試合だけを使う
+  // （次シーズンの日程は、そのシーズンが始まってから今シーズンとして出る）。
+  // 過去シーズンは /api/past-scores から選んだシーズンだけを読む
   const shownScoreSeason =
     selectedPastSeason !== undefined ? seasonOrdinal(selectedPastSeason) : currentSeasonLabel;
 
-  const seasonGames = useMemo(
-    () => (shownScoreSeason ? games.filter((g) => g.season === shownScoreSeason) : []),
-    [games, shownScoreSeason]
-  );
+  const seasonGames = useMemo(() => {
+    if (selectedPastSeason !== undefined) return pastScores[selectedPastSeason] ?? [];
+    return currentSeasonLabel ? games.filter((g) => g.season === currentSeasonLabel) : [];
+  }, [games, pastScores, selectedPastSeason, currentSeasonLabel]);
 
   const divisionGames = useMemo(
     () => seasonGames.filter((g) => g.divisionLabel === selectedDivision),
@@ -568,7 +581,7 @@ function PlayerRankingContent() {
             </h1>
 
             <div className="mb-3">
-              {renderSeasonPicker(mode === "ranking" ? pastTeamSeasonList : scorePastSeasons)}
+              {renderSeasonPicker(mode === "ranking" ? pastTeamSeasonList : pastScoreSeasonList)}
             </div>
 
             {/* ディビジョン選択 */}
@@ -715,14 +728,14 @@ function PlayerRankingContent() {
 
         {mode === "score" && (
           <div className="mt-4">
-            {!scoresLoaded && (
+            {(!scoresLoaded || (!showingCurrent && pastScoresLoading && !pastScores[selectedPastSeason!])) && (
               <div className="flex items-center justify-center py-16 gap-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
                 <span className="text-gray-400">スコア取得中...</span>
               </div>
             )}
 
-            {scoresLoaded && seasonGames.length === 0 && (
+            {scoresLoaded && seasonGames.length === 0 && (showingCurrent || pastScores[selectedPastSeason!]) && (
               <p className="text-center py-12 text-gray-500 text-sm">
                 {showingCurrent ? (
                   <>

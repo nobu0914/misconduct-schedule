@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260929-0122`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260929-0127`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -60,6 +60,8 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 - `/api/prev-season-players`: 動的（`?season=N`）+ `s-maxage=3600`。指定シーズンの保存済み個人成績と、
   データがある過去シーズンの一覧 `available`（個人ランクの「過去シーズン」選択肢）
 - `/api/past-standings`: 動的（`?season=N`）+ `s-maxage=3600`。過去シーズンの保存済み最終順位と `available`
+- `/api/past-scores`: 動的（`?season=N`）+ `s-maxage=3600`。過去シーズンのスコア（KVの `archive:scores:{シーズン}/*`、
+  無ければ `src/data/scores-{シーズン}.json`）と `available`
 - `/api/events`: `revalidate=86400`（1日）
 
 **cron で毎日再生成する対象**（`/api/cron/schedule` の `WARM_PATHS`）:
@@ -149,9 +151,12 @@ cron の0件チェックは `pending` を想定内として扱う。その間も
 - TOP の順位・勝敗は `Match.season` と順位表の `season` が一致するときだけ出す（`findStanding()`）
 - 「前シーズン」は**表示しているシーズン − 1** を選ぶ。決め打ち（旧: 52nd固定）にすると2シーズン前のデータを
   前シーズン・前年比として出してしまう。TOP は試合のシーズン − 1、ランキングは個人成績の `season` − 1
-- スコアタブも「今シーズン」と「過去シーズン」に分ける（`/api/scores` は前・今・次シーズンが混在して返る）。
-  今シーズンは今シーズンの試合だけ、過去シーズンは返ってきたデータのうち今より前のシーズンから選ぶ。
+- スコアタブも「今シーズン」と「過去シーズン」に分ける。今シーズンは `/api/scores`（前・今・次シーズンが混在して返る）
+  のうち今シーズンの試合だけ。過去シーズンは `/api/past-scores`（`src/lib/pastScores.ts`）から選んだシーズンを読む。
   次シーズンの日程はそのシーズンが始まってから今シーズンとして出る
+- **52nd のスコア**は保存の仕組みを入れる前に公式ページが消えていたため、`scripts/fetch-wayback-scores.mts` で
+  Wayback Machine から取り直して `src/data/scores-52nd.json` に置く（この環境からは web.archive.org に出られないので
+  手元のPCで実行する: `npx tsx scripts/fetch-wayback-scores.mts 52`）。パーサーはサイトと同じ `parseScoresHtml()`
 - シーズン表記の変換は `src/lib/season.ts`（依存なし。ページ側から `schedule.ts` を import しない）
 
 **チーム名・選手名の照合**（`src/lib/teamName.ts`）: 同じチームでも日程表・順位表・シーズンで表記が微妙に違う。
@@ -199,7 +204,7 @@ cron の0件チェックは `pending` を想定内として扱う。その間も
 
 ```bash
 npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
-npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合（Shift-JISのダミーページ使用、66項目）
+npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、72項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -232,6 +237,9 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 ### 2026-09-29
 - スコアタブも「今シーズン」と「過去シーズン」に分けた（個人ランク・チームランキングと共通のシーズン選択、URLの `season`）。
   旧実装は取得できた全シーズンをチップで並べ、結果が出ている最新シーズンを既定にしていた。
+- スコアの過去シーズンを `/api/past-scores` から読むようにし、2シーズン以上前（KVに保存済みのもの）も選べるようにした。
+  52nd は `scripts/fetch-wayback-scores.mts` で Wayback Machine から復元する（`src/data/scores-52nd.json`、未取得の間は空）。
+  スコア表の解析を `parseScoresHtml()` / `decodePage()` に切り出し、スクリプトと共有。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。
