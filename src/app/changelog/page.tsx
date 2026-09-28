@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260929-0131",
+    date: "2026-09-29",
+    changes: [
+      "52nd シーズンのスコア（282試合）を Wayback Machine から復元し、過去シーズンで見られるように",
+      "過去シーズンで結果が残っていない試合は「記録なし」と表示",
+    ],
+  },
+  {
     version: "Ver.1-260929-0127",
     date: "2026-09-29",
     changes: [

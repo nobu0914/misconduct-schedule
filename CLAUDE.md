@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260929-0127`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260929-0131`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -240,6 +240,9 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 - スコアの過去シーズンを `/api/past-scores` から読むようにし、2シーズン以上前（KVに保存済みのもの）も選べるようにした。
   52nd は `scripts/fetch-wayback-scores.mts` で Wayback Machine から復元する（`src/data/scores-52nd.json`、未取得の間は空）。
   スコア表の解析を `parseScoresHtml()` / `decodePage()` に切り出し、スクリプトと共有。
+- 52nd のスコア 282 試合を復元（手元のPCでスクリプトを実行）。Gold・Bronze・35&Over は最新の保存が 2/15 時点で、
+  2/15・2/22 の10試合は結果が空欄のまま。過去シーズンでは「未消化」ではなく「記録なし」と表示する。
+  52nd には Women Bronze もあった（11試合）が、52nd の順位表データ（`src/lib/pastStandings.ts`）には入っていない。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。

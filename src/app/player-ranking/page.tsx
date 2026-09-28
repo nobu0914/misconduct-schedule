@@ -763,7 +763,10 @@ function PlayerRankingContent() {
                           <span>#{g.gameNo}</span>
                           <span>{g.timeStart}〜{g.timeEnd}</span>
                           {!g.played && (
-                            <span className="bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded text-[10px]">未消化</span>
+                            <span className="bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded text-[10px]">
+                              {/* 過去シーズンで結果が無いのは、保存されたページが結果掲載前のものだったため */}
+                              {showingCurrent ? "未消化" : "記録なし"}
+                            </span>
                           )}
                         </div>
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
