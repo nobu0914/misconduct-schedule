@@ -58,8 +58,6 @@ function PlayerRankingContent() {
   const [scoresLoaded, setScoresLoaded] = useState(false);
   // 今シーズン（"54th" など）。APIが返すので表記を固定しない
   const [currentSeasonLabel, setCurrentSeasonLabel] = useState("");
-  // スコアタブで表示するシーズン（"" = 自動: 結果が出ている最新シーズン）
-  const [scoreSeason, setScoreSeason] = useState("");
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
@@ -181,8 +179,8 @@ function PlayerRankingContent() {
     } else {
       if (selectedDivision !== "Platinum") params.set("div", selectedDivision);
     }
-    // シーズンの選択は個人ランクとチームランキングで共通（スコアは独自に切り替える）
-    if (mode !== "score" && selectedPastSeason !== undefined) params.set("season", String(selectedPastSeason));
+    // シーズンの選択は個人ランク・チームランキング・スコアで共通
+    if (selectedPastSeason !== undefined) params.set("season", String(selectedPastSeason));
     const qs = params.toString();
     router.replace(`/player-ranking${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [mode, query, selectedPastSeason, selectedDivision, router]);
@@ -215,26 +213,30 @@ function PlayerRankingContent() {
     [pastTeams, selectedPastSeason, selectedDivision]
   );
 
-  // スコアは前・今・次シーズンが混在して返るので、シーズンを選んで1つずつ表示する
-  const allDivisionGames = useMemo(
-    () => games.filter((g) => g.divisionLabel === selectedDivision),
-    [games, selectedDivision]
+  // スコアは前シーズン（保存済み）・今シーズン・次シーズンが混在して返る。
+  // 「今シーズン」は今シーズンの試合だけ、「過去シーズン」は選んだシーズンだけを出す
+  // （次シーズンの日程は、そのシーズンが始まってから今シーズンとして出る）
+  const scorePastSeasons = useMemo(() => {
+    if (currentSeasonNum === undefined) return [];
+    const set = new Set<number>();
+    for (const g of games) {
+      const n = parseSeasonNumber(g.season);
+      if (n !== undefined && n < currentSeasonNum) set.add(n);
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [games, currentSeasonNum]);
+
+  const shownScoreSeason =
+    selectedPastSeason !== undefined ? seasonOrdinal(selectedPastSeason) : currentSeasonLabel;
+
+  const seasonGames = useMemo(
+    () => (shownScoreSeason ? games.filter((g) => g.season === shownScoreSeason) : []),
+    [games, shownScoreSeason]
   );
 
-  const scoreSeasons = useMemo(() => {
-    const set = new Set(allDivisionGames.map((g) => g.season).filter(Boolean));
-    return Array.from(set).sort((a, b) => (parseSeasonNumber(b) ?? 0) - (parseSeasonNumber(a) ?? 0));
-  }, [allDivisionGames]);
-
-  const shownScoreSeason = useMemo(() => {
-    if (scoreSeason && scoreSeasons.includes(scoreSeason)) return scoreSeason;
-    // 既定は結果が出ている最新シーズン（9月に未消化の次シーズンだけが並ぶのを避ける）
-    return scoreSeasons.find((s) => allDivisionGames.some((g) => g.season === s && g.played)) ?? scoreSeasons[0] ?? "";
-  }, [scoreSeason, scoreSeasons, allDivisionGames]);
-
   const divisionGames = useMemo(
-    () => allDivisionGames.filter((g) => !shownScoreSeason || g.season === shownScoreSeason),
-    [allDivisionGames, shownScoreSeason]
+    () => seasonGames.filter((g) => g.divisionLabel === selectedDivision),
+    [seasonGames, selectedDivision]
   );
 
   const gamesByDate = useMemo(() => {
@@ -565,7 +567,9 @@ function PlayerRankingContent() {
               {mode === "ranking" ? "チームランキング" : "スコア"}
             </h1>
 
-            {mode === "ranking" && <div className="mb-3">{renderSeasonPicker(pastTeamSeasonList)}</div>}
+            <div className="mb-3">
+              {renderSeasonPicker(mode === "ranking" ? pastTeamSeasonList : scorePastSeasons)}
+            </div>
 
             {/* ディビジョン選択 */}
             <div className="flex flex-wrap gap-2 pb-2">
@@ -711,34 +715,27 @@ function PlayerRankingContent() {
 
         {mode === "score" && (
           <div className="mt-4">
-            {scoreSeasons.length > 1 && (
-              <div className="flex gap-2 mb-4">
-                {scoreSeasons.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setScoreSeason(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      shownScoreSeason === s
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-800 text-gray-400 border border-gray-700"
-                    }`}
-                  >
-                    {s} シーズン
-                  </button>
-                ))}
-              </div>
-            )}
-            {scoreSeasons.length === 1 && (
-              <p className="text-xs text-gray-500 mb-3">{scoreSeasons[0]} シーズン</p>
-            )}
-            {scoresLoading && games.length === 0 && (
+            {!scoresLoaded && (
               <div className="flex items-center justify-center py-16 gap-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
                 <span className="text-gray-400">スコア取得中...</span>
               </div>
             )}
 
-            {!scoresLoading && gamesByDate.length === 0 && games.length > 0 && (
+            {scoresLoaded && seasonGames.length === 0 && (
+              <p className="text-center py-12 text-gray-500 text-sm">
+                {showingCurrent ? (
+                  <>
+                    {currentSeasonLabel || "今シーズン"} のスコアはまだありません。<br />
+                    公式サイトに掲載されると表示されます。
+                  </>
+                ) : (
+                  <>{shownScoreSeason} のスコアはありません</>
+                )}
+              </p>
+            )}
+
+            {scoresLoaded && seasonGames.length > 0 && gamesByDate.length === 0 && (
               <p className="text-center py-12 text-gray-500">このディビジョンのデータはありません</p>
             )}
 

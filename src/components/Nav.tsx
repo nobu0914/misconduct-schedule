@@ -173,7 +173,7 @@ export default function Nav() {
                 </Link>
 
                 <div className="border-t border-gray-700" />
-                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-260928-0303</div>
+                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-260929-0122</div>
               </div>
             )}
           </div>
