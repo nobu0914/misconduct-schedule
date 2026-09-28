@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260929-0138`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260929-0144`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -206,7 +206,7 @@ KVを先に見ると取り直したデータが反映されない）。52nd は 
 
 ```bash
 npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
-npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、78項目）
+npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、84項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -248,6 +248,13 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 - 52nd の順位表・個人成績も Wayback Machine から取り直せるようにした（`scripts/fetch-wayback-standings.mts`、
   CDX 検索は `scripts/wayback.mts` に共通化）。順位表・個人成績の解析を `parseStandingsHtml()` /
   `parsePlayersHtml()`（`src/lib/playerStats.ts`）に切り出してスクリプトと共有。
+- 52nd の順位表（66チーム）・個人成績（584人）を復元（手元のPCでスクリプトを実行）。旧データは 62チーム / 431人で
+  Women Bronze が欠け、Bronze・Brass などは試合数も少なかった（シーズン途中の保存）。
+- **Wayback の保存時期はページごとにばらばら**。52nd の順位表は Copper（42/54試合）・Iron（18/45試合）・Platinum（5/6試合）が
+  シーズン途中の保存だったため、`scripts/fill-standings-from-scores.mts` でスコアから集計し直した
+  （勝ち2・引き分け1、同点は得失点差→総得点。Iron の 3〜5位と 7〜8位は勝点が並んでおり、公式の決め方は不明）。
+  スコアより保存ページの方が新しいディビジョン（Gold・Bronze）は保存ページのまま。
+- `normalizeName()` でアクセント記号も無視するようにした（スコア表 `EUROSPORT MĀVIN` / 順位表 `EUROSPORT MAVIN`）。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。

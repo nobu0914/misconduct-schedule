@@ -9,11 +9,15 @@
 /**
  * 表記が違っても同じ名前とみなせる形にする。
  * - NFKC（全角英数・全角記号・半角カナを揃える）
+ * - アクセント記号を外す（"EUROSPORT MĀVIN" と "EUROSPORT MAVIN" が混在する）
  * - 括弧書き（ベンチ表記 "(A)" など）を除く。全角括弧も NFKC で半角になる
  * - 大文字小文字、空白、区切り記号の違いを無視
  */
 export function normalizeName(name: string): string {
   return name
+    // 分解してラテン文字のアクセント（U+0300–036F）だけ外し、日本語の濁点等は NFKC で組み直す
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .normalize("NFKC")
     .replace(/\([^)]*\)/g, "")
     .toLowerCase()

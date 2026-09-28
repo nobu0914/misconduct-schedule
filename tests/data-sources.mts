@@ -8,6 +8,7 @@ import { mergeByDivision, toSeasonTeamEntries } from "../src/lib/seasonSnapshot"
 import { normalizeName, findTeam } from "../src/lib/teamName";
 import { fetchWaybackScores } from "../scripts/fetch-wayback-scores.mts";
 import { fetchWaybackStandings } from "../scripts/fetch-wayback-standings.mts";
+import { fillStandingsFromScores } from "../scripts/fill-standings-from-scores.mts";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
@@ -177,6 +178,9 @@ async function main() {
     assert(normalizeName("高山 智宏") === normalizeName("高山　智宏") && normalizeName("高山 智宏") === normalizeName("高山智宏"),
       "選手名の半角/全角スペースを吸収");
     assert(normalizeName("日体大DREAMS WB") !== normalizeName("日体大DREAMS WG"), "別チーム（WB/WG）は別のまま");
+    assert(normalizeName("EUROSPORT MĀVIN") === normalizeName("EUROSPORT MAVIN"), "アクセント記号を吸収");
+    assert(normalizeName("ダイナモ") === normalizeName("ﾀﾞｲﾅﾓ") && normalizeName("ダイナモ") !== normalizeName("タイナモ"),
+      "濁点は残す（半角カナも揃う）");
 
     const list = [
       { team: "名無しBoyz", divisionLabel: "Brass" },
@@ -257,6 +261,34 @@ async function main() {
       "個人成績も同じページから取れる");
     assert(report.some((r) => r.division === "Platinum" && r.note?.includes("アーカイブ無し")), "無いディビジョンは報告する");
     assert(report.some((r) => r.division === "mystery"), "対応するディビジョンが無いファイルは報告する（順位表）");
+  }
+
+  // --- 保存ページが古いディビジョンはスコアから順位を集計し直す ---
+  {
+    const gm = (div: string, a: string, as: number, h: string, hs: number) => ({
+      gameNo: 1, date: "2026/2/1", dayOfWeek: "Sun", timeStart: "12:30", timeEnd: "13:30",
+      awayTeam: a, awayScore: as, homeTeam: h, homeScore: hs, divisionLabel: div, played: true, season: "52nd", sourceUrl: "",
+    });
+    const games = [
+      gm("Iron", "A", 3, "B", 1), gm("Iron", "A", 2, "C", 2), gm("Iron", "C", 5, "B", 0),
+      gm("Gold", "X", 1, "Y", 0),
+    ];
+    const standings = [
+      // Iron: 保存ページは1試合分しか無い（古い）
+      { team: "A", divisionLabel: "Iron", rank: 1, totalTeams: 2, gp: 1, wins: 1, losses: 0, ties: 0, points: 2 },
+      { team: "B", divisionLabel: "Iron", rank: 2, totalTeams: 2, gp: 1, wins: 0, losses: 1, ties: 0, points: 0 },
+      // Gold: 保存ページの方が試合数が多い（スコア表の保存が古い）
+      { team: "Y", divisionLabel: "Gold", rank: 1, totalTeams: 2, gp: 2, wins: 1, losses: 1, ties: 0, points: 2 },
+      { team: "X", divisionLabel: "Gold", rank: 2, totalTeams: 2, gp: 2, wins: 1, losses: 1, ties: 0, points: 2 },
+    ];
+    const { standings: out, report } = fillStandingsFromScores(standings, games);
+    const iron = out.filter((s) => s.divisionLabel === "Iron");
+    assert(iron.length === 3 && iron.every((s) => s.gp === 2) && iron[0].points === 3 && iron[1].points === 3 && iron[2].points === 0,
+      "スコアの方が新しいディビジョンはスコアから集計（勝ち2・引き分け1）");
+    assert(iron[0].team === "C" && iron[1].team === "A", "勝点が同じなら得失点差で並べる（C +5 > A +2）");
+    assert(report.find((r) => r.division === "Iron")?.ties.some((t) => t.includes("A") && t.includes("C")) === true,
+      "勝点が並んだら報告する");
+    assert(out.filter((s) => s.divisionLabel === "Gold")[0].team === "Y", "保存ページの方が新しいディビジョンはそのまま");
   }
 
   // --- シーズン別の順位・個人成績の保存 ---

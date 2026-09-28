@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260929-0144",
+    date: "2026-09-29",
+    changes: [
+      "52nd シーズンの順位表（66チーム、Women Bronze を含む全ディビジョン）と個人成績（584人）を復元",
+      "チーム名のアクセント記号の違い（MĀVIN / MAVIN など）を同じ名前として照合",
+    ],
+  },
+  {
     version: "Ver.1-260929-0138",
     date: "2026-09-29",
     changes: [
