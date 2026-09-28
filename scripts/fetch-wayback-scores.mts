@@ -13,10 +13,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SCORE_DIVISIONS, decodePage, parseScoresHtml, type GameScore } from "../src/lib/scores";
 import { seasonOrdinal } from "../src/lib/season";
-
-const UPLOADS = "misconduct.co.jp/wordpress/wp-content/uploads/";
-
-type Fetch = (url: string) => Promise<Response>;
+import { findLatestSnapshots, politePause, type Fetch } from "./wayback.mts";
 
 export interface WaybackResult {
   games: GameScore[];
@@ -26,22 +23,7 @@ export interface WaybackResult {
 
 export async function fetchWaybackScores(season: number, fetchImpl: Fetch = fetch): Promise<WaybackResult> {
   const ord = seasonOrdinal(season);
-
-  // シーズンのスコア表をまとめて検索し、ファイルごとに最新のスナップショットを選ぶ
-  const cdx =
-    "https://web.archive.org/cdx/search/cdx?output=json&filter=statuscode:200&fl=timestamp,original" +
-    `&url=${encodeURIComponent(`${UPLOADS}${ord}_score_*`)}`;
-  const res = await fetchImpl(cdx);
-  if (!res.ok) throw new Error(`CDX 検索に失敗: HTTP ${res.status}`);
-  const rows = ((await res.json()) as string[][]).slice(1); // 先頭行は見出し
-
-  const latest = new Map<string, { timestamp: string; original: string }>();
-  for (const [timestamp, original] of rows) {
-    const slug = original.match(/_score_([a-z0-9]+)\.htm/i)?.[1]?.toLowerCase();
-    if (!slug) continue;
-    const cur = latest.get(slug);
-    if (!cur || timestamp > cur.timestamp) latest.set(slug, { timestamp, original });
-  }
+  const latest = await findLatestSnapshots(`${ord}_score_`, fetchImpl);
 
   const games: GameScore[] = [];
   const report: WaybackResult["report"] = [];
@@ -51,19 +33,16 @@ export async function fetchWaybackScores(season: number, fetchImpl: Fetch = fetc
       report.push({ division: label, count: 0, note: "アーカイブ無し（このシーズンに無いディビジョンの可能性）" });
       continue;
     }
-    // id_ を付けると Wayback のツールバー等を挟まない元のバイト列が返る（Shift-JIS のまま）
-    const raw = `https://web.archive.org/web/${snap.timestamp}id_/${snap.original}`;
-    const page = await fetchImpl(raw);
+    const page = await fetchImpl(snap.raw);
     if (!page.ok) {
-      report.push({ division: label, count: 0, snapshot: raw, note: `HTTP ${page.status}` });
+      report.push({ division: label, count: 0, snapshot: snap.raw, note: `HTTP ${page.status}` });
       continue;
     }
     // 画面の「公式サイトで見る」は、消えた公式ページではなくアーカイブを指す
-    const viewUrl = `https://web.archive.org/web/${snap.timestamp}/${snap.original}`;
-    const parsed = parseScoresHtml(decodePage(Buffer.from(await page.arrayBuffer())), label, viewUrl, ord);
+    const parsed = parseScoresHtml(decodePage(Buffer.from(await page.arrayBuffer())), label, snap.view, ord);
     games.push(...parsed);
-    report.push({ division: label, count: parsed.length, snapshot: raw });
-    await new Promise((r) => setTimeout(r, 500)); // アーカイブに負荷をかけない
+    report.push({ division: label, count: parsed.length, snapshot: snap.raw });
+    await politePause();
   }
 
   const unknown = [...latest.keys()].filter((slug) => !SCORE_DIVISIONS.some((d) => d.slug === slug));

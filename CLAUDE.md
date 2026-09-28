@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260929-0131`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-260929-0138`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -168,7 +168,9 @@ cron の0件チェックは `pending` を想定内として扱う。その間も
 **シーズン別の最終順位・個人成績の保存**（`src/lib/seasonSnapshot.ts`）: 順位表ページもシーズン後に消えるため、
 `/api/standings` / `/api/player-stats` が取得のたびに `season:{N}:data` / `season:{N}:players` へ保存する。
 ディビジョン単位で差し替えるので、一部のページが先に消えても残りは失わない。空では上書きしない。
-52nd は公式ページが既に無いため Wayback Machine 由来の固定データ（KVに無いときの控え）。
+52nd は公式ページが既に無いため固定データ。**固定データはKVより優先**する（以前は初回アクセス時にKVへ写していたため、
+KVを先に見ると取り直したデータが反映されない）。52nd は `scripts/fetch-wayback-standings.mts` で取り直した
+`src/data/standings-52nd.json` / `src/data/players-52nd.json` を使い、空なら手で復元した旧データ（Women Bronze 欠け）を使う。
 
 ### 入力検証とレート制限（重要）
 公開APIが受け取った値は**そのままKVのキーや集計キーになる**ため、検証しないと任意のキーを作られて
@@ -204,7 +206,7 @@ cron の0件チェックは `pending` を想定内として扱う。その間も
 
 ```bash
 npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
-npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、72項目）
+npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、78項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -243,6 +245,9 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 - 52nd のスコア 282 試合を復元（手元のPCでスクリプトを実行）。Gold・Bronze・35&Over は最新の保存が 2/15 時点で、
   2/15・2/22 の10試合は結果が空欄のまま。過去シーズンでは「未消化」ではなく「記録なし」と表示する。
   52nd には Women Bronze もあった（11試合）が、52nd の順位表データ（`src/lib/pastStandings.ts`）には入っていない。
+- 52nd の順位表・個人成績も Wayback Machine から取り直せるようにした（`scripts/fetch-wayback-standings.mts`、
+  CDX 検索は `scripts/wayback.mts` に共通化）。順位表・個人成績の解析を `parseStandingsHtml()` /
+  `parsePlayersHtml()`（`src/lib/playerStats.ts`）に切り出してスクリプトと共有。
 
 ### 2026-09-26
 - **プレイオフの決勝・準決勝が一覧に出ない**問題を修正。原因は表示期間ではなくパーサー側だった。

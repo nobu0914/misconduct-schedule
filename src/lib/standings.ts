@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
-import iconv from "iconv-lite";
 import { currentSeasonNumber, seasonOrdinal } from "./schedule";
 import { normalizeName } from "./teamName";
+import { decodePage } from "./scores";
 
 export interface TeamStanding {
   rank: number;
@@ -88,6 +88,136 @@ function cleanText(text: string): string {
     .trim();
 }
 
+/**
+ * 順位表ページのHTMLを読む（チーム順位＋得点上位）。取得と分けてあるのは、
+ * Wayback Machine から過去シーズンを取り直すスクリプト（scripts/fetch-wayback-standings.mts）でも使うため。
+ */
+export function parseStandingsHtml(
+  text: string,
+  divisionLabel: string,
+  url: string,
+  debugMode = false,
+  result: ParseResult = {
+    label: divisionLabel, status: 200, rowCount: 0, colspan2Cells: [], sectionLog: [], playersByTeamDebug: {}, standings: [],
+  }
+): ParseResult {
+  const $ = cheerio.load(text);
+
+  type Section = "none" | "team" | "goalie" | "player";
+  let section: Section = "none";
+
+  const playersByTeam: Record<string, { jersey: number; points: number }[]> = {};
+
+  $("tr").each((_, row) => {
+    result.rowCount++;
+    const tds = $(row).find("td");
+    if (tds.length === 0) return;
+
+    const cellData: Array<{ text: string; colspan: number }> = [];
+    tds.each((_, td) => {
+      cellData.push({
+        text: cleanText($(td).text()),
+        colspan: parseInt($(td).attr("colspan") ?? "1", 10),
+      });
+    });
+    const texts = cellData.map((c) => c.text);
+
+    if (texts.includes("W") && texts.includes("L") && texts.includes("GP")) {
+      section = "team";
+      if (debugMode) result.sectionLog.push(`row${result.rowCount}→team: [${texts.join(",")}]`);
+      return;
+    }
+    if (texts.includes("Save%") || texts.includes("SOG")) {
+      section = "goalie";
+      if (debugMode) result.sectionLog.push(`row${result.rowCount}→goalie: [${texts.join(",")}]`);
+      return;
+    }
+    if (texts.includes("PIM") && !texts.includes("Save%") && !texts.includes("SOG")) {
+      section = "player";
+      if (debugMode) result.sectionLog.push(`row${result.rowCount}→player: [${texts.join(",")}]`);
+      return;
+    }
+
+    if (section === "team") {
+      const teamCellIdx = cellData.findIndex(
+        (c) =>
+          c.colspan === 2 &&
+          c.text !== "" &&
+          c.text !== "Team" &&
+          !/^[\d\s\-\+]+$/.test(c.text)
+      );
+      if (teamCellIdx === -1) return;
+
+      if (debugMode) {
+        result.colspan2Cells.push(`[${divisionLabel}] "${cellData[teamCellIdx].text}"`);
+      }
+
+      let rank = 0;
+      for (let i = 0; i < teamCellIdx; i++) {
+        const n = parseInt(cellData[i].text, 10);
+        if (!isNaN(n) && n > 0 && String(n) === cellData[i].text) {
+          rank = n;
+          break;
+        }
+      }
+      if (rank === 0) return;
+
+      const teamName = cellData[teamCellIdx].text;
+      const gp     = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
+      const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
+      const wins   = parseInt(cellData[teamCellIdx + 3]?.text ?? "", 10);
+      const losses = parseInt(cellData[teamCellIdx + 4]?.text ?? "", 10);
+      const ties   = parseInt(cellData[teamCellIdx + 5]?.text ?? "", 10);
+      if (isNaN(gp)) return;
+
+      result.standings.push({
+        rank, team: teamName, divisionLabel,
+        points, gp,
+        wins:   isNaN(wins)   ? 0 : wins,
+        losses: isNaN(losses) ? 0 : losses,
+        ties:   isNaN(ties)   ? 0 : ties,
+        topScorers: [],
+        sourceUrl: url,
+        rankChange: 0,
+      });
+      return;
+    }
+
+    if (section === "player") {
+      if (cellData.length < 5) return;
+
+      const rank = parseInt(cellData[1].text, 10);
+      if (isNaN(rank) || rank <= 0 || String(rank) !== cellData[1].text) return;
+
+      const jersey = parseInt(cellData[3].text, 10);
+      if (isNaN(jersey) || jersey <= 0) return;
+
+      const teamName = cleanText(cellData[4].text);
+      if (!teamName || teamName === "Team") return;
+
+      const pts = parseInt(cellData[8]?.text ?? "", 10);
+
+      if (!playersByTeam[teamName]) playersByTeam[teamName] = [];
+      playersByTeam[teamName].push({ jersey, points: isNaN(pts) ? 0 : pts });
+    }
+  });
+
+  if (debugMode) result.playersByTeamDebug = playersByTeam;
+
+  for (const standing of result.standings) {
+    const key = Object.keys(playersByTeam).find(
+      (k) => normalizeName(k) === normalizeName(standing.team)
+    );
+    standing.topScorers = key
+      ? [...playersByTeam[key]]
+          .sort((a, b) => b.points - a.points)
+          .slice(0, 3)
+          .map((p) => p.jersey)
+      : [];
+  }
+  return result;
+}
+
 export async function fetchAndParseStandings(
   divisionLabel: string,
   url: string,
@@ -111,133 +241,7 @@ export async function fetchAndParseStandings(
     result.status = res.status;
     if (!res.ok) return result;
 
-    const buffer = await res.arrayBuffer();
-    const buf = Buffer.from(buffer);
-
-    let text: string;
-    if (buf[0] === 0xff && buf[1] === 0xfe) {
-      text = iconv.decode(buf, "utf-16le");
-    } else if (buf[0] === 0xfe && buf[1] === 0xff) {
-      text = iconv.decode(buf, "utf-16be");
-    } else {
-      text = iconv.decode(buf, "shift_jis");
-    }
-
-    const $ = cheerio.load(text);
-
-    type Section = "none" | "team" | "goalie" | "player";
-    let section: Section = "none";
-
-    const playersByTeam: Record<string, { jersey: number; points: number }[]> = {};
-
-    $("tr").each((_, row) => {
-      result.rowCount++;
-      const tds = $(row).find("td");
-      if (tds.length === 0) return;
-
-      const cellData: Array<{ text: string; colspan: number }> = [];
-      tds.each((_, td) => {
-        cellData.push({
-          text: cleanText($(td).text()),
-          colspan: parseInt($(td).attr("colspan") ?? "1", 10),
-        });
-      });
-      const texts = cellData.map((c) => c.text);
-
-      if (texts.includes("W") && texts.includes("L") && texts.includes("GP")) {
-        section = "team";
-        if (debugMode) result.sectionLog.push(`row${result.rowCount}→team: [${texts.join(",")}]`);
-        return;
-      }
-      if (texts.includes("Save%") || texts.includes("SOG")) {
-        section = "goalie";
-        if (debugMode) result.sectionLog.push(`row${result.rowCount}→goalie: [${texts.join(",")}]`);
-        return;
-      }
-      if (texts.includes("PIM") && !texts.includes("Save%") && !texts.includes("SOG")) {
-        section = "player";
-        if (debugMode) result.sectionLog.push(`row${result.rowCount}→player: [${texts.join(",")}]`);
-        return;
-      }
-
-      if (section === "team") {
-        const teamCellIdx = cellData.findIndex(
-          (c) =>
-            c.colspan === 2 &&
-            c.text !== "" &&
-            c.text !== "Team" &&
-            !/^[\d\s\-\+]+$/.test(c.text)
-        );
-        if (teamCellIdx === -1) return;
-
-        if (debugMode) {
-          result.colspan2Cells.push(`[${divisionLabel}] "${cellData[teamCellIdx].text}"`);
-        }
-
-        let rank = 0;
-        for (let i = 0; i < teamCellIdx; i++) {
-          const n = parseInt(cellData[i].text, 10);
-          if (!isNaN(n) && n > 0 && String(n) === cellData[i].text) {
-            rank = n;
-            break;
-          }
-        }
-        if (rank === 0) return;
-
-        const teamName = cellData[teamCellIdx].text;
-        const gp     = parseInt(cellData[teamCellIdx + 1]?.text ?? "", 10);
-        const points = parseInt(cellData[teamCellIdx + 2]?.text ?? "", 10);
-        const wins   = parseInt(cellData[teamCellIdx + 3]?.text ?? "", 10);
-        const losses = parseInt(cellData[teamCellIdx + 4]?.text ?? "", 10);
-        const ties   = parseInt(cellData[teamCellIdx + 5]?.text ?? "", 10);
-        if (isNaN(gp)) return;
-
-        result.standings.push({
-          rank, team: teamName, divisionLabel,
-          points, gp,
-          wins:   isNaN(wins)   ? 0 : wins,
-          losses: isNaN(losses) ? 0 : losses,
-          ties:   isNaN(ties)   ? 0 : ties,
-          topScorers: [],
-          sourceUrl: url,
-          rankChange: 0,
-        });
-        return;
-      }
-
-      if (section === "player") {
-        if (cellData.length < 5) return;
-
-        const rank = parseInt(cellData[1].text, 10);
-        if (isNaN(rank) || rank <= 0 || String(rank) !== cellData[1].text) return;
-
-        const jersey = parseInt(cellData[3].text, 10);
-        if (isNaN(jersey) || jersey <= 0) return;
-
-        const teamName = cleanText(cellData[4].text);
-        if (!teamName || teamName === "Team") return;
-
-        const pts = parseInt(cellData[8]?.text ?? "", 10);
-
-        if (!playersByTeam[teamName]) playersByTeam[teamName] = [];
-        playersByTeam[teamName].push({ jersey, points: isNaN(pts) ? 0 : pts });
-      }
-    });
-
-    if (debugMode) result.playersByTeamDebug = playersByTeam;
-
-    for (const standing of result.standings) {
-      const key = Object.keys(playersByTeam).find(
-        (k) => normalizeName(k) === normalizeName(standing.team)
-      );
-      standing.topScorers = key
-        ? [...playersByTeam[key]]
-            .sort((a, b) => b.points - a.points)
-            .slice(0, 3)
-            .map((p) => p.jersey)
-        : [];
-    }
-
+    parseStandingsHtml(decodePage(Buffer.from(await res.arrayBuffer())), divisionLabel, url, debugMode, result);
   } catch (e) {
     result.error = String(e);
   }

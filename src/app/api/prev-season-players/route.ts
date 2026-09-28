@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { kv } from "@vercel/kv";
 import { currentSeasonNumber } from "@/lib/schedule";
 import { loadSeasonSnapshot, seasonPlayersKey, seasonsWithSnapshot, type SeasonPlayerEntry } from "@/lib/seasonSnapshot";
+import players52 from "@/data/players-52nd.json";
 
 export type PrevPlayerStat = SeasonPlayerEntry;
 
@@ -441,8 +441,15 @@ const SEASON_52_PLAYERS: PrevPlayerStat[] = [
   { name: "竹村昭紀", jersey: 14, team: "たたかえ！！ホイジンガー", divisionLabel: "35&Over", divisionRank: 25, gp: 3, goals: 0, assists: 1, points: 1, pim: 0 },
 ];
 
-/** KV に無いときの控え（公式ページが消えたシーズンを手で復元したもの） */
-const STATIC_SEASONS: Record<number, PrevPlayerStat[]> = { 52: SEASON_52_PLAYERS };
+/**
+ * 公式ページが消えたシーズンの固定データ。KVより優先する（確定済みで変わらないため。
+ * 以前は初回アクセス時にKVへ写していたので、KVを先に見ると取り直したデータが反映されない）。
+ * 52nd は Wayback Machine から scripts/fetch-wayback-standings.mts で取り直したもの
+ * （src/data/players-52nd.json）を使い、未取得なら手で復元した SEASON_52_PLAYERS を使う。
+ */
+const FIXED_SEASONS: Record<number, PrevPlayerStat[]> = {
+  52: (players52 as PrevPlayerStat[]).length > 0 ? (players52 as PrevPlayerStat[]) : SEASON_52_PLAYERS,
+};
 
 /** 保存データの最古シーズン。これより前は存在しない */
 const OLDEST_SEASON = 52;
@@ -454,7 +461,7 @@ async function availablePastSeasons(current: number): Promise<number[]> {
   const saved = new Set(
     await seasonsWithSnapshot(candidates.map((n) => ({ season: n, key: seasonPlayersKey(n) })))
   );
-  return candidates.filter((n) => saved.has(n) || (STATIC_SEASONS[n]?.length ?? 0) > 0);
+  return candidates.filter((n) => saved.has(n) || (FIXED_SEASONS[n]?.length ?? 0) > 0);
 }
 
 /**
@@ -469,20 +476,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const headers = { "Cache-Control": "s-maxage=3600, stale-while-revalidate=3600" };
-  const key = seasonPlayersKey(requested);
-  const [saved, available] = await Promise.all([
-    loadSeasonSnapshot<PrevPlayerStat>(key),
+  const [players, available] = await Promise.all([
+    FIXED_SEASONS[requested]?.length
+      ? Promise.resolve(FIXED_SEASONS[requested])
+      : loadSeasonSnapshot<PrevPlayerStat>(seasonPlayersKey(requested)),
     availablePastSeasons(current),
   ]);
-  if (saved.length > 0) {
-    return NextResponse.json({ season: requested, players: saved, available }, { headers });
-  }
-
-  const fallback = STATIC_SEASONS[requested] ?? [];
-  if (fallback.length > 0) {
-    try {
-      await kv.set(key, fallback); // 次回からKVで返す
-    } catch {}
-  }
-  return NextResponse.json({ season: requested, players: fallback, available }, { headers });
+  return NextResponse.json({ season: requested, players, available }, { headers });
 }

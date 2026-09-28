@@ -7,6 +7,7 @@ import { parseSeasonNumber } from "../src/lib/season";
 import { mergeByDivision, toSeasonTeamEntries } from "../src/lib/seasonSnapshot";
 import { normalizeName, findTeam } from "../src/lib/teamName";
 import { fetchWaybackScores } from "../scripts/fetch-wayback-scores.mts";
+import { fetchWaybackStandings } from "../scripts/fetch-wayback-standings.mts";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
 
@@ -223,6 +224,39 @@ async function main() {
     assert(games[0].sourceUrl.startsWith("https://web.archive.org/web/20260401000000/"),
       "リンク先は消えた公式ページではなくアーカイブ");
     assert(report.some((r) => r.division === "mystery"), "対応するディビジョンが無いファイルは報告する");
+  }
+
+  // --- 過去シーズンの順位表（チーム＋個人）を Wayback Machine から取り直す ---
+  {
+    const page = `<html><body><table>
+      <tr><td>Rank</td><td colspan="2">Team</td><td>GP</td><td>Pts</td><td>W</td><td>L</td><td>T</td></tr>
+      <tr><td>1</td><td colspan="2">日体大DREAMS WB</td><td>6</td><td>10</td><td>5</td><td>1</td><td>0</td></tr>
+      <tr><td>2</td><td colspan="2">Individuals WB</td><td>6</td><td>2</td><td>1</td><td>5</td><td>0</td></tr>
+      <tr><td></td><td>Rank</td><td>Name</td><td>#</td><td>Team</td><td>GP</td><td>G</td><td>A</td><td>P</td><td>PIM</td></tr>
+      <tr><td></td><td>1</td><td>山田花子</td><td>9</td><td>日体大DREAMS WB</td><td>6</td><td>7</td><td>3</td><td>10</td><td>0</td></tr>
+    </table></body></html>`;
+    const sjis = iconv.encode(page, "shift_jis");
+    const fakeFetch = async (url: string) => {
+      if (url.includes("/cdx/search/cdx")) {
+        assert(decodeURIComponent(url).includes("52nd_standings_*"), "順位表のファイルを検索する");
+        return new Response(JSON.stringify([
+          ["timestamp", "original"],
+          ["20260307153626", "https://misconduct.co.jp/wordpress/wp-content/uploads/52nd_standings_wb.htm"],
+          ["20260307153626", "https://misconduct.co.jp/wordpress/wp-content/uploads/52nd_standings_mystery.htm"],
+        ]));
+      }
+      if (url.includes("id_/") && url.endsWith("52nd_standings_wb.htm")) return new Response(sjis);
+      return new Response("", { status: 404 });
+    };
+    const { teams, players, report } = await fetchWaybackStandings(52, fakeFetch);
+    assert(teams.length === 2 && teams.every((t) => t.divisionLabel === "Women Bronze" && t.totalTeams === 2),
+      `Women Bronze の順位を取れる (=${teams.length}チーム)`);
+    assert(teams[0].team === "日体大DREAMS WB" && teams[0].rank === 1 && teams[0].wins === 5 && teams[0].points === 10,
+      "順位・勝敗・勝点が入る");
+    assert(players.length === 1 && players[0].name === "山田花子" && players[0].points === 10 && players[0].divisionLabel === "Women Bronze",
+      "個人成績も同じページから取れる");
+    assert(report.some((r) => r.division === "Platinum" && r.note?.includes("アーカイブ無し")), "無いディビジョンは報告する");
+    assert(report.some((r) => r.division === "mystery"), "対応するディビジョンが無いファイルは報告する（順位表）");
   }
 
   // --- シーズン別の順位・個人成績の保存 ---

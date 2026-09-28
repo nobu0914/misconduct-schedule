@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260929-0138",
+    date: "2026-09-29",
+    changes: [
+      "52nd シーズンの順位表・個人成績を Wayback Machine から取り直せるように（Women Bronze を含む全ディビジョン）",
+    ],
+  },
+  {
     version: "Ver.1-260929-0131",
     date: "2026-09-29",
     changes: [

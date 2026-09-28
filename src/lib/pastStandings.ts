@@ -1,5 +1,5 @@
-import { kv } from "@vercel/kv";
 import { loadSeasonSnapshot, seasonTeamsKey, seasonsWithSnapshot, type SeasonTeamEntry } from "./seasonSnapshot";
+import standings52 from "@/data/standings-52nd.json";
 
 // シーズン別の最終順位（保存済み）の読み出し。/api/prev-season（TOPの前シーズン表示）と
 // /api/past-standings（チームランキングの過去シーズン）で共有する。
@@ -93,18 +93,20 @@ const SEASON_52_DATA: SeasonTeamEntry[] = [
   { team: "Individuals 35",        divisionLabel: "35&Over", rank: 5, totalTeams: 5 },
 ];
 
-/** KV に無いときの控え（公式ページが消えたシーズンを手で復元したもの） */
-const STATIC_SEASONS: Record<number, SeasonTeamEntry[]> = { 52: SEASON_52_DATA };
+/**
+ * 公式ページが消えたシーズンの固定データ。KVより優先する（確定済みで変わらないため。
+ * 以前は初回アクセス時にKVへ写していたので、KVを先に見ると取り直したデータが反映されない）。
+ * 52nd は Wayback Machine から scripts/fetch-wayback-standings.mts で取り直したもの
+ * （src/data/standings-52nd.json）を使い、未取得なら手で復元した SEASON_52_DATA を使う。
+ */
+const FIXED_SEASONS: Record<number, SeasonTeamEntry[]> = {
+  52: (standings52 as SeasonTeamEntry[]).length > 0 ? (standings52 as SeasonTeamEntry[]) : SEASON_52_DATA,
+};
 
 export async function loadSeasonTeams(season: number): Promise<SeasonTeamEntry[]> {
-  const saved = await loadSeasonSnapshot<SeasonTeamEntry>(seasonTeamsKey(season));
-  if (saved.length > 0) return saved;
-  const fallback = STATIC_SEASONS[season];
-  if (!fallback) return [];
-  try {
-    await kv.set(seasonTeamsKey(season), fallback); // 次回からKVで返す
-  } catch {}
-  return fallback;
+  const fixed = FIXED_SEASONS[season];
+  if (fixed?.length) return fixed;
+  return loadSeasonSnapshot<SeasonTeamEntry>(seasonTeamsKey(season));
 }
 
 /** 過去シーズン（今シーズンより前）のうち、データがあるものを新しい順に */
@@ -114,5 +116,5 @@ export async function availablePastTeamSeasons(current: number): Promise<number[
   const saved = new Set(
     await seasonsWithSnapshot(candidates.map((n) => ({ season: n, key: seasonTeamsKey(n) })))
   );
-  return candidates.filter((n) => saved.has(n) || (STATIC_SEASONS[n]?.length ?? 0) > 0);
+  return candidates.filter((n) => saved.has(n) || (FIXED_SEASONS[n]?.length ?? 0) > 0);
 }
