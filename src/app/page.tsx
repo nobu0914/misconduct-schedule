@@ -7,6 +7,7 @@ import type { TeamStanding } from "./api/standings/route";
 import type { PrevSeasonEntry } from "./api/prev-season/route";
 import type { DayForecast } from "./api/weather/route";
 import type { RentalEntry } from "./api/rental/route";
+import { getPracticeNotice, isPracticeCancelled, upcomingCancelledPractices } from "@/lib/practiceNotices";
 
 type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }
@@ -113,6 +114,15 @@ function ScheduleContent() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [sourceIssue, setSourceIssue] = useState<string | null>(null);
+
+  // 水曜練習会の中止告知。「当日以降か」は現在時刻に依存するので、
+  // サーバー描画（UTC）とズレないようマウント後に確定させる
+  const [cancelledNotices, setCancelledNotices] = useState<{ date: string; reason?: string }[]>([]);
+  useEffect(() => {
+    setCancelledNotices(
+      upcomingCancelledPractices().map((date) => ({ date, reason: getPracticeNotice(date)?.reason }))
+    );
+  }, []);
   const [copied, setCopied] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [weatherMap, setWeatherMap] = useState<Record<string, DayForecast>>({});
@@ -769,6 +779,27 @@ function ScheduleContent() {
           </div>
         )}
 
+        {cancelledNotices.length > 0 && (
+          <div className="mb-4 bg-red-900/30 border border-red-700 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-red-300 text-sm font-semibold mb-1">水曜練習会 中止のお知らせ</p>
+                <ul className="space-y-0.5">
+                  {cancelledNotices.map(({ date, reason }) => (
+                    <li key={date} className="text-sm text-gray-300">
+                      {formatDate(date).display} は<span className="text-red-400 font-semibold">中止</span>です
+                      {reason && <span className="text-gray-400">（{reason}）</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!loading && !error && grouped.length === 0 && (
           <div className="text-center py-20 text-gray-500">
             {matches.length === 0 ? "試合日程を表示できません" : "該当する試合がありません"}
@@ -801,23 +832,28 @@ function ScheduleContent() {
                 {dateItems.map((item, i) => {
                   if (item.kind === "rental") {
                     const r = item.data;
+                    const cancelled = r.label.includes("水曜練習会") && isPracticeCancelled(r.date);
                     return (
                       <a
                         key={`${date}-r-${i}`}
                         href={r.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`block border-l-4 ${r.isOfficial ? "border-blue-500" : "border-emerald-500"} bg-gray-900/40 border-y border-r border-gray-800 rounded-r-xl px-4 py-2.5 hover:bg-gray-900 transition-colors`}
+                        className={`block border-l-4 ${cancelled ? "border-red-500 bg-red-950/20 border-y border-r border-red-900/70" : `${r.isOfficial ? "border-blue-500" : "border-emerald-500"} bg-gray-900/40 border-y border-r border-gray-800`} rounded-r-xl px-4 py-2.5 hover:bg-gray-900 transition-colors`}
                       >
                         <div className="flex items-center gap-3 flex-wrap">
-                          <div className="text-emerald-400 font-mono text-sm font-semibold">
+                          <div className={`font-mono text-sm font-semibold ${cancelled ? "text-gray-600 line-through" : "text-emerald-400"}`}>
                             {r.timeStart}
                             {r.timeEnd && <span className="text-gray-500"> ~ {r.timeEnd}</span>}
                           </div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.isOfficial ? "bg-blue-600 text-white" : "bg-emerald-700 text-emerald-100"}`}>
-                            {r.isOfficial ? "MHL枠" : "リンク予定"}
-                          </span>
-                          <span className="text-gray-300 text-sm flex-1 min-w-0 truncate">{r.label || "─"}</span>
+                          {cancelled ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-red-600 text-white">中止</span>
+                          ) : (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.isOfficial ? "bg-blue-600 text-white" : "bg-emerald-700 text-emerald-100"}`}>
+                              {r.isOfficial ? "MHL枠" : "リンク予定"}
+                            </span>
+                          )}
+                          <span className={`text-sm flex-1 min-w-0 truncate ${cancelled ? "text-gray-500 line-through" : "text-gray-300"}`}>{r.label || "─"}</span>
                           <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
