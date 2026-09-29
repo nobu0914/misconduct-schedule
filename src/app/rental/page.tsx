@@ -7,6 +7,7 @@ import type { EventItem, ProgramEntry } from "../api/events/route";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import WednesdayVoteModal from "@/components/WednesdayVoteModal";
+import { getPracticeNotice, isPracticeCancelled, upcomingCancelledPractices } from "@/lib/practiceNotices";
 
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("/").map(Number);
@@ -107,6 +108,15 @@ function RentalContent() {
         setError("データの取得に失敗しました");
         setLoading(false);
       });
+  }, []);
+
+  // 中止告知は「当日以降か」を現在時刻で判定するため、サーバー描画とズレないよう
+  // マウント後に確定させる（Vercel は UTC、閲覧者は JST）
+  const [cancelledNotices, setCancelledNotices] = useState<{ date: string; reason?: string }[]>([]);
+  useEffect(() => {
+    setCancelledNotices(
+      upcomingCancelledPractices().map((date) => ({ date, reason: getPracticeNotice(date)?.reason }))
+    );
   }, []);
 
   const months = useMemo(() => {
@@ -282,6 +292,26 @@ function RentalContent() {
 
       {/* Content */}
       <main className="max-w-5xl mx-auto px-4 pb-12">
+        {cancelledNotices.length > 0 && (
+          <div className="mb-4 bg-red-900/30 border border-red-700 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-red-300 text-sm font-semibold mb-1">水曜練習会 中止のお知らせ</p>
+                <ul className="space-y-0.5">
+                  {cancelledNotices.map(({ date, reason }) => (
+                    <li key={date} className="text-sm text-gray-300">
+                      {formatDate(date)} は<span className="text-red-400 font-semibold">中止</span>です
+                      {reason && <span className="text-gray-400">（{reason}）</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
@@ -362,18 +392,19 @@ function RentalContent() {
               <div className="space-y-2">
                 {dateEntries.map((entry, i) => {
                   const isWed = entry.label.includes("水曜練習会");
+                  const cancelled = isWed && isPracticeCancelled(entry.date);
                   const matchedProgram = findMatchingProgram(entry);
                   const isClickable = isWed || !!matchedProgram;
                   return (
                   <div
                     key={`${date}-${i}`}
                     onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : matchedProgram ? () => setSelectedProgram(matchedProgram) : undefined}
-                    className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : isClickable ? "cursor-pointer hover:border-blue-700 hover:bg-blue-950/20" : "hover:border-gray-600"}`}
+                    className={`bg-gray-900 border rounded-xl p-4 transition-colors ${cancelled ? "border-red-800/70 bg-red-950/20 cursor-pointer hover:border-red-600" : isWed ? "border-gray-800 cursor-pointer hover:border-green-700 hover:bg-green-950/20" : isClickable ? "border-gray-800 cursor-pointer hover:border-blue-700 hover:bg-blue-950/20" : "border-gray-800 hover:border-gray-600"}`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                       {/* 時間 */}
                       <div className="flex items-center gap-3">
-                        <div className="text-blue-400 font-mono font-semibold flex-shrink-0">
+                        <div className={`font-mono font-semibold flex-shrink-0 ${cancelled ? "text-gray-600 line-through" : "text-blue-400"}`}>
                           {entry.timeStart}
                           <span className="text-gray-500 text-sm"> ~ {entry.timeEnd}</span>
                         </div>
@@ -394,7 +425,10 @@ function RentalContent() {
 
                       {/* ラベル */}
                       <div className="flex-1 flex items-center gap-2 text-white min-w-0">
-                        <span className="font-medium truncate">{entry.label}</span>
+                        <span className={`font-medium truncate ${cancelled ? "line-through text-gray-500" : ""}`}>{entry.label}</span>
+                        {cancelled && (
+                          <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0">中止</span>
+                        )}
                         {entry.isOfficial && (
                           <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">公式</span>
                         )}
@@ -406,7 +440,7 @@ function RentalContent() {
                             詳細
                           </span>
                         )}
-                        {isWed && (
+                        {isWed && !cancelled && (
                           <span className="flex items-center gap-1 bg-green-700/60 text-green-300 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 border border-green-600">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />

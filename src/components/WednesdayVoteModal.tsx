@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { MENU_ITEMS } from "@/lib/voteConstants";
 import type { Attendance } from "@/lib/voteConstants";
+import { getPracticeNotice } from "@/lib/practiceNotices";
 
 interface VoteResult {
   attend: { yes: number; maybe: number; no: number };
@@ -127,6 +128,8 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
   const [mangaOpen, setMangaOpen] = useState(false);
   const manga = MANGA_BY_DATE[date];
   const hasManga = Boolean(manga);
+  const notice = getPracticeNotice(date);
+  const cancelled = notice?.status === "cancelled";
 
   async function handleShare() {
     const url = `${window.location.origin}/rental?practice=${encodeURIComponent(date)}`;
@@ -161,8 +164,10 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
         {/* Header */}
         <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 px-5 py-4 flex items-center justify-between rounded-t-2xl sm:rounded-t-2xl" style={{isolation: "isolate"}}>
           <div>
-            <div className="text-xs text-green-400 font-medium mb-0.5">水曜練習会</div>
-            <div className="text-white font-bold">{dateLabel}</div>
+            <div className={`text-xs font-medium mb-0.5 ${cancelled ? "text-red-400" : "text-green-400"}`}>
+              水曜練習会{cancelled && "（中止）"}
+            </div>
+            <div className={`font-bold ${cancelled ? "text-gray-400 line-through" : "text-white"}`}>{dateLabel}</div>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -199,6 +204,23 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
             </div>
           ) : (
             <>
+              {cancelled && (
+                <div className="bg-red-900/40 border border-red-600 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-6 h-6 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-red-300 font-bold mb-1">この回は中止になりました</p>
+                      <p className="text-sm text-gray-300 leading-relaxed">
+                        {notice?.reason ?? "ご参加を予定されていた方はご注意ください。"}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">次回の開催予定はレンタル情報の一覧をご確認ください。</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 水曜練習とは？ */}
               <div className="bg-green-900/30 border border-green-700 rounded-xl overflow-hidden">
                 <button
@@ -242,9 +264,12 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
               {/* 参加状況 */}
               <section>
                 <h3 className="text-sm font-semibold text-gray-300 mb-1">参加状況（無記名）</h3>
-                <p className="text-xs text-gray-500 mb-3">参加表明は必須ではありません。ご自由にどうぞ。</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  {cancelled ? "中止のため投票は締め切りました（中止前の集計）" : "参加表明は必須ではありません。ご自由にどうぞ。"}
+                </p>
 
                 {/* 投票ボタン */}
+                {!cancelled && (
                 <div className="flex gap-2 mb-4">
                   {ATTEND_OPTIONS.map(({ value, label, color, activeColor }) => (
                     <button
@@ -259,6 +284,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                     </button>
                   ))}
                 </div>
+                )}
 
                 {/* 集計バー */}
                 {result && totalAttend > 0 && (
@@ -286,6 +312,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
               </section>
 
               {/* 練習メニュー投票 */}
+              {!cancelled && (
               <section>
                 <h3 className="text-sm font-semibold text-gray-300 mb-1">やりたい練習メニュー</h3>
                 <p className="text-xs text-gray-500 mb-3">複数選択OK（無記名）</p>
@@ -323,9 +350,10 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                   })}
                 </div>
               </section>
+              )}
 
               {/* 送信 / 変更 */}
-              {!hasVoted ? (
+              {cancelled ? null : !hasVoted ? (
                 <button
                   onClick={handleSubmit}
                   disabled={!selectedAttend || submitting}

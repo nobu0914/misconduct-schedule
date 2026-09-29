@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-260929-2021",
+    date: "2026-09-29",
+    changes: [
+      "水曜練習会が中止になった回を「中止」として表示するようにした（レンタル一覧の告知バナー・カードのバッジ・出欠モーダル）",
+      "2026年9月30日(水)の水曜練習会は中止",
+    ],
+  },
+  {
     version: "Ver.1-260926-0017",
     date: "2026-09-26",
     changes: [

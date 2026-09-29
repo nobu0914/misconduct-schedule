@@ -5,6 +5,7 @@ import {
 } from "../src/lib/schedule";
 import { withArchivedScoreSeasons } from "../src/lib/scores";
 import { buildRentalSources, fetchAllRentalEntries } from "../src/lib/rental";
+import { PRACTICE_NOTICES, isPracticeCancelled, upcomingCancelledPractices } from "../src/lib/practiceNotices";
 
 const NOW = new Date(2026, 8, 11); // 2026/9/11
 
@@ -198,6 +199,19 @@ async function main() {
     assert(merged.length === 2 && merged[1].items.length === 2,
       `前シーズンのスコアが足される (=${merged.length}/${merged[1]?.items.length})`);
     assert(merged[1].source.fromArchive === "2026-09-13T08:00:00Z", "スコアにも保存時刻が付く");
+  }
+
+  // --- 水曜練習会の中止告知 ---
+  {
+    // RentalEntry.date は `YYYY/M/D`（ゼロ埋めなし）。"2026/09/30" と書くと永久に一致しない
+    for (const date of Object.keys(PRACTICE_NOTICES)) {
+      assert(/^\d{4}\/([1-9]|1[0-2])\/([1-9]|[12]\d|3[01])$/.test(date),
+        `中止告知の日付形式（ゼロ埋めなし）: ${date}`);
+      assert(isPracticeCancelled(date), `${date} は中止として引ける`);
+    }
+    assert(!isPracticeCancelled("2026/1/1"), "告知のない日は中止にならない");
+    const upcoming = upcomingCancelledPractices(new Date(2100, 0, 1));
+    assert(upcoming.length === 0, `過ぎた告知はバナーに出さない (=${upcoming.length})`);
   }
 
   const r = await fetchAllRentalEntries({ now: NOW });
