@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-260929-0144`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261002-2325`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -219,6 +219,29 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 
 ## 作業記録
 
+### 2026-10-02
+- **本番が 9/29 から古いコードに巻き戻っていた**。9/28 のデプロイ（`past-standings` / `past-scores` あり）の後、
+  9/29 の2回のデプロイはどちらも `past-standings` が404で、9/13〜9/28 の18コミット
+  （入力検証・認証強化、過去シーズン分離、52nd 復元など）を含まない古いコードだった（どこから出たかは未確認）。
+  10/2 の作業も最初は 9/13 時点の手元ブランチ（`feat/capacitor-app`）を土台にデプロイしてしまい、
+  `git fetch` で気づいて `origin/main` を土台に必要な修正だけ載せ直した。
+  **CLI でデプロイする前に必ず `git fetch` して `origin/main` との差を確認する**こと。
+- 公式サイトの取得が Vercel から全滅（`fetch failed`）。ローカルからは 200 で取れるのに Vercel からだけ
+  `UND_ERR_CONNECT_TIMEOUT`。同じ日に「本家がPCだと遅い・スマホだと速い・その後回復」とのことで、
+  意図的な遮断より公式サーバーの一時的な不調の可能性が高い（断続的に成功・失敗した）。
+  - 失敗時のエラーに `cause.code` を残すようにした（`src/lib/schedule.ts`）。`fetch failed` だけでは区別できない。
+  - Vercel のリージョンを東京（`hnd1`）に変更（`vercel.json`）。効果は断定できないが国内向けなので害はない。
+- **リンク予定の保存データ補完が一度も効いていなかった**。Upstash は値をJSONとして解釈するため、数字だけのラベル
+  （レンタルの `202610`）が `smembers` から**数値**で返り、`Set.has("202610")` が一致しなかった。
+  `listArchived()` で文字列に揃えた（`src/lib/archive.ts`）。公式に届かない日はリンク予定が0件になっていた。
+- トップの警告が、終わったシーズンの保存データ（status 0・エラーなし）まで「取得できなかった日程」と数えていた
+  （最初に見た「37件」は失敗30件＋53rd の保存分7件）。エラーがあったものだけを失敗に数え、取れなかった分を
+  保存データで補えているときは「保存データ（M/D HH:MM時点）で表示しています」と出すようにした（`src/app/page.tsx`）。
+- 公式に届く環境から KV の保存データを更新する `scripts/refresh-kv.mts` を追加し、GitHub Actions
+  （`.github/workflows/refresh-kv.yml`、毎日 05:30 / 17:30 JST）で実行する。KV の認証情報は GitHub の
+  Secrets（`KV_REST_API_URL` / `KV_REST_API_TOKEN`）。手元では `npx tsx scripts/refresh-kv.mts --env <.env>`、
+  書き込まずに確認するなら `--dry-run`。
+
 ### 2026-09-28
 - 本番が `main` ではなく `claude/latest-data-fetch-check-ie1hqs` からデプロイされていたため、`main` に取り込んで揃えた
   （`main` を push すると本番に自動デプロイされる。**本番より古い `main` を push すると巻き戻る**ので注意）。
@@ -394,6 +417,9 @@ npx vercel --prod
 ```
 
 デプロイ後、`mhlcxc.rinnavi.com` に自動でエイリアスされる。
+
+**デプロイ前に必ず `git fetch` して、手元が `origin/main` より古くないか確認する**（`git log HEAD..origin/main` が空であること）。
+古い手元のコードから CLI でデプロイすると、本番が巻き戻る（2026-10-02 に実際に起きた）。`main` を push した場合も同様。
 
 ---
 
