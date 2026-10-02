@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-0010`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-0725`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -239,7 +239,12 @@ npx tsx tests/analytics.mts     # アクセス解析の入力検証・来訪日�
   公式の最終結果ページ（`result-after-53rd-season`、優勝・準優勝・Top Gun・The Wall）を
   `scripts/fetch-season-results.mts 53` で `src/data/awards-53rd.json` に書き出し、`src/lib/seasonAwards.ts` の
   `playoffResult()` で表示する（モーダル・チームランキングの過去シーズン・チーム相性）。結果ページが無いシーズン
-  （52nd 以前。URL は 53rd に転送される）は優勝表示を出さない。順位表の見出しは「（レギュラーシーズン）」と明記。
+  は優勝表示を出さない。順位表の見出しは「（レギュラーシーズン）」と明記。
+- 10/3 追記: 52nd・51st の結果ページは公式では 53rd に転送されるが、**Wayback Machine に残っていた**
+  （`web.archive.org/web/20260513074156id_/…result-after-52nd-season/`、51st は `20260215182535`）。
+  `fetch-season-results.mts 52 --html <file>` で `<title>` のシーズンを確認してから書き出した。
+  52nd・53rd の優勝・準優勝20チームは全てその季の順位表のチーム名と一致（`teamKey`）。レギュラー1位が優勝したのは
+  53rd 4/9、52nd 5/9 ディビジョンだけ。チーム相性のカードは結果があれば「プレイオフ 🏆優勝」を大きく、順位は添え書き。
 
 ### 2026-10-02（チーム相性）
 - ランクに「チーム相性」タブ（`?mode=matchup&div=…&season=53&a=…&b=…`）。同ディビジョンの2チームを八角形で比較する。

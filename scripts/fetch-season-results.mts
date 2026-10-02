@@ -3,12 +3,15 @@
 //
 // 順位表はレギュラーシーズンの順位で、優勝はプレイオフで決まる（53rd Brass はレギュラー2位のサイコが優勝）。
 // 公式ページはシーズンが変わると消える・差し替わる可能性があるので、取れるうちに JSON で持っておく。
-// 2026-10 時点で存在するのは 53rd だけ（他のシーズンの URL は 53rd に転送される）。
+// 2026-10 時点で公式に存在するのは 53rd だけ（他のシーズンの URL は 53rd に転送される）。
+// 52nd・51st は Wayback Machine に残っていたページから書き出した（--html）。
 //
 // 使い方（ネットワークに出られる手元のPCで）:
 //   npx tsx scripts/fetch-season-results.mts 53
+//   npx tsx scripts/fetch-season-results.mts 52 --html <保存したHTML>   # Wayback Machine などから取ったページ
+//     例: curl -sL -o r52.html "https://web.archive.org/web/20260513074156id_/https://misconduct.co.jp/result-after-52nd-season/"
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as cheerio from "cheerio";
 import { seasonOrdinal } from "../src/lib/season";
@@ -59,15 +62,28 @@ async function main() {
     console.error("使い方: npx tsx scripts/fetch-season-results.mts 53");
     process.exit(1);
   }
-  const url = `https://misconduct.co.jp/result-after-${seasonOrdinal(season)}-season/`;
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  // 別シーズンの URL は最新の結果ページに転送されるので、取り違えないよう転送先を確認する
-  if (!res.ok || !res.url.includes(`result-after-${seasonOrdinal(season)}-season`)) {
-    console.error(`${seasonOrdinal(season)} の結果ページがありません（HTTP ${res.status} → ${res.url}）`);
-    process.exit(1);
+  const ordinal = seasonOrdinal(season);
+  const htmlIndex = process.argv.indexOf("--html");
+  let html: string;
+  if (htmlIndex >= 0) {
+    html = readFileSync(process.argv[htmlIndex + 1], "utf8");
+    // 保存したページが別シーズンのものでないか、タイトルで確認する
+    if (!new RegExp(`<title>[^<]*after ${ordinal} Season`, "i").test(html)) {
+      console.error(`${ordinal} の結果ページではありません（<title> を確認してください）`);
+      process.exit(1);
+    }
+  } else {
+    const url = `https://misconduct.co.jp/result-after-${ordinal}-season/`;
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    // 別シーズンの URL は最新の結果ページに転送されるので、取り違えないよう転送先を確認する
+    if (!res.ok || !res.url.includes(`result-after-${ordinal}-season`)) {
+      console.error(`${ordinal} の結果ページがありません（HTTP ${res.status} → ${res.url}）`);
+      process.exit(1);
+    }
+    html = await res.text();
   }
-  const awards = parseSeasonResultHtml(await res.text());
-  const out = fileURLToPath(new URL(`../src/data/awards-${seasonOrdinal(season)}.json`, import.meta.url));
+  const awards = parseSeasonResultHtml(html);
+  const out = fileURLToPath(new URL(`../src/data/awards-${ordinal}.json`, import.meta.url));
   writeFileSync(out, JSON.stringify(awards, null, 2) + "\n");
   for (const a of awards) {
     console.log(`${a.division.padEnd(13)} 優勝 ${a.champion ?? "—"} / 準優勝 ${a.runnerUp ?? "—"}`);

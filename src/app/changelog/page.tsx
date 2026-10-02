@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-0725",
+    date: "2026-10-03",
+    changes: [
+      "52nd・51st の優勝・準優勝と Top Gun Award / The Wall Award を追加（公式の最終結果ページの記録から）",
+      "チーム相性のカードで、優勝・準優勝をレギュラーシーズンの順位と分けて表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-0010",
     date: "2026-10-03",
     changes: [

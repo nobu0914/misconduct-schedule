@@ -1,0 +1,122 @@
+[
+  {
+    "division": "Platinum",
+    "champion": "かんだ食堂",
+    "runnerUp": "Flying Penguins",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "かんだ食堂"
+    }
+  },
+  {
+    "division": "Gold",
+    "champion": "SONIDO",
+    "runnerUp": "DROP HAMMER",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "SONIDO"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "DROP HAMMER"
+    }
+  },
+  {
+    "division": "Silver",
+    "champion": "Flying Penguins Silver",
+    "runnerUp": "名無しBoyz Starz",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins Silver"
+    },
+    "wall": {
+      "name": "原田猛",
+      "team": "Flying Penguins Silver"
+    }
+  },
+  {
+    "division": "Bronze",
+    "champion": "Millennium Falcons",
+    "runnerUp": "Dark Sales",
+    "topGun": {
+      "name": "谷平陽祐",
+      "team": "STIGA Bronze"
+    },
+    "wall": {
+      "name": "Emarson, Keung",
+      "team": "Dark Sales"
+    }
+  },
+  {
+    "division": "Brass",
+    "champion": "Evolving Discus",
+    "runnerUp": "サイコ",
+    "topGun": {
+      "name": "音賀優颯",
+      "team": "風神雷神"
+    },
+    "wall": {
+      "name": "池田浩輝",
+      "team": "Team Apples"
+    }
+  },
+  {
+    "division": "Copper",
+    "champion": "HCNK Copper",
+    "runnerUp": "Change-zero",
+    "topGun": {
+      "name": "植松大介",
+      "team": "NWC"
+    },
+    "wall": {
+      "name": "中西俊貴",
+      "team": "ブックレインズ"
+    }
+  },
+  {
+    "division": "Iron",
+    "champion": "サイコスクエア",
+    "runnerUp": "HCNK",
+    "topGun": {
+      "name": "藤巻峻",
+      "team": "風神雷神 Iron"
+    },
+    "wall": {
+      "name": "加藤茂美",
+      "team": "Over50’s"
+    }
+  },
+  {
+    "division": "Women Gold",
+    "champion": "Ginza Genkai Peanuts",
+    "runnerUp": "Team SONIC",
+    "topGun": {
+      "name": "勅使河原小梅",
+      "team": "日体大DREAMS WG"
+    },
+    "wall": {
+      "name": "箕浦まどか",
+      "team": "Ginza Genkai Peanuts"
+    }
+  },
+  {
+    "division": "Women Bronze"
+  },
+  {
+    "division": "35&Over",
+    "champion": "Flying Penguins 35",
+    "runnerUp": "武田園",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins 35"
+    },
+    "wall": {
+      "name": "Emarson, Keung",
+      "team": "STIGA 35"
+    }
+  }
+]

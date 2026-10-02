@@ -3,8 +3,10 @@
 // 順位表（レギュラーシーズン）の1位・2位を優勝・準優勝として扱ってはいけない。優勝はプレイオフで決まる
 // （53rd: Brass はレギュラー2位のサイコが優勝、Platinum はレギュラー2位の TEAM I が優勝）。
 // データは公式の最終結果ページから scripts/fetch-season-results.mts で書き出したもの。
-// 公式の結果ページが無いシーズン（52nd 以前）は持っていない。
+// 52nd・51st は公式から消えていたので Wayback Machine に残っていたページから書き出した。
 
+import awards51st from "../data/awards-51st.json";
+import awards52nd from "../data/awards-52nd.json";
 import awards53rd from "../data/awards-53rd.json";
 import { teamKey } from "./teamName";
 
@@ -22,6 +24,8 @@ export interface DivisionAwards {
 }
 
 const SEASON_AWARDS: Record<number, DivisionAwards[]> = {
+  51: awards51st as DivisionAwards[],
+  52: awards52nd as DivisionAwards[],
   53: awards53rd as DivisionAwards[],
 };
 

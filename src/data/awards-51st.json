@@ -1,0 +1,132 @@
+[
+  {
+    "division": "Platinum",
+    "champion": "かんだ食堂",
+    "runnerUp": "Flying Penguins",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "かんだ食堂"
+    }
+  },
+  {
+    "division": "Gold",
+    "champion": "若い衆",
+    "runnerUp": "SONIDO",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "SONIDO"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "DROP HAMMER"
+    }
+  },
+  {
+    "division": "Silver",
+    "champion": "SYGMA",
+    "runnerUp": "BLACK JACK",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins Silver"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "SYGMA"
+    }
+  },
+  {
+    "division": "Bronze",
+    "champion": "STIGA Bronze",
+    "runnerUp": "名無しBoyzⅡ",
+    "topGun": {
+      "name": "谷平陽祐",
+      "team": "STIGA Bronze"
+    },
+    "wall": {
+      "name": "山崎伸",
+      "team": "WHITE WOLF"
+    }
+  },
+  {
+    "division": "Brass",
+    "champion": "Team Apples",
+    "runnerUp": "サイコ",
+    "topGun": {
+      "name": "勅使河原小梅",
+      "team": "日本体育大学 女子"
+    },
+    "wall": {
+      "name": "酒寄典弘",
+      "team": "EarlyBird"
+    }
+  },
+  {
+    "division": "Copper",
+    "champion": "MASSIVE ATTACK",
+    "runnerUp": "伊王島観光協会",
+    "topGun": {
+      "name": "保科伸一",
+      "team": "MASSIVE ATTACK"
+    },
+    "wall": {
+      "name": "荒木伸夫, Mylon",
+      "team": "伊王島観光協会"
+    }
+  },
+  {
+    "division": "Iron",
+    "champion": "Over50’s",
+    "runnerUp": "サイコスクエア",
+    "topGun": {
+      "name": "牧野統",
+      "team": "Over50’s"
+    },
+    "wall": {
+      "name": "加藤茂美",
+      "team": "Over50’s"
+    }
+  },
+  {
+    "division": "Women Gold",
+    "champion": "Ginza Genkai Peanuts",
+    "runnerUp": "Team SONIC",
+    "topGun": {
+      "name": "勅使河原小梅",
+      "team": "日体大DREAMS WG"
+    },
+    "wall": {
+      "name": "伊藤陽",
+      "team": "Ginza Genkai Peanuts"
+    }
+  },
+  {
+    "division": "Women Bronze",
+    "champion": "ぽろたん",
+    "runnerUp": "Individuals WB",
+    "topGun": {
+      "name": "森香菜子",
+      "team": "ぽろたん"
+    },
+    "wall": {
+      "name": "是澤咲良",
+      "team": "Individuals WB"
+    }
+  },
+  {
+    "division": "35&Over",
+    "champion": "Flying Penguins 35",
+    "runnerUp": "武田園35+",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins 35"
+    },
+    "wall": {
+      "name": "立元長",
+      "team": "Flying Penguins 35"
+    }
+  }
+]
