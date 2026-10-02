@@ -1,0 +1,34 @@
+name: Refresh KV archive
+
+# 公式サイトが不調で Vercel から取得できない日でも、GitHub のランナーから取得して
+# KV の保存データを最新に保つ（サイトは取得失敗時に保存データで表示する）。
+on:
+  schedule:
+    - cron: "30 20 * * *" # 毎日 05:30 JST
+    - cron: "30 8 * * *"  # 毎日 17:30 JST
+  workflow_dispatch: {}
+
+concurrency:
+  group: refresh-kv
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch official site and refresh KV
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+        run: npx --yes tsx scripts/refresh-kv.mts
