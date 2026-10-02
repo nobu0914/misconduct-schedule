@@ -62,6 +62,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
   const [selectedSeason, setSelectedSeason] = useState<number | undefined>(initial.season);
   const [teamA, setTeamA] = useState(initial.a ?? "");
   const [teamB, setTeamB] = useState(initial.b ?? "");
+  const [copied, setCopied] = useState(false);
 
   // 今シーズン（公式ページ）と保存済みの過去シーズンをまとめて読む
   useEffect(() => {
@@ -137,6 +138,32 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
     // onChange は親の setState（安定）なので依存に入れない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSeason, a?.team, b?.team]);
+
+  /** 開いた人にも同じ比較が出るリンク（シーズン・ディビジョン・2チームを含む）を共有する */
+  async function handleShare() {
+    if (!a || !b) return;
+    const params = new URLSearchParams({ mode: "matchup", div: division });
+    if (season !== undefined) params.set("season", String(season));
+    params.set("a", a.team);
+    params.set("b", b.team);
+    const url = `${window.location.origin}/player-ranking?${params}`;
+    const title = `チーム相性 ${a.team} vs ${b.team}（${season !== undefined ? seasonOrdinal(season) : ""} ${division}）`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url });
+      } catch {
+        // 共有シートを閉じただけ
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("このリンクをコピーしてください", url);
+    }
+  }
 
   if (loading) {
     return (
@@ -228,6 +255,15 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
               <span className={`${B_COLOR.text} font-bold`}>{b.team} {adv.b}</span>
               {adv.even > 0 && <span className="text-gray-500">{" ・ "}互角 {adv.even}</span>}
             </p>
+            <button
+              onClick={handleShare}
+              data-track="チーム相性を共有"
+              className={`mt-3 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-300 border border-gray-700 hover:text-white"
+              }`}
+            >
+              {copied ? "リンクをコピーしました" : "この比較を共有"}
+            </button>
           </div>
 
           {/* 数値の比較 */}
