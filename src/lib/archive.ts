@@ -26,7 +26,9 @@ function indexKey(group: string): string {
 export async function listArchived(group: string): Promise<Set<string>> {
   try {
     const labels = await kv.smembers<string[]>(indexKey(group));
-    return new Set(labels ?? []);
+    // Upstash は値をJSONとして解釈するため、数字だけのラベル（rental の "202610" など）が
+    // 数値で返ってくる。文字列に揃えないと has("202610") が一致せず補完が効かない。
+    return new Set((labels ?? []).map(String));
   } catch {
     return new Set();
   }
