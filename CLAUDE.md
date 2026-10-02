@@ -278,6 +278,11 @@ npx tsx tests/analytics.mts     # アクセス解析の入力検証・来訪日�
   （`.github/workflows/refresh-kv.yml`、毎日 05:30 / 17:30 JST）で実行する。KV の認証情報は GitHub の
   Secrets（`KV_REST_API_URL` / `KV_REST_API_TOKEN`）。手元では `npx tsx scripts/refresh-kv.mts --env <.env>`、
   書き込まずに確認するなら `--dry-run`。
+- **GitHub Actions からも公式に届かなかった**（10/3 手動実行で全件 `UND_ERR_CONNECT_TIMEOUT`。同時刻に Vercel も全滅、
+  自宅回線の Mac からは 0.4 秒で 200）。公式はクラウドの IP を通さないと見て、**定期更新はオーナーの Mac で動かす**:
+  launchd `~/Library/LaunchAgents/com.rinnavi.refresh-kv.plist`（毎日 05:30 / 17:30、スリープ中の回は復帰時に実行）→
+  `~/.rinnavi-refresh/refresh.sh`（専用 clone `~/.rinnavi-refresh/repo` を main に合わせてから実行、ログは
+  `~/.rinnavi-refresh/refresh.log`）。GitHub の workflow は無効化（`gh workflow enable refresh-kv.yml` で戻せる）。
 
 ### 2026-09-28
 - 本番が `main` ではなく `claude/latest-data-fetch-check-ie1hqs` からデプロイされていたため、`main` に取り込んで揃えた

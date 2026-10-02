@@ -9,7 +9,8 @@
 //   npx tsx scripts/refresh-kv.mts --env <.envファイル>   # KV の認証情報をファイルから読む
 //   npx tsx scripts/refresh-kv.mts --dry-run              # 取得だけして KV には書かない
 //
-// GitHub Actions（.github/workflows/refresh-kv.yml）から毎日実行している。
+// 公式はクラウド（Vercel・GitHub Actions）からの接続を通さないため、オーナーの Mac の launchd から
+// 1日2回実行している（~/.rinnavi-refresh/refresh.sh）。.github/workflows/refresh-kv.yml は無効化してある。
 
 import { readFileSync } from "node:fs";
 
