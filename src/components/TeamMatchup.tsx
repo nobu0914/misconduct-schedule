@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseSeasonNumber, seasonOrdinal } from "@/lib/season";
 import { teamKey } from "@/lib/teamName";
+import { playoffResult } from "@/lib/seasonAwards";
 import {
   buildDivisionStats,
   countAdvantages,
@@ -214,8 +215,8 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
 
           {/* 概要 */}
           <div className="grid grid-cols-2 gap-3">
-            <TeamSummary team={a} color={A_COLOR} />
-            <TeamSummary team={b} color={B_COLOR} />
+            <TeamSummary team={a} color={A_COLOR} result={playoffResult(season, division, a.team)} />
+            <TeamSummary team={b} color={B_COLOR} result={playoffResult(season, division, b.team)} />
           </div>
 
           {/* 八角形 */}
@@ -317,10 +318,27 @@ function TeamSelect({
   );
 }
 
-function TeamSummary({ team, color }: { team: TeamSeasonStats; color: typeof A_COLOR }) {
+function TeamSummary({
+  team,
+  color,
+  result,
+}: {
+  team: TeamSeasonStats;
+  color: typeof A_COLOR;
+  /** プレイオフの公式結果（順位はレギュラーシーズンなので別に出す） */
+  result?: "champion" | "runnerUp";
+}) {
   return (
     <div className={`bg-gray-900 border border-gray-800 rounded-xl p-3 border-t-4 ${color.border}`}>
-      <div className={`text-sm font-bold truncate ${color.text}`}>{team.team}</div>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className={`text-sm font-bold truncate ${color.text}`}>{team.team}</span>
+        {result === "champion" && (
+          <span className="flex-shrink-0 bg-yellow-600/30 text-yellow-300 text-[10px] px-1.5 py-0.5 rounded font-medium">優勝</span>
+        )}
+        {result === "runnerUp" && (
+          <span className="flex-shrink-0 bg-gray-600/40 text-gray-300 text-[10px] px-1.5 py-0.5 rounded font-medium">準優勝</span>
+        )}
+      </div>
       <div className="text-2xl font-bold text-white mt-1">
         {team.rank ? `${team.rank}位` : "—"}
         {team.totalTeams ? <span className="text-xs text-gray-500 font-normal"> / {team.totalTeams}チーム</span> : null}

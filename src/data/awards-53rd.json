@@ -1,0 +1,122 @@
+[
+  {
+    "division": "Platinum",
+    "champion": "TEAM I",
+    "runnerUp": "TEAM K",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins"
+    },
+    "wall": {
+      "name": "池田豊",
+      "team": "TEAM I"
+    }
+  },
+  {
+    "division": "Gold",
+    "champion": "若い衆",
+    "runnerUp": "DROP HAMMER",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "SONIDO"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "DROP HAMMER"
+    }
+  },
+  {
+    "division": "Silver",
+    "champion": "Flying Penguins Silver",
+    "runnerUp": "SYGMA",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins Silver"
+    },
+    "wall": {
+      "name": "安達拳汰",
+      "team": "SYGMA"
+    }
+  },
+  {
+    "division": "Bronze",
+    "champion": "STIGA Bronze",
+    "runnerUp": "サイコペッカーズ",
+    "topGun": {
+      "name": "武田雅志",
+      "team": "フライングペンギンズM"
+    },
+    "wall": {
+      "name": "熊倉みなみ",
+      "team": "WSJ"
+    }
+  },
+  {
+    "division": "Brass",
+    "champion": "サイコ",
+    "runnerUp": "Early Bird",
+    "topGun": {
+      "name": "久保田一誠",
+      "team": "Team Apples"
+    },
+    "wall": {
+      "name": "池田浩輝",
+      "team": "Team Apples"
+    }
+  },
+  {
+    "division": "Copper",
+    "champion": "ブックレインズ",
+    "runnerUp": "MASSIVE ATTACK",
+    "topGun": {
+      "name": "関谷勇吹",
+      "team": "ブックレインズ"
+    },
+    "wall": {
+      "name": "中西俊貴",
+      "team": "ブックレインズ"
+    }
+  },
+  {
+    "division": "Iron",
+    "champion": "Over50’s",
+    "runnerUp": "風神雷神 Iron",
+    "topGun": {
+      "name": "小田浩一郎",
+      "team": "BigGate"
+    },
+    "wall": {
+      "name": "鈴木大輔",
+      "team": "ブルーフラグス"
+    }
+  },
+  {
+    "division": "Women Gold",
+    "champion": "日体大DREAMS WG",
+    "runnerUp": "Peanuts",
+    "topGun": {
+      "name": "勅使河原小梅",
+      "team": "日体大DREAMS WG"
+    },
+    "wall": {
+      "name": "並木理月",
+      "team": "Team SONIC"
+    }
+  },
+  {
+    "division": "Women Bronze"
+  },
+  {
+    "division": "35&Over",
+    "champion": "武田園",
+    "runnerUp": "Flying Penguins 35",
+    "topGun": {
+      "name": "髙山智宏",
+      "team": "Flying Penguins 35"
+    },
+    "wall": {
+      "name": "山崎伸",
+      "team": "STIGA 35"
+    }
+  }
+]

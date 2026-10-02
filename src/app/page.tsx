@@ -14,6 +14,7 @@ type TimelineItem =
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { findTeam } from "@/lib/teamName";
+import { playoffResult } from "@/lib/seasonAwards";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 
 const DIVISION_COLORS: Record<string, string> = {
@@ -449,16 +450,18 @@ function ScheduleContent() {
         {(() => {
           const p = findPrevSeason(name, selectedMatch?.division, prevSeasonNum);
           if (!p || prevSeasonNum === undefined) return null;
+          // 順位はレギュラーシーズン。優勝・準優勝はプレイオフの公式結果があるシーズンだけ出す
+          const result = playoffResult(prevSeasonNum, p.divisionLabel, p.team);
           return (
             <div className="pt-3 border-t border-gray-800">
               <p className="text-xs text-gray-500 mb-1.5 text-center">前シーズン（{seasonOrdinal(prevSeasonNum)}）</p>
               <div className="flex items-center justify-center gap-2">
                 <span className="text-base font-bold text-gray-300">{p.rank}位</span>
                 <span className="text-gray-600 text-xs">/ {p.totalTeams}チーム</span>
-                {p.rank === 1 && (
+                {result === "champion" && (
                   <span className="bg-yellow-600/30 text-yellow-300 text-xs px-1.5 py-0.5 rounded font-medium">優勝</span>
                 )}
-                {p.rank === 2 && (
+                {result === "runnerUp" && (
                   <span className="bg-gray-600/40 text-gray-300 text-xs px-1.5 py-0.5 rounded font-medium">準優勝</span>
                 )}
               </div>
@@ -571,7 +574,7 @@ function ScheduleContent() {
               <div className="flex items-center justify-center px-2 text-gray-600 text-xs font-bold self-stretch">vs</div>
               <TeamCompareCol name={selectedMatch.homeTeam} role="home" />
             </div>
-            <p className="text-xs text-gray-600 text-center px-4 py-2 border-t border-gray-800">※昨シーズンランクはレギュラーシーズン順位の場合があります。</p>
+            <p className="text-xs text-gray-600 text-center px-4 py-2 border-t border-gray-800">※前シーズンの順位はレギュラーシーズン。優勝・準優勝はプレイオフの公式結果です。</p>
           </div>
         </div>
       )}

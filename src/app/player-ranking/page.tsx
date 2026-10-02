@@ -10,6 +10,7 @@ import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
+import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -663,8 +664,27 @@ function PlayerRankingContent() {
             {!showingCurrent && pastDivisionStandings.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-800">
-                  {seasonOrdinal(selectedPastSeason!)} シーズン 最終順位
+                  {seasonOrdinal(selectedPastSeason!)} シーズン 最終順位（レギュラーシーズン）
                 </div>
+                {(() => {
+                  // 優勝はプレイオフで決まる。公式の最終結果があるシーズンだけ出す
+                  const aw = divisionAwards(selectedPastSeason, selectedDivision);
+                  if (!aw || (!aw.champion && !aw.runnerUp)) return null;
+                  const person = (p?: { name: string; team?: string }) => (p ? `${p.name}${p.team ? `（${p.team}）` : ""}` : "—");
+                  return (
+                    <div className="px-3 py-2.5 border-b border-gray-800 text-xs space-y-1">
+                      <div className="text-gray-500">プレイオフ・個人賞（公式の最終結果）</div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        <span><span className="text-yellow-300 font-medium">優勝</span> <span className="text-white">{aw.champion ?? "—"}</span></span>
+                        <span><span className="text-gray-300 font-medium">準優勝</span> <span className="text-white">{aw.runnerUp ?? "—"}</span></span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-400">
+                        <span>Top Gun Award {person(aw.topGun)}</span>
+                        <span>The Wall Award {person(aw.wall)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -682,7 +702,17 @@ function PlayerRankingContent() {
                       {pastDivisionStandings.map((s) => (
                         <tr key={`${s.divisionLabel}-${s.team}`} className="border-b border-gray-800 last:border-b-0">
                           <td className="py-2 px-2 text-center text-white font-semibold">{s.rank}</td>
-                          <td className="py-2 px-2 text-white">{s.team}</td>
+                          <td className="py-2 px-2 text-white">
+                            {s.team}
+                            {(() => {
+                              const r = playoffResult(selectedPastSeason, s.divisionLabel, s.team);
+                              if (r === "champion")
+                                return <span className="ml-1.5 bg-yellow-600/30 text-yellow-300 text-[10px] px-1.5 py-0.5 rounded font-medium">優勝</span>;
+                              if (r === "runnerUp")
+                                return <span className="ml-1.5 bg-gray-600/40 text-gray-300 text-[10px] px-1.5 py-0.5 rounded font-medium">準優勝</span>;
+                              return null;
+                            })()}
+                          </td>
                           <td className="py-2 px-2 text-center text-gray-300">{s.gp ?? "-"}</td>
                           <td className="py-2 px-1 text-center text-green-400">{s.wins ?? "-"}</td>
                           <td className="py-2 px-1 text-center text-red-400">{s.losses ?? "-"}</td>
