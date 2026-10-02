@@ -38,6 +38,12 @@ const NORMALIZED_ALIASES: Record<string, string> = Object.fromEntries(
   Object.entries(TEAM_ALIASES).map(([from, to]) => [normalizeName(from), normalizeName(to)])
 );
 
+/** 照合用のキー（正規化＋別名の解決）。同じチームなら表記が違っても同じ値になる */
+export function teamKey(name: string): string {
+  const key = normalizeName(name);
+  return NORMALIZED_ALIASES[key] ?? key;
+}
+
 /**
  * 一覧から同じチームを探す。ディビジョンを指定したら一致するものだけ
  * （別ディビジョンの同名チームを拾わない）。

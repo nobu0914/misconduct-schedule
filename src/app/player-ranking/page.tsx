@@ -9,6 +9,7 @@ import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
+import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -31,7 +32,7 @@ function getDivisionColor(division: string): string {
   return "bg-gray-500";
 }
 
-type Mode = "search" | "ranking" | "score";
+type Mode = "search" | "ranking" | "score" | "matchup";
 
 function PlayerRankingContent() {
   const router = useRouter();
@@ -65,7 +66,7 @@ function PlayerRankingContent() {
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
-    if (m === "search" || m === "ranking" || m === "score") return m;
+    if (m === "search" || m === "ranking" || m === "score" || m === "matchup") return m;
     // 後方互換: 旧URL（?q=...）はそのまま個人ランク検索を開く
     if (searchParams.get("q")) return "search";
     return "ranking";
@@ -82,6 +83,15 @@ function PlayerRankingContent() {
   const [selectedDivision, setSelectedDivision] = useState<string>(() => {
     const d = searchParams.get("div");
     return d && DIVISIONS.includes(d) ? d : "Platinum";
+  });
+  // チーム相性の選択（URLの season / a / b）。シーズンは相性タブ内で選ぶ
+  const [matchup, setMatchup] = useState<MatchupSelection>(() => {
+    const n = Number(searchParams.get("season"));
+    return {
+      season: Number.isInteger(n) && n > 0 ? n : undefined,
+      a: searchParams.get("a") ?? undefined,
+      b: searchParams.get("b") ?? undefined,
+    };
   });
 
   const currentSeasonNum = parseSeasonNumber(currentSeasonLabel);
@@ -202,11 +212,17 @@ function PlayerRankingContent() {
     } else {
       if (selectedDivision !== "Platinum") params.set("div", selectedDivision);
     }
-    // シーズンの選択は個人ランク・チームランキング・スコアで共通
-    if (selectedPastSeason !== undefined) params.set("season", String(selectedPastSeason));
+    if (mode === "matchup") {
+      if (matchup.season !== undefined) params.set("season", String(matchup.season));
+      if (matchup.a) params.set("a", matchup.a);
+      if (matchup.b) params.set("b", matchup.b);
+    } else if (selectedPastSeason !== undefined) {
+      // シーズンの選択は個人ランク・チームランキング・スコアで共通
+      params.set("season", String(selectedPastSeason));
+    }
     const qs = params.toString();
     router.replace(`/player-ranking${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [mode, query, selectedPastSeason, selectedDivision, router]);
+  }, [mode, query, selectedPastSeason, selectedDivision, matchup, router]);
 
   const currentResults = useMemo(() => {
     if (!query.trim()) return [];
@@ -332,22 +348,36 @@ function PlayerRankingContent() {
         <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-lg p-1 mb-4">
           {(
             [
-              { key: "ranking", label: "チームランキング" },
-              { key: "score", label: "スコア" },
-              { key: "search", label: "個人ランク" },
-            ] as { key: Mode; label: string }[]
+              // 4つ並ぶとスマホでは入りきらないので短い表記も持つ
+              { key: "ranking", label: "チームランキング", short: "チーム" },
+              { key: "score", label: "スコア", short: "スコア" },
+              { key: "search", label: "個人ランク", short: "個人" },
+              { key: "matchup", label: "チーム相性", short: "相性" },
+            ] as { key: Mode; label: string; short: string }[]
           ).map((t) => (
             <button
               key={t.key}
               onClick={() => setMode(t.key)}
-              className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                 mode === t.key ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              {t.label}
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.label}</span>
             </button>
           ))}
         </div>
+
+        {mode === "matchup" && (
+          <TeamMatchup
+            divisions={DIVISIONS}
+            division={selectedDivision}
+            onDivisionChange={setSelectedDivision}
+            divisionColor={getDivisionColor}
+            initial={matchup}
+            onChange={setMatchup}
+          />
+        )}
 
         {mode === "search" && (
           <>
