@@ -92,14 +92,35 @@ function parseTeamName(name: string): { base: string; bench: string | null } {
 // 取得元の状態から警告文を組み立てる（0件＝「試合なし」なのか「取れていない」のかを区別する）
 function describeSourceIssue(data: { matches?: Match[]; sources?: SourceStatus[] }): string | null {
   const sources = data.sources ?? [];
-  const failed = sources.filter((s) => s.status !== 200 && s.status !== 404);
+  // 終わったシーズンの保存データ（status 0・エラーなし）は想定どおりなので失敗に数えない。
+  // 失敗は「取得エラーがあったもの」と「200/404 以外で保存データでもないもの」。
+  const failed = sources.filter(
+    (s) => Boolean(s.error) || (s.status !== 200 && s.status !== 404 && !s.fromArchive)
+  );
   if ((data.matches ?? []).length === 0) {
     return "公式サイトから試合日程を取得できませんでした。時間をおいて再読み込みしてください。";
   }
   if (failed.length > 0) {
+    // 公式サイトの不調時は、普段なら404の未公開月まで失敗になり件数が膨らむ。
+    // 取れなかった分を保存データで補えているなら、その時点のデータを出していることだけ伝える。
+    const restoredAt = failed
+      .map((s) => s.fromArchive)
+      .filter((t): t is string => !!t)
+      .sort()
+      .pop();
+    if (restoredAt) {
+      return `公式サイトから取得できなかった分は、保存データ（${formatJst(restoredAt)}時点）で表示しています。`;
+    }
     return `一部の日程を取得できませんでした（${failed.length}件）。表示が最新でない可能性があります。`;
   }
   return null;
+}
+
+function formatJst(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${hh}:${mm}`;
 }
 
 function ScheduleContent() {

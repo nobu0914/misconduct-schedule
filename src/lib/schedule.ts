@@ -294,7 +294,12 @@ export async function fetchAndParseSchedule(
       source.error = `対戦カードらしき行が${unparsedGameRows}件あるが解釈できない（構造変更の可能性）`;
     }
   } catch (e) {
-    source.error = e instanceof Error ? e.message : String(e);
+    // "fetch failed" だけだと原因が分からないため、低レベルの cause.code も残す
+    // （ECONNRESET=接続リセット / UND_ERR_CONNECT_TIMEOUT・ETIMEDOUT=到達不可 など）
+    const base = e instanceof Error ? e.message : String(e);
+    const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
+    const causeCode = cause?.code ?? cause?.message;
+    source.error = causeCode ? `${base} (${causeCode})` : base;
     console.error(`Failed to fetch/parse ${url}:`, e);
   }
 
