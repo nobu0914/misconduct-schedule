@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261002-2351`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261002-2359`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -208,6 +208,7 @@ KVを先に見ると取り直したデータが反映されない）。52nd は 
 npx tsx tests/votes.mts         # 投票の検証・同時実行・旧データ移行（20項目）
 npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン判定・名前照合・Wayback復元（Shift-JISのダミーページ使用、84項目）
 npx tsx tests/matchup.mts       # チーム相性の集計（得失点・直接対決・8軸の相対値、19項目）
+npx tsx tests/season-awards.mts # シーズン最終結果（優勝・準優勝・個人賞）の解析と照合（13項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -219,6 +220,14 @@ npx tsx tests/matchup.mts       # チーム相性の集計（得失点・直接�
 - `/rental` ページ: 日付＋開始時刻でマッチングし「詳細」バッジ＋モーダル表示
 
 ## 作業記録
+
+### 2026-10-02（優勝表示）
+- 試合モーダルの「前シーズン 優勝/準優勝」が**レギュラーシーズンの1位・2位**から付けられていた。優勝はプレイオフで決まるため
+  53rd は9ディビジョン中5つで食い違っていた（Brass はレギュラー2位のサイコが優勝、Silver はレギュラー4位が優勝）。
+  公式の最終結果ページ（`result-after-53rd-season`、優勝・準優勝・Top Gun・The Wall）を
+  `scripts/fetch-season-results.mts 53` で `src/data/awards-53rd.json` に書き出し、`src/lib/seasonAwards.ts` の
+  `playoffResult()` で表示する（モーダル・チームランキングの過去シーズン・チーム相性）。結果ページが無いシーズン
+  （52nd 以前。URL は 53rd に転送される）は優勝表示を出さない。順位表の見出しは「（レギュラーシーズン）」と明記。
 
 ### 2026-10-02（チーム相性）
 - ランクに「チーム相性」タブ（`?mode=matchup&div=…&season=53&a=…&b=…`）。同ディビジョンの2チームを八角形で比較する。

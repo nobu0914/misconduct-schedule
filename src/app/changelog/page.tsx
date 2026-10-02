@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261002-2359",
+    date: "2026-10-02",
+    changes: [
+      "優勝・準優勝の表示を、レギュラーシーズンの順位ではなくプレイオフの公式結果にもとづくように修正（53rd）",
+      "チームランキングの過去シーズンに、優勝・準優勝と Top Gun Award / The Wall Award を表示",
+    ],
+  },
+  {
     version: "Ver.1-261002-2351",
     date: "2026-10-02",
     changes: [
