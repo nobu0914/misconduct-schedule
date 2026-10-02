@@ -78,6 +78,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     "/api/standings",
     "/api/scores",
     "/api/player-stats",
+    "/api/events",
   ];
   let warmed = false;
   const warmedCounts: Record<string, number> = {};
@@ -92,7 +93,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
         // 再生成後の件数を控えておく（0件ならどこかで壊れている）
         const body = await res.json().catch(() => null);
-        const items = body?.matches ?? body?.entries ?? body?.standings ?? body?.games ?? body?.players;
+        const items =
+          body?.matches ?? body?.entries ?? body?.standings ?? body?.games ?? body?.players ?? body?.items;
         warmedCounts[path] = Array.isArray(items) ? items.length : 0;
         // pending: 開幕直後で今シーズンのデータがまだ無い（想定内）
         if (warmedCounts[path] === 0 && !body?.pending) warnings.push(`${path} が0件`);

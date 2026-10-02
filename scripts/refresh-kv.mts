@@ -1,4 +1,4 @@
-// 公式サイトを取得し、KV の保存データ（スケジュール・レンタル・スコア・順位表・個人成績）を更新する。
+// 公式サイトを取得し、KV の保存データ（スケジュール・レンタル・スコア・順位表・個人成績・お知らせ）を更新する。
 //
 // 公式サイトが不調で Vercel から取得できない日（UND_ERR_CONNECT_TIMEOUT など）も、サイトは KV の
 // 保存データで表示を続ける。その保存データを、公式に届く環境（GitHub Actions・手元のPC）から
@@ -36,6 +36,7 @@ const { fetchSeasonStandings, buildStandingsSources } = await import("../src/lib
 const { parsePlayersHtml } = await import("../src/lib/playerStats");
 const { seasonOrdinal } = await import("../src/lib/season");
 const { saveSeasonTeams, saveSeasonPlayers, toSeasonTeamEntries } = await import("../src/lib/seasonSnapshot");
+const { fetchEvents } = await import("../src/lib/events");
 
 // noStore:true の経路で取得すると、取れたものがそのまま KV に保存される（cron と同じ）
 const noStore = !dryRun;
@@ -49,6 +50,9 @@ console.log(`rental:    ${rental.entries.length} 件（取得元 ${rental.source
 
 const scores = await fetchAllScores({ noStore });
 console.log(`scores:    ${scores.games.length} 試合（取得元 ${scores.sources.length}、失敗 ${failures(scores.sources)}）`);
+
+const events = await fetchEvents({ save: !dryRun });
+console.log(`events:    ${events.items.length} 件${events.fromArchive ? "（※公式に届かず保存データ）" : ""}`);
 
 // 個人成績は /api/player-stats と同じ取り方（順位表ページの中に載っている）
 async function fetchSeasonPlayers(season: number) {
