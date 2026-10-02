@@ -89,28 +89,36 @@ function parseTeamName(name: string): { base: string; bench: string | null } {
   return { base: name, bench: null };
 }
 
-// 取得元の状態から警告文を組み立てる（0件＝「試合なし」なのか「取れていない」のかを区別する）
-function describeSourceIssue(data: { matches?: Match[]; sources?: SourceStatus[] }): string | null {
-  const sources = data.sources ?? [];
-  // 終わったシーズンの保存データ（status 0・エラーなし）は想定どおりなので失敗に数えない。
-  // 失敗は「取得エラーがあったもの」と「200/404 以外で保存データでもないもの」。
-  const failed = sources.filter(
+type SourceData = { matches?: Match[]; sources?: SourceStatus[] };
+
+// 終わったシーズンの保存データ（status 0・エラーなし）は想定どおりなので失敗に数えない。
+// 失敗は「取得エラーがあったもの」と「200/404 以外で保存データでもないもの」。
+function failedSources(data: SourceData): SourceStatus[] {
+  return (data.sources ?? []).filter(
     (s) => Boolean(s.error) || (s.status !== 200 && s.status !== 404 && !s.fromArchive)
   );
-  if ((data.matches ?? []).length === 0) {
-    return "公式サイトから試合日程を取得できませんでした。時間をおいて再読み込みしてください。";
-  }
-  if (failed.length > 0) {
-    // 公式サイトの不調時は、普段なら404の未公開月まで失敗になり件数が膨らむ。
-    // 取れなかった分を保存データで補えているなら、その時点のデータを出していることだけ伝える。
-    const restoredAt = failed
+}
+
+/** 公式から取れなかった分を保存データで補ったとき、その保存時刻（新しいもの） */
+function restoredAt(data: SourceData): string | null {
+  return (
+    failedSources(data)
       .map((s) => s.fromArchive)
       .filter((t): t is string => !!t)
       .sort()
-      .pop();
-    if (restoredAt) {
-      return `公式サイトから取得できなかった分は、保存データ（${formatJst(restoredAt)}時点）で表示しています。`;
-    }
+      .pop() ?? null
+  );
+}
+
+// 取得元の状態から警告文を組み立てる（0件＝「試合なし」なのか「取れていない」のかを区別する）。
+// 公式サイトの不調で取れなくても、保存データ（前回取れた内容）で補えているなら警告は出さない
+// （普段なら404の未公開月まで失敗になり件数が膨らむ）。その場合は更新時刻の横に保存時点だけ添える。
+function describeSourceIssue(data: SourceData): string | null {
+  if ((data.matches ?? []).length === 0) {
+    return "公式サイトから試合日程を取得できませんでした。時間をおいて再読み込みしてください。";
+  }
+  const failed = failedSources(data);
+  if (failed.length > 0 && !restoredAt(data)) {
     return `一部の日程を取得できませんでした（${failed.length}件）。表示が最新でない可能性があります。`;
   }
   return null;
@@ -139,6 +147,7 @@ function ScheduleContent() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [sourceIssue, setSourceIssue] = useState<string | null>(null);
+  const [archivedAt, setArchivedAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [weatherMap, setWeatherMap] = useState<Record<string, DayForecast>>({});
@@ -241,6 +250,7 @@ function ScheduleContent() {
     setRentals(rentData.entries ?? []);
     setLastUpdated(schedData.lastUpdated ?? "");
     setSourceIssue(describeSourceIssue(schedData));
+    setArchivedAt(restoredAt(schedData));
     setStandings(stData.standings ?? []);
     setStandingsSeason(stData.season ?? "");
     setStandingsLoading(false);
@@ -271,6 +281,7 @@ function ScheduleContent() {
         setRentals(rentData.entries ?? []);
         setLastUpdated(schedData.lastUpdated ?? "");
         setSourceIssue(describeSourceIssue(schedData));
+        setArchivedAt(restoredAt(schedData));
         setStandings(stData.standings ?? []);
         setStandingsSeason(stData.season ?? "");
         setPastSeasons(buildPastSeasonsMap(prevData));
@@ -566,7 +577,12 @@ function ScheduleContent() {
       )}
       {lastUpdated && (
         <div className="max-w-5xl mx-auto px-4 pt-2 text-right">
-          <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
+          {archivedAt ? (
+            // 公式サイトに届かず、前回取れた内容で表示しているとき
+            <span className="text-xs text-gray-500">更新: {formatJst(archivedAt)}（保存データ）</span>
+          ) : (
+            <span className="text-xs text-gray-500">更新: {new Date(lastUpdated).toLocaleString("ja-JP")}</span>
+          )}
         </div>
       )}
 
