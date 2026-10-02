@@ -366,19 +366,28 @@ function TeamSummary({
 }) {
   return (
     <div className={`bg-gray-900 border border-gray-800 rounded-xl p-3 border-t-4 ${color.border}`}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className={`text-sm font-bold truncate ${color.text}`}>{team.team}</span>
-        {result === "champion" && (
-          <span className="flex-shrink-0 bg-yellow-600/30 text-yellow-300 text-[10px] px-1.5 py-0.5 rounded font-medium">優勝</span>
-        )}
-        {result === "runnerUp" && (
-          <span className="flex-shrink-0 bg-gray-600/40 text-gray-300 text-[10px] px-1.5 py-0.5 rounded font-medium">準優勝</span>
-        )}
-      </div>
-      <div className="text-2xl font-bold text-white mt-1">
-        {team.rank ? `${team.rank}位` : "—"}
-        {team.totalTeams ? <span className="text-xs text-gray-500 font-normal"> / {team.totalTeams}チーム</span> : null}
-      </div>
+      <div className={`text-sm font-bold truncate ${color.text}`}>{team.team}</div>
+      {/* 最終結果（プレイオフ）があればそれを大きく出し、レギュラーシーズンの順位は添える */}
+      {result ? (
+        <>
+          <div className="text-[10px] text-gray-500 mt-1">プレイオフ</div>
+          <div className={`text-2xl font-bold ${result === "champion" ? "text-yellow-300" : "text-gray-200"}`}>
+            {result === "champion" ? "🏆 優勝" : "準優勝"}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1 whitespace-nowrap">
+            レギュラー {team.rank ? `${team.rank}位` : "—"}
+            {team.totalTeams ? ` / ${team.totalTeams}チーム` : ""}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="text-[10px] text-gray-500 mt-1">レギュラーシーズン</div>
+          <div className="text-2xl font-bold text-white">
+            {team.rank ? `${team.rank}位` : "—"}
+            {team.totalTeams ? <span className="text-xs text-gray-500 font-normal"> / {team.totalTeams}チーム</span> : null}
+          </div>
+        </>
+      )}
       <div className="text-xs text-gray-400 mt-1">
         {team.wins}勝 {team.losses}敗 {team.ties}分 ・ {team.points}pt
       </div>
