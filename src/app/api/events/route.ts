@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { loadArchive, saveArchive } from "@/lib/archive";
 
 export interface ProgramEntry {
   dateTime: string;   // "4月4日(土) 9:00-11:00"
@@ -22,6 +23,20 @@ interface EventsData {
   items: EventItem[];
   lastUpdated: string;
   hasNew: boolean;
+  /** 公式サイトから取れず保存データで返したとき、その保存時刻 */
+  fromArchive?: string;
+}
+
+// 公式サイトに届かない日（ビルド時の事前生成を含む）は、前回取れたお知らせを KV から返す
+const ARCHIVE_GROUP = "events";
+const ARCHIVE_LABEL = "news";
+
+const NEW_WITHIN_DAYS = 7;
+
+function isRecent(date: string, now: Date): boolean {
+  const [y, m, d] = date.split("/").map(Number);
+  const diffDays = (now.getTime() - new Date(y, m - 1, d).getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays <= NEW_WITHIN_DAYS;
 }
 
 // 他の取得系APIと同じく1日キャッシュ。内部 fetch の revalidate と同じ値にする
@@ -32,12 +47,20 @@ const MONTH_MAP: Record<string, number> = {
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
 };
 
-async function fetchPage(url: string): Promise<EventItem[]> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    next: { revalidate: 86400 },
-  });
-  if (!res.ok) return [];
+/** 取得できなかった（接続エラー・HTTPエラー）ときは null */
+async function fetchPage(url: string): Promise<EventItem[] | null> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(15000),
+      next: { revalidate: 86400 },
+    });
+  } catch (e) {
+    console.error(`Failed to fetch ${url}:`, e);
+    return null;
+  }
+  if (!res.ok) return null;
 
   const text = await res.text();
   const $ = cheerio.load(text);
@@ -57,9 +80,7 @@ async function fetchPage(url: string): Promise<EventItem[]> {
     const month = MONTH_MAP[monthStr] ?? MONTH_MAP[monthStr.charAt(0).toUpperCase() + monthStr.slice(1).toLowerCase()];
     if (!month) return;
 
-    const postDate = new Date(year, month - 1, day);
-    const diffDays = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60 * 24);
-    const isNew = diffDays <= 7;
+    const isNew = isRecent(`${year}/${month}/${day}`, now);
 
     const titleEl = $(li).find(".post_title a");
     const title = titleEl.text().trim();
@@ -164,7 +185,20 @@ export async function GET(): Promise<NextResponse<EventsData>> {
     fetchPage("https://misconduct.co.jp/news/page/2/"),
   ]);
 
-  allItems.push(...page1, ...page2);
+  // 1ページ目が取れないときは保存データで返す（空で上書きしない）
+  if (page1 === null) {
+    const now = new Date();
+    const snapshot = await loadArchive<EventItem>(ARCHIVE_GROUP, ARCHIVE_LABEL);
+    const items = (snapshot?.items ?? []).map((item) => ({ ...item, isNew: isRecent(item.date, now) }));
+    return NextResponse.json({
+      items,
+      lastUpdated: snapshot?.savedAt ?? now.toISOString(),
+      hasNew: items.some((item) => item.isNew),
+      ...(snapshot ? { fromArchive: snapshot.savedAt } : {}),
+    });
+  }
+
+  allItems.push(...page1, ...(page2 ?? []));
 
   // Deduplicate by URL
   const seen = new Set<string>();
@@ -183,6 +217,9 @@ export async function GET(): Promise<NextResponse<EventsData>> {
   );
 
   const hasNew = unique.some((item) => item.isNew);
+
+  // 取れた分を保存しておく（公式に届かない日の表示用。空なら上書きしない）
+  await saveArchive(ARCHIVE_GROUP, ARCHIVE_LABEL, unique);
 
   return NextResponse.json({
     items: unique,

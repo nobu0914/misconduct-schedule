@@ -237,6 +237,10 @@ npx tsx tests/data-sources.mts  # URL自動生成・パーサー・シーズン�
 - トップの警告が、終わったシーズンの保存データ（status 0・エラーなし）まで「取得できなかった日程」と数えていた
   （最初に見た「37件」は失敗30件＋53rd の保存分7件）。エラーがあったものだけを失敗に数え、取れなかった分を
   保存データで補えているときは「保存データ（M/D HH:MM時点）で表示しています」と出すようにした（`src/app/page.tsx`）。
+- **公式に届かないとデプロイ自体ができなかった**。9/13 に ISR 化した `/api/events` は取得失敗で例外を投げるため、
+  ビルド時の事前生成で落ちてビルドごと失敗する（`main` への push が Error）。取得できたら KV に保存し、
+  1ページ目が取れないときは保存データを返すようにした。手元で再現するときは `.next` を消してから、公式への
+  fetch だけ失敗させる `--require` 付きでビルドする（`.next/cache` が残っていると取得済みページが返って再現しない）。
 - 公式に届く環境から KV の保存データを更新する `scripts/refresh-kv.mts` を追加し、GitHub Actions
   （`.github/workflows/refresh-kv.yml`、毎日 05:30 / 17:30 JST）で実行する。KV の認証情報は GitHub の
   Secrets（`KV_REST_API_URL` / `KV_REST_API_TOKEN`）。手元では `npx tsx scripts/refresh-kv.mts --env <.env>`、
