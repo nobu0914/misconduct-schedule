@@ -1,11 +1,10 @@
+import { sendAnalytics } from "./analyticsClient";
+
 const timers: Record<string, ReturnType<typeof setTimeout>> = {};
 
+/** 集計から除外した端末では送らない（sendAnalytics で判定） */
 export function trackEvent(event: string, value: string) {
-  fetch("/api/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, value }),
-  }).catch(() => {});
+  sendAnalytics({ event, value });
 }
 
 /** デバウンス付き（検索ワード用。入力が止まって1秒後に送信） */

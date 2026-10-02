@@ -65,5 +65,67 @@ export async function GET(req: NextRequest) {
   });
   await Promise.all(eventPromises);
 
-  return NextResponse.json({ days, events });
+  return NextResponse.json({ days, events, visitors: await visitorStats(dateStrs) });
+}
+
+/** 日ごとのハッシュを期間分足し合わせる */
+async function sumHashes(prefix: string, dates: string[]): Promise<Record<string, number>> {
+  const all = await Promise.all(dates.map((ds) => kv.hgetall<Record<string, number>>(`${prefix}:${ds}`)));
+  const merged: Record<string, number> = {};
+  for (const h of all) {
+    if (!h) continue;
+    for (const [k, v] of Object.entries(h)) merged[k] = (merged[k] ?? 0) + Number(v);
+  }
+  return merged;
+}
+
+/** 訪問者・リピート・端末・流入元・時間帯・滞在時間（/api/track で記録したもの） */
+async function visitorStats(dateStrs: string[]) {
+  const last7 = dateStrs.slice(0, 7);
+  const last14 = dateStrs.slice(0, 14);
+  const last30 = dateStrs.slice(0, 30);
+  // HyperLogLog は複数キーを渡すと「期間内の重複なしの人数」になる
+  const unique = (prefix: string, dates: string[]) => {
+    const [first, ...rest] = dates.map((ds) => `${prefix}:${ds}`);
+    return kv.pfcount(first, ...rest);
+  };
+
+  const [uv7, ret7, uv30, ret30, sessionCounts, daily, devices, browsers, referrers, hours, dwell, visitHistogram, since] =
+    await Promise.all([
+      unique("uv", last7),
+      unique("uvret", last7),
+      unique("uv", last30),
+      unique("uvret", last30),
+      kv.mget<(number | null)[]>(...last14.map((ds) => `ss:${ds}`)),
+      Promise.all(
+        last14.map(async (ds) => ({
+          date: ds,
+          visitors: await kv.pfcount(`uv:${ds}`),
+          returning: await kv.pfcount(`uvret:${ds}`),
+        }))
+      ),
+      sumHashes("dev", last7),
+      sumHashes("br", last7),
+      sumHashes("ref", last7),
+      sumHashes("hr", last7),
+      sumHashes("dw", last7),
+      kv.hgetall<Record<string, number>>("vhist"),
+      kv.get<string>("analytics:since"),
+    ]);
+
+  return {
+    since: since ?? null,
+    uv7,
+    returning7: ret7,
+    uv30,
+    returning30: ret30,
+    sessions7: sessionCounts.slice(0, 7).reduce<number>((s, v) => s + (Number(v) || 0), 0),
+    daily: daily.map((d, i) => ({ ...d, sessions: Number(sessionCounts[i]) || 0 })),
+    devices,
+    browsers,
+    referrers,
+    hours,
+    dwellSeconds: dwell,
+    visitHistogram: visitHistogram ?? {},
+  };
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { isTrackingExcluded, setTrackingExcluded } from "@/lib/analyticsClient";
+import { VISIT_BUCKETS } from "@/lib/analyticsConstants";
 
 const PAGE_LABELS: Record<string, string> = {
   "/": "ゲーム情報",
@@ -128,7 +130,225 @@ const EVENT_LABELS: Record<string, string> = {
   search: "ゲーム情報 検索ワード",
   card: "カードタップ",
   "rank-search": "ランク検索ワード",
+  click: "タップされたボタン・リンク（ページ｜文言）",
 };
+
+interface VisitorStats {
+  since: string | null;
+  uv7: number;
+  returning7: number;
+  uv30: number;
+  returning30: number;
+  sessions7: number;
+  daily: { date: string; visitors: number; returning: number; sessions: number }[];
+  devices: Record<string, number>;
+  browsers: Record<string, number>;
+  referrers: Record<string, number>;
+  hours: Record<string, number>;
+  dwellSeconds: Record<string, number>;
+  visitHistogram: Record<string, number>;
+}
+
+const DEVICE_GROUP: Record<string, string> = {
+  iPhone: "スマホ", Android: "スマホ",
+  iPad: "タブレット", "Androidタブレット": "タブレット",
+  Windows: "PC", Mac: "PC",
+};
+
+function formatDuration(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return "—";
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m > 0 ? `${m}分${s}秒` : `${s}秒`;
+}
+
+function percent(n: number, total: number): string {
+  return total > 0 ? `${Math.round((n / total) * 100)}%` : "—";
+}
+
+/** 項目ごとの横棒（多い順） */
+function BarList({ items, emptyText = "データなし" }: { items: [string, number][]; emptyText?: string }) {
+  const rows = items.filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+  const total = rows.reduce((s, [, v]) => s + v, 0);
+  const max = Math.max(...rows.map(([, v]) => v), 1);
+  if (rows.length === 0) return <p className="text-sm text-gray-600">{emptyText}</p>;
+  return (
+    <div className="space-y-1.5">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-center gap-2 text-xs">
+          <span className="w-28 flex-shrink-0 text-gray-300 truncate">{label}</span>
+          <div className="flex-1 bg-gray-800 rounded-full h-3 overflow-hidden">
+            <div className="bg-blue-500 h-3 rounded-full" style={{ width: `${(value / max) * 100}%` }} />
+          </div>
+          <span className="w-16 flex-shrink-0 text-right text-white">
+            {value} <span className="text-gray-500">{percent(value, total)}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** この端末のアクセスを集計から除外するスイッチ（管理者自身のアクセスを数えないため） */
+function TrackingToggle() {
+  const [excluded, setExcluded] = useState<boolean | null>(null);
+  useEffect(() => setExcluded(isTrackingExcluded()), []);
+  if (excluded === null) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+      <div className="text-sm">
+        <div className="text-white">この端末のアクセス</div>
+        <div className={`text-xs mt-0.5 ${excluded ? "text-green-400" : "text-yellow-400"}`}>
+          {excluded ? "集計から除外中（数えません）" : "集計しています"}
+        </div>
+      </div>
+      <button
+        onClick={() => {
+          setTrackingExcluded(!excluded);
+          setExcluded(!excluded);
+        }}
+        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 border border-gray-700 text-gray-200 hover:text-white"
+      >
+        {excluded ? "集計に含める" : "集計から除外する"}
+      </button>
+    </div>
+  );
+}
+
+/** 直近7日のうち、訪問者の計測を始めた日以降の PV（1訪問あたりPV・平均滞在の分母） */
+function pvSinceTracking(days: DayData[], todayStr: string, since: string | null) {
+  const byPage: Record<string, number> = {};
+  let total = 0;
+  if (!since) return { total, byPage };
+  for (const d of days) {
+    const diff = (new Date(todayStr).getTime() - new Date(d.date).getTime()) / 86400000;
+    if (diff < 0 || diff >= 7 || d.date < since) continue;
+    total += d.total;
+    for (const [p, c] of Object.entries(d.pages)) byPage[p] = (byPage[p] ?? 0) + c;
+  }
+  return { total, byPage };
+}
+
+function VisitorsSection({ v, days, todayStr }: { v: VisitorStats; days: DayData[]; todayStr: string }) {
+  const pv = pvSinceTracking(days, todayStr, v.since);
+  const dwellTotal = Object.values(v.dwellSeconds).reduce((s, x) => s + x, 0);
+  const pvByDate = Object.fromEntries(days.map((d) => [d.date, d.total]));
+  const devices = Object.entries(v.devices) as [string, number][];
+  const deviceGroups: Record<string, number> = {};
+  for (const [d, n] of devices) deviceGroups[DEVICE_GROUP[d] ?? "その他"] = (deviceGroups[DEVICE_GROUP[d] ?? "その他"] ?? 0) + n;
+  const maxHour = Math.max(...Array.from({ length: 24 }, (_, h) => v.hours[String(h)] ?? 0), 1);
+
+  if (!v.since) {
+    return (
+      <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-sm text-gray-500">
+        訪問者・端末・滞在時間などは、次のアクセスから計測されます。
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-gray-300">
+          訪問者（過去7日）<span className="text-xs text-gray-500 font-normal ml-2">{v.since.slice(5).replace("-", "/")} から計測</span>
+        </h2>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "訪問者", value: String(v.uv7), sub: `30日 ${v.uv30}人` },
+            { label: "リピーター率", value: percent(v.returning7, v.uv7), sub: `${v.returning7}人` },
+            { label: "訪問回数", value: String(v.sessions7), sub: "30分空いたら別の訪問" },
+            { label: "1訪問あたりPV", value: v.sessions7 > 0 ? (pv.total / v.sessions7).toFixed(1) : "—", sub: "ページ数" },
+            { label: "平均滞在", value: formatDuration(pv.total > 0 ? dwellTotal / pv.total : 0), sub: "1ページあたり" },
+            { label: "リピーター率（30日）", value: percent(v.returning30, v.uv30), sub: `${v.returning30}人` },
+          ].map(({ label, value, sub }) => (
+            <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-white">{value}</div>
+              <div className="text-xs text-gray-400 mt-1">{label}</div>
+              <div className="text-[10px] text-gray-600 mt-0.5">{sub}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-gray-300 mb-3">日別の訪問者（直近14日）</h2>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left font-normal pb-1">日付</th>
+              <th className="text-right font-normal pb-1">訪問者</th>
+              <th className="text-right font-normal pb-1">うちリピーター</th>
+              <th className="text-right font-normal pb-1">訪問回数</th>
+              <th className="text-right font-normal pb-1">PV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.daily
+              .filter((d) => d.date >= (v.since ?? ""))
+              .map((d) => (
+                <tr key={d.date} className="border-t border-gray-800">
+                  <td className="py-1 text-gray-400">{d.date.slice(5).replace("-", "/")}</td>
+                  <td className="py-1 text-right text-white">{d.visitors}</td>
+                  <td className="py-1 text-right text-gray-300">{d.returning}</td>
+                  <td className="py-1 text-right text-gray-300">{d.sessions}</td>
+                  <td className="py-1 text-right text-gray-300">{pvByDate[d.date] ?? 0}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-300 mb-2">端末（過去7日・訪問者数）</h2>
+          <div className="flex gap-4 text-xs text-gray-400 mb-2">
+            {["スマホ", "タブレット", "PC", "その他"].map((g) =>
+              deviceGroups[g] ? (
+                <span key={g}>
+                  {g} <span className="text-white">{percent(deviceGroups[g], devices.reduce((s, [, n]) => s + n, 0))}</span>
+                </span>
+              ) : null
+            )}
+          </div>
+          <BarList items={devices} />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-300 mb-2">ブラウザ（過去7日・訪問者数）</h2>
+          <BarList items={Object.entries(v.browsers)} />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-300 mb-2">流入元（過去7日・訪問回数）</h2>
+          <BarList
+            items={Object.entries(v.referrers).map(([k, n]) => [k === "direct" ? "直接（ブックマーク・アプリ内など）" : k, n])}
+          />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-300 mb-2">来訪日数（これまでの累計・人数）</h2>
+          <BarList items={VISIT_BUCKETS.map((b) => [b, Number(v.visitHistogram[b] ?? 0)])} />
+        </div>
+      </section>
+
+      <section className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-gray-300 mb-3">時間帯（過去7日・PV・日本時間）</h2>
+        <div className="flex items-end gap-0.5 h-20">
+          {Array.from({ length: 24 }, (_, h) => {
+            const n = v.hours[String(h)] ?? 0;
+            return (
+              <div key={h} className="flex-1 flex flex-col items-center justify-end h-full" title={`${h}時台 ${n}PV`}>
+                <div className="w-full bg-blue-500 rounded-t" style={{ height: `${(n / maxHour) * 100}%`, minHeight: n > 0 ? 2 : 0 }} />
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+          {[0, 6, 12, 18, 23].map((h) => (
+            <span key={h}>{h}時</span>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
 
 // 日付データを月ごとにグループ化
 function groupByMonth(days: DayData[]): { month: string; days: DayData[]; total: number }[] {
@@ -149,6 +369,7 @@ function groupByMonth(days: DayData[]): { month: string; days: DayData[]; total:
 function AnalyticsDashboard({ passcode }: { passcode: string }) {
   const [data, setData] = useState<DayData[] | null>(null);
   const [events, setEvents] = useState<Record<string, Record<string, number>>>({});
+  const [visitors, setVisitors] = useState<VisitorStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
@@ -164,6 +385,7 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
       .then((d) => {
         setData(d.days);
         setEvents(d.events ?? {});
+        setVisitors(d.visitors ?? null);
         // 最新月を自動展開
         if (d.days?.length > 0) {
           setExpandedMonth(d.days[0].date.slice(0, 7));
@@ -231,6 +453,10 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
             </div>
           ))}
         </div>
+
+        <TrackingToggle />
+
+        {visitors && <VisitorsSection v={visitors} days={data} todayStr={todayStr} />}
 
         {/* 月別PV（アコーディオン） */}
         <section className="space-y-2">
@@ -302,9 +528,13 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
 
         {/* 過去7日のページ別合計 */}
         <section className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-gray-300 mb-3">過去7日のページ別PV</h2>
+          <h2 className="text-sm font-semibold text-gray-300 mb-3">過去7日のページ別PV・平均滞在</h2>
           <div className="space-y-2">
             {(() => {
+              // 平均滞在 = 滞在時間の合計 ÷ 計測を始めた日以降のPV
+              const pvTracked = pvSinceTracking(data, todayStr, visitors?.since ?? null).byPage;
+              const dwellOf = (path: string) =>
+                visitors && pvTracked[path] ? formatDuration((visitors.dwellSeconds[path] ?? 0) / pvTracked[path]) : "—";
               const totals: Record<string, number> = {};
               data.filter((d) => {
                 const diff = (new Date(todayStr).getTime() - new Date(d.date).getTime()) / 86400000;
@@ -319,7 +549,10 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
               return sorted.map(([path, count]) => (
                 <div key={path} className="flex items-center justify-between text-sm">
                   <span className="text-gray-300">{PAGE_LABELS[path] ?? path}</span>
-                  <span className="text-white font-semibold">{count}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">滞在 {dwellOf(path)}</span>
+                    <span className="text-white font-semibold w-8 text-right">{count}</span>
+                  </span>
                 </div>
               ));
             })()}
@@ -377,6 +610,8 @@ export default function AdminPage() {
         body: JSON.stringify({ passcode: code }),
       });
       if (res.ok) {
+        // 管理者の端末は自分のアクセスを数えない（管理画面のスイッチで戻せる）
+        setTrackingExcluded(true);
         sessionStorage.setItem("admin_passcode", code);
         setPasscode(code);
         setAuthed(true);
