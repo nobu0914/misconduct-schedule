@@ -226,7 +226,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
       if (res.ok && d.sheet) {
         setDraft(d.sheet);
         setPhotoOpen(false);
-        setMessage("読み取りました。写真と見比べて（上の「写真を表示」で開けます）、違うところを直してから保存してください。");
+        setMessage("読み取りました。写真と見比べて（上の「開く ▼」で写真を表示）、違うところを直してから一番下で保存してください。");
         setTimeout(() => document.getElementById("sheet-message")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       } else {
         setDraft((cur) => cur ?? emptySheet());
@@ -278,9 +278,19 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
     }
   }
 
+  // おまかせの候補は、入力欄が出たときに1回だけ入れる（消したあとに勝手に入れ直さない）
+  const suggested = useRef(false);
   useEffect(() => {
-    if (draft && !newCode) setNewCode(suggestContinueCode(browserRandom));
-  }, [draft, newCode]);
+    if (!draft) {
+      suggested.current = false;
+      return;
+    }
+    if (!suggested.current) {
+      suggested.current = true;
+      setNewCode((cur) => cur || suggestContinueCode(browserRandom));
+    }
+  }, [draft]);
+  const codeOk = normalizeContinueCode(newCode) !== null;
 
   const issues = draft ? checkSheet(draft).errors.length : 0;
   const blank = draft ? isBlankSheet(draft) : true;
@@ -291,11 +301,12 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
         <div>
           <h1 className="text-xl font-bold text-white">スコア表分析</h1>
           <p className="text-xs text-gray-500 mt-1">
-            スコア表の写真から、セーブ率・決定率・パワープレー得点などを分析します。会員登録は不要です。保存するとコンテニューコードが出るので、メモしておけばいつでも呼び出せます。
+            スコア表の写真から、セーブ率・決定率・得点の流れなどを分析します。会員登録は不要で、コンテニューコードでいつでも呼び出せます。
           </p>
         </div>
 
-        <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-lg p-1">
+        {/* 上の「チーム / スコア / … / 分析」と見分けやすいよう、こちらは下線のタブにする */}
+        <div className="flex border-b border-gray-800">
           {(
             [
               ["analysis", "分析を見る"],
@@ -305,7 +316,9 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === k ? "bg-blue-600 text-white" : "text-gray-400"}`}
+              className={`flex-1 py-2.5 text-sm font-medium border-b-2 -mb-px ${
+                tab === k ? "border-blue-500 text-white" : "border-transparent text-gray-500"
+              }`}
             >
               {label}
             </button>
@@ -318,7 +331,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
           <>
             <ContinueCodeInput
               onLoaded={(s) => {
-                // 呼び出したデータは一覧に入れる（分析は一覧からタップ）
+                // 呼び出したデータは一覧に入れる（分析は一覧の行をタップして開く）
                 remember(s);
                 setJustLoaded(s.continueCode ?? null);
                 setOpened(null);
@@ -329,31 +342,37 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 sheets={sheets}
                 highlight={justLoaded}
                 onDelete={deleteSheet}
-                onOpen={(s) => {
-                  setOpened(s);
+                openCode={opened?.continueCode ?? null}
+                onToggle={(s) => {
                   setJustLoaded(null);
-                  setTimeout(() => document.getElementById("sheet-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  const closing = opened?.continueCode === s.continueCode;
+                  setOpened(closing ? null : s);
+                  if (!closing) {
+                    setTimeout(() => document.getElementById(`row-${s.continueCode}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }
                 }}
+                renderDetail={(s) => (
+                  <div className="space-y-2 pb-2">
+                    <GameDetail sheet={s} />
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
+                      <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">
+                        閉じる
+                      </button>
+                      <button onClick={() => deleteSheet(s)} className="text-xs text-red-400 underline">
+                        このデータを削除
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm("この端末の一覧から外します（コンテニューコードでまた呼び出せます）。")) forget(s.continueCode);
+                        }}
+                        className="text-xs text-gray-500 underline"
+                      >
+                        この端末から外す
+                      </button>
+                    </div>
+                  </div>
+                )}
               />
-            )}
-            {opened && (
-              <div id="sheet-detail" className="space-y-2 scroll-mt-4">
-                <GameDetail sheet={opened} />
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">閉じる</button>
-                  <button onClick={() => deleteSheet(opened)} className="text-xs text-red-400 underline">
-                    このデータを削除
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm("この端末の一覧から外します（コンテニューコードでまた呼び出せます）。")) forget(opened.continueCode);
-                    }}
-                    className="text-xs text-gray-500 underline"
-                  >
-                    この端末から外す
-                  </button>
-                </div>
-              </div>
             )}
             {!loading && sheets.length === 0 && (
               <p className="text-sm text-gray-500 text-center py-10">
@@ -369,52 +388,74 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
 
         {tab === "add" && (
           <div className="space-y-4">
-            <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-3">
-              <p className="text-xs text-gray-400">
-                スコア表の写真を選ぶと、自動で読み取って下の欄に入れます（写真は保存しません）。手書きなので読み違いがあります。必ず写真と見比べてから登録してください。
-              </p>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
-              <div className="flex gap-2">
-                <button onClick={() => fileRef.current?.click()} className="flex-1 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200">
-                  {photo ? "写真を選び直す" : "写真を選ぶ"}
+            <Steps step={draft ? 3 : photo ? 2 : 1} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+
+            {/* ① 写真を選ぶ */}
+            {!photo && !draft && (
+              <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 text-center">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-base"
+                >
+                  📷 スコア表の写真を選ぶ
                 </button>
+                <p className="text-[11px] text-gray-500">画像のみ・10MBまで（写真は保存しません）</p>
+                <button onClick={() => setDraft(emptySheet())} className="text-xs text-gray-400 underline">
+                  写真を使わず手入力する
+                </button>
+              </section>
+            )}
+
+            {/* ② 読み取る */}
+            {photo && !draft && (
+              <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo} alt="スコア表の写真" className="w-full max-h-72 object-contain rounded-lg border border-gray-800 bg-black" />
                 <button
                   onClick={readPhoto}
-                  disabled={!photo || reading || quota?.remaining === 0}
+                  disabled={reading || quota?.remaining === 0}
                   data-track="スコア表 読み取り"
-                  className="flex-1 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40"
+                  className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-base disabled:opacity-40"
                 >
-                  {reading ? "読み取り中…" : quota?.remaining === 0 ? "今日の上限に達しました" : "写真から読み取る"}
+                  {reading ? "読み取り中…" : quota?.remaining === 0 ? "今日の上限に達しました" : "この写真を読み取る（約30秒）"}
                 </button>
-              </div>
-              <p className="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
-                <span>画像のみ・10MBまで</span>
-                {quota && quota.remaining !== null && (
-                  <span className={quota.remaining === 0 ? "text-amber-300" : quota.remaining <= 5 ? "text-amber-200" : ""}>
-                    今日のアップロード 残り <b className="text-gray-200">{quota.remaining}</b> / {quota.limit} 件（全員で共通・0時に戻ります）
-                  </span>
-                )}
-              </p>
-              {!draft && (
-                <button onClick={() => setDraft(emptySheet())} className="text-xs text-blue-400 underline">
-                  写真なしで手入力する
-                </button>
-              )}
-              {photo && (
-                <div className="space-y-2">
-                  {draft && (
-                    <button onClick={() => setPhotoOpen((v) => !v)} className="text-xs text-blue-400 underline">
-                      {photoOpen ? "写真を折りたたむ" : "写真を表示"}
-                    </button>
-                  )}
-                  {photoOpen && (
-                    // 入力中に見比べられるよう、写真は拡大できる大きさで表示する
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photo} alt="スコア表の写真" className="w-full rounded-lg border border-gray-800" />
-                  )}
+                <div className="flex items-center justify-between text-xs">
+                  <button onClick={() => fileRef.current?.click()} className="text-gray-400 underline">
+                    別の写真にする
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDraft(emptySheet());
+                      setPhotoOpen(false);
+                    }}
+                    className="text-gray-400 underline"
+                  >
+                    手入力にする
+                  </button>
                 </div>
-              )}
-            </section>
+              </section>
+            )}
+
+            {/* ③ 確認して保存：写真は折りたたみ */}
+            {draft && photo && (
+              <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+                <button onClick={() => setPhotoOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-gray-300">
+                  <span>📷 スコア表の写真（見比べ用）</span>
+                  <span className="text-xs text-blue-400">{photoOpen ? "閉じる ▲" : "開く ▼"}</span>
+                </button>
+                {photoOpen && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo} alt="スコア表の写真" className="w-full rounded-lg border border-gray-800" />
+                )}
+              </section>
+            )}
+
+            {quota && quota.remaining !== null && !draft && (
+              <p className={`text-[11px] text-center ${quota.remaining === 0 ? "text-amber-300" : quota.remaining <= 5 ? "text-amber-200" : "text-gray-500"}`}>
+                今日のアップロード 残り <b className="text-gray-200">{quota.remaining}</b> / {quota.limit} 件（全員で共通・0時に戻ります）
+              </p>
+            )}
 
             {message && (
               <p id="sheet-message" className="text-xs text-gray-300 bg-gray-800 rounded px-3 py-2 scroll-mt-4">
@@ -458,11 +499,17 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 </section>
                 <button
                   onClick={save}
-                  disabled={saving || reading || blank}
+                  disabled={saving || reading || blank || !codeOk}
                   data-track="スコア表 登録"
                   className={`w-full py-3 rounded-lg text-white font-medium disabled:opacity-40 ${issues ? "bg-amber-600" : "bg-green-600"}`}
                 >
-                  {saving ? "保存中…" : blank ? "チーム名や得点を入れると保存できます" : "コンテニューコードを設定して保存"}
+                  {saving
+                    ? "保存中…"
+                    : blank
+                      ? "チーム名や得点を入れると保存できます"
+                      : !codeOk
+                        ? "コンテニューコードを入れると保存できます"
+                        : "コンテニューコードを設定して保存"}
                 </button>
                 {issues > 0 && (
                   <p className="text-[11px] text-amber-300/80 -mt-2">
@@ -617,5 +664,31 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
         </div>
       </div>
     </div>
+  );
+}
+
+/** アップロードの手順（今どこか） */
+function Steps({ step }: { step: 1 | 2 | 3 }) {
+  const items = ["写真を選ぶ", "読み取る", "確認して保存"];
+  return (
+    <ol className="flex items-center gap-1 text-[11px]">
+      {items.map((label, i) => {
+        const n = i + 1;
+        const state = n < step ? "done" : n === step ? "now" : "next";
+        return (
+          <li key={label} className="flex-1 flex items-center gap-1 min-w-0">
+            <span
+              className={`flex-shrink-0 w-5 h-5 rounded-full grid place-items-center font-bold ${
+                state === "now" ? "bg-blue-600 text-white" : state === "done" ? "bg-gray-600 text-white" : "bg-gray-800 text-gray-500"
+              }`}
+            >
+              {state === "done" ? "✓" : n}
+            </span>
+            <span className={`truncate ${state === "now" ? "text-white font-medium" : "text-gray-500"}`}>{label}</span>
+            {n < 3 && <span className="flex-1 h-px bg-gray-800 min-w-2" />}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

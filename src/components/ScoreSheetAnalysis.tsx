@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GoalieDonuts, PlayerBars, ScoreFlow, TimeBandChart, VersusBars } from "@/components/ScoreSheetCharts";
 import {
   aggregate,
   analyzeGame,
@@ -22,21 +23,6 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
   const a = analyzeGame(sheet);
   const situations = goalSituations(sheet);
   const timeline = sheet.goals.map((g, i) => ({ g, tag: situations[i] })).sort((x, y) => goalOrder(x.g, y.g));
-  const rows: { label: string; v: (x: GameAnalysis) => string }[] = [
-    { label: "前半", v: (x) => String(x.byHalf.for[0]) },
-    { label: "後半", v: (x) => String(x.byHalf.for[1]) },
-    ...(a.visitor.byHalf.for[2] + a.home.byHalf.for[2] > 0 ? [{ label: "OT", v: (x: GameAnalysis) => String(x.byHalf.for[2]) }] : []),
-    { label: "シュート", v: (x) => (x.shots === null ? "—" : String(x.shots)) },
-    { label: "決定率", v: (x) => pctOf(x.shootingPct) },
-    {
-      label: "ゴーリー",
-      v: (x) => (x.goalie.savePct === null ? x.goalie.name || "—" : `${x.goalie.name || `#${x.goalie.no}`} ${pctOf(x.goalie.savePct)}`),
-    },
-    { label: "セーブ", v: (x) => (x.goalie.shotsFaced === null ? "—" : `${x.goalie.saves}/${x.goalie.shotsFaced}`) },
-    { label: "PP得点", v: (x) => String(x.powerPlayGoals) },
-    { label: "SH得点", v: (x) => String(x.shortHandedGoals) },
-    { label: "反則", v: (x) => `${x.penaltyMinutes}分` },
-  ];
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -73,17 +59,11 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
             .join("・")}
         </p>
       </div>
-      <table className="w-full text-sm">
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label} className="border-b border-gray-800/70">
-              <td className="py-1.5 px-4 text-blue-300 w-[38%]">{r.v(a.visitor)}</td>
-              <td className="py-1.5 text-center text-xs text-gray-500">{r.label}</td>
-              <td className="py-1.5 px-4 text-orange-300 text-right w-[38%]">{r.v(a.home)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="px-4 py-3 space-y-5 border-b border-gray-800">
+        <VersusBars a={a} />
+        <GoalieDonuts a={a} />
+        <ScoreFlow sheet={sheet} />
+      </div>
       <div className="px-4 py-3 space-y-1">
         <p className="text-xs text-gray-400 mb-1">得点経過</p>
         {timeline.map(({ g, tag }, i) => {
@@ -105,8 +85,8 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
       </div>
 
       <div className="px-4 pb-3 space-y-4">
-        <PlayerTable sheet={sheet} />
-        <TimeBands sheet={sheet} />
+        <PlayerBars sheet={sheet} />
+        <TimeBandChart sheet={sheet} />
         <Combos sheet={sheet} />
         <PenaltyList sheet={sheet} />
         <p className="text-[11px] text-gray-600">
@@ -122,99 +102,6 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
 }
 
 const sideColor = (side: "visitor" | "home") => (side === "visitor" ? "text-blue-300" : "text-orange-300");
-
-/** この試合の個人成績（得点の記録から数える） */
-function PlayerTable({ sheet }: { sheet: ScoreSheet }) {
-  const rows = (["visitor", "home"] as const).flatMap((side) => {
-    const team = sheet[side];
-    const m = new Map<string, { g: number; a: number }>();
-    const add = (no: string | undefined, k: "g" | "a") => {
-      if (!no) return;
-      const r = m.get(no) ?? { g: 0, a: 0 };
-      r[k] += 1;
-      m.set(no, r);
-    };
-    for (const g of sheet.goals.filter((x) => x.side === side)) {
-      add(g.scorer, "g");
-      add(g.assist1, "a");
-      add(g.assist2, "a");
-    }
-    return [...m.entries()]
-      .map(([no, r]) => ({ side, team: team.name, no, name: playerName(team, no), ...r, p: r.g + r.a }))
-      .sort((x, y) => y.p - x.p || y.g - x.g);
-  });
-  if (rows.length === 0) return null;
-  return (
-    <section>
-      <p className="text-xs text-gray-400 mb-1">個人（この試合）</p>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-gray-500 border-b border-gray-800">
-            <th className="py-1 text-left font-medium">選手</th>
-            <th className="py-1 font-medium">G</th>
-            <th className="py-1 font-medium">A</th>
-            <th className="py-1 font-medium">P</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={`${r.side}${r.no}`} className="border-b border-gray-800/60 last:border-0">
-              <td className={`py-1 ${sideColor(r.side)}`}>
-                #{r.no} {r.name}
-              </td>
-              <td className="py-1 text-center text-gray-300">{r.g || ""}</td>
-              <td className="py-1 text-center text-gray-300">{r.a || ""}</td>
-              <td className="py-1 text-center text-white font-semibold">{r.p}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-/** 時間帯ごとの得点（各ハーフを5分ずつ） */
-function TimeBands({ sheet }: { sheet: ScoreSheet }) {
-  const bands = [
-    [0, 5],
-    [5, 10],
-    [10, 15],
-    [15, 20],
-  ];
-  const count = (side: "visitor" | "home", half: number, from: number, to: number) =>
-    sheet.goals.filter((g) => {
-      const sec = parseClock(g.time);
-      return g.side === side && g.half === half && sec !== null && sec >= from * 60 && (to === 20 ? sec <= 20 * 60 : sec < to * 60);
-    }).length;
-  if (sheet.goals.length === 0) return null;
-  return (
-    <section>
-      <p className="text-xs text-gray-400 mb-1">時間帯ごとの得点</p>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-gray-500 border-b border-gray-800">
-            <th className="py-1 text-left font-medium">分</th>
-            <th className="py-1 font-medium text-blue-300">{sheet.visitor.name || "Visitor"}</th>
-            <th className="py-1 font-medium text-orange-300">{sheet.home.name || "Home"}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[1, 2].flatMap((half) =>
-            bands.map(([from, to]) => (
-              <tr key={`${half}-${from}`} className="border-b border-gray-800/60 last:border-0">
-                <td className="py-1 text-gray-500">
-                  {halfLabel(half)} {from}〜{to}
-                </td>
-                <td className="py-1 text-center text-gray-200">{count("visitor", half, from, to) || ""}</td>
-                <td className="py-1 text-center text-gray-200">{count("home", half, from, to) || ""}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </section>
-  );
-}
 
 /** この試合のアシスト → ゴール */
 function Combos({ sheet }: { sheet: ScoreSheet }) {
@@ -263,16 +150,20 @@ function PenaltyList({ sheet }: { sheet: ScoreSheet }) {
   );
 }
 
-/** 保存・呼び出した試合の一覧（全ディビジョン、新しく保存・呼び出した順）。タップでその試合の分析、「削除する」で各行に削除ボタン */
+/** 保存・呼び出した試合の一覧（新しく保存・呼び出した順）。行をタップするとその下に試合の分析が開く（アコーディオン） */
 export function SheetList({
   sheets,
-  onOpen,
+  onToggle,
   onDelete,
+  openCode,
+  renderDetail,
   highlight,
 }: {
   sheets: ScoreSheet[];
-  onOpen: (s: ScoreSheet) => void;
+  onToggle: (s: ScoreSheet) => void;
   onDelete: (s: ScoreSheet) => void;
+  openCode: string | null;
+  renderDetail: (s: ScoreSheet) => React.ReactNode;
   highlight?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
@@ -286,39 +177,52 @@ export function SheetList({
         </button>
       </div>
       <div className="divide-y divide-gray-800">
-        {sheets.map((s) => (
-          <div
-            key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`}
-            className={`flex items-center gap-2 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}
-          >
-            <button onClick={() => onOpen(s)} className="flex-1 min-w-0 text-left py-2 px-1">
-              <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                <span>{s.date || "日付なし"}</span>
-                <span>{s.division}</span>
-                {s.gameNo && <span>#{s.gameNo}</span>}
-                {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-                <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
+        {sheets.map((s) => {
+          const open = !!s.continueCode && s.continueCode === openCode;
+          return (
+            <div key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`} id={`row-${s.continueCode}`} className="scroll-mt-4">
+              <div className={`flex items-center gap-2 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}>
+                <button onClick={() => onToggle(s)} aria-expanded={open} className="flex-1 min-w-0 text-left py-2 px-1">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                    <span>{s.date || "日付なし"}</span>
+                    <span>{s.division}</span>
+                    {s.gameNo && <span>#{s.gameNo}</span>}
+                    {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
+                    <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm mt-0.5">
+                    <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
+                    <span className="text-white font-bold">
+                      {s.visitor.total} − {s.home.total}
+                    </span>
+                    <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
+                    {!editing && (
+                      <svg
+                        className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+                {editing && (
+                  <button
+                    onClick={() => onDelete(s)}
+                    className="flex-shrink-0 px-3 py-1.5 rounded bg-red-600/80 text-white text-xs font-medium"
+                    aria-label={`${s.continueCode ?? ""} を削除`}
+                  >
+                    削除
+                  </button>
+                )}
               </div>
-              <div className="flex items-center gap-2 text-sm mt-0.5">
-                <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
-                <span className="text-white font-bold">
-                  {s.visitor.total} − {s.home.total}
-                </span>
-                <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
-                {!editing && <span className="text-blue-400 text-xs">分析</span>}
-              </div>
-            </button>
-            {editing && (
-              <button
-                onClick={() => onDelete(s)}
-                className="flex-shrink-0 px-3 py-1.5 rounded bg-red-600/80 text-white text-xs font-medium"
-                aria-label={`${s.continueCode ?? ""} を削除`}
-              >
-                削除
-              </button>
-            )}
-          </div>
-        ))}
+              {open && !editing && renderDetail(s)}
+            </div>
+          );
+        })}
       </div>
       {editing && <p className="text-[11px] text-gray-500">削除したデータは元に戻せず、コンテニューコードでも呼び出せなくなります。</p>}
     </section>
