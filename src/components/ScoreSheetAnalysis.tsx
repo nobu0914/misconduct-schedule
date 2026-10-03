@@ -176,50 +176,59 @@ export function SheetList({
           {editing ? "完了" : "削除する"}
         </button>
       </div>
-      <div className="divide-y divide-gray-800">
+      <div className="space-y-3">
         {sheets.map((s) => {
           const open = !!s.continueCode && s.continueCode === openCode;
+          const vWin = s.visitor.total > s.home.total;
+          const hWin = s.home.total > s.visitor.total;
+          const team = (name: string, score: number, win: boolean, color: string) => (
+            <div className="flex items-center gap-2">
+              <span className={`w-1 self-stretch rounded ${color}`} />
+              <span className={`flex-1 truncate ${win ? "text-white font-bold" : "text-gray-300"}`}>{name || "?"}</span>
+              <span className={`text-lg tabular-nums ${win ? "text-white font-bold" : "text-gray-400"}`}>{score}</span>
+            </div>
+          );
           return (
-            <div key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`} id={`row-${s.continueCode}`} className="scroll-mt-4">
-              <div className={`flex items-center gap-2 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}>
-                <button onClick={() => onToggle(s)} aria-expanded={open} className="flex-1 min-w-0 text-left py-2 px-1">
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500">
+            <div
+              key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`}
+              id={`row-${s.continueCode}`}
+              className={`scroll-mt-4 rounded-xl border overflow-hidden ${
+                open ? "border-blue-600/70" : s.continueCode && s.continueCode === highlight ? "border-blue-500/60" : "border-gray-700"
+              } bg-gray-800/40`}
+            >
+              <div className="flex items-stretch">
+                <button onClick={() => onToggle(s)} aria-expanded={open} className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700/70 text-[11px] text-gray-400">
+                    <span className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-200 font-medium">{s.division || "—"}</span>
                     <span>{s.date || "日付なし"}</span>
-                    <span>{s.division}</span>
                     {s.gameNo && <span>#{s.gameNo}</span>}
-                    {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-                    <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
+                    {s.issues?.length ? <span className="px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
+                    <span className="ml-auto tracking-wider text-gray-300">{s.continueCode}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm mt-0.5">
-                    <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
-                    <span className="text-white font-bold">
-                      {s.visitor.total} − {s.home.total}
-                    </span>
-                    <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
-                    {!editing && (
-                      <svg
-                        className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        aria-hidden
-                      >
+                  <div className="px-3 py-2 space-y-1 text-sm">
+                    {team(s.visitor.name, s.visitor.total, vWin, "bg-blue-400")}
+                    {team(s.home.name, s.home.total, hWin, "bg-orange-400")}
+                  </div>
+                  {!editing && (
+                    <div className="flex items-center justify-center gap-1 py-1.5 border-t border-gray-700/70 text-xs text-blue-400">
+                      <svg className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
-                    )}
-                  </div>
+                      {open ? "分析を閉じる" : "分析を開く"}
+                    </div>
+                  )}
                 </button>
                 {editing && (
                   <button
                     onClick={() => onDelete(s)}
-                    className="flex-shrink-0 px-3 py-1.5 rounded bg-red-600/80 text-white text-xs font-medium"
+                    className="flex-shrink-0 px-4 bg-red-600/80 text-white text-xs font-medium"
                     aria-label={`${s.continueCode ?? ""} を削除`}
                   >
                     削除
                   </button>
                 )}
               </div>
-              {open && !editing && renderDetail(s)}
+              {open && !editing && <div className="border-t border-gray-700 bg-gray-950/40 p-2">{renderDetail(s)}</div>}
             </div>
           );
         })}

@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2005",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: 保存した試合を1試合ずつのカードで表示（スコアボード風、勝ったチームを太字、「分析を開く」で展開）",
+    ],
+  },
+  {
     version: "Ver.1-261003-2001",
     date: "2026-10-03",
     changes: [
