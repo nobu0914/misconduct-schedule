@@ -90,6 +90,8 @@ function PlayerRankingContent() {
     return d && DIVISIONS.includes(d) ? d : "Platinum";
   });
   // チーム相性の選択（URLの season / a / b）。シーズンは相性タブ内で選ぶ
+  // スコア表分析の共有リンク（?mode=analysis&code=）で開いたときのコード
+  const [sharedCode] = useState(() => searchParams.get("code"));
   const [matchup, setMatchup] = useState<MatchupSelection>(() => {
     const n = Number(searchParams.get("season"));
     return {
@@ -436,7 +438,7 @@ function PlayerRankingContent() {
           ))}
         </div>
 
-        {mode === "analysis" && <ScoreSheetApp embedded />}
+        {mode === "analysis" && <ScoreSheetApp embedded initialCode={sharedCode} />}
 
         {mode === "matchup" && (
           <TeamMatchup

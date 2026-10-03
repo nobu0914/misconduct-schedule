@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2029",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: コンテニューコードとリンクを共有するボタンを追加（リンクを開くと、その試合の分析がすぐ開きます）",
+    ],
+  },
+  {
     version: "Ver.1-261003-2024",
     date: "2026-10-03",
     changes: [

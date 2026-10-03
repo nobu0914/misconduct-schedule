@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-2024`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-2029`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -267,6 +267,8 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   - AI総評: 分析を開いたとき `POST /api/scoresheets/review?code=` で作成し、KV の試合データに `review` として保存（keepTtl）。
     2回目以降は保存分。全体100件/日（アップロード40件とは別）。数字だけから書くようプロンプトで制限（`reviewScoreSheet`）。
     SOG は Total 欄が空ならハーフの合計を使う（`shotsOf`。10/3 Brass #4 で Total 空 → 決定率・セーブ率が出なかった）。
+  - 共有: 試合の分析内「🔗 コンテニューコードとリンクを共有」と保存直後の画面の「共有」。リンクは
+    `/player-ranking?mode=analysis&code=XXXX`（開くと呼び出して一覧に入れて開く。page の `sharedCode` → `ScoreSheetApp initialCode`）。
   画面はデータ（旧「ランク」）ページの「分析」タブ（`?mode=analysis`、`ScoreSheetApp embedded`）。`/scoresheet` はそこへ転送。
   以下の「誰でも登録・先着のみ」の記述は旧方式。
 - `/scoresheet`（メニュー「スコア表分析」）。**誰でも**スコア表を登録・分析を閲覧できる（ユーザー指示）。

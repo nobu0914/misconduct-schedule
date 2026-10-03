@@ -106,6 +106,35 @@ async function shrinkImage(file: File): Promise<{ base64: string; mediaType: str
 }
 
 /** embedded: データページの「分析」タブの中に出すとき（外枠・余白を付けない） */
+/** 共有用のリンク（開くとこのコードの試合を呼び出して開く） */
+function shareUrl(code: string): string {
+  return `${window.location.origin}/player-ranking?mode=analysis&code=${encodeURIComponent(code)}`;
+}
+
+/** コンテニューコードとリンクを共有する（共有シートが無ければコピー）。成功したら "shared" / "copied" */
+async function shareGame(code: string, sheet?: ScoreSheet | null): Promise<"shared" | "copied" | null> {
+  const title = sheet
+    ? `スコア表分析 ${sheet.date} ${sheet.visitor.name} ${sheet.visitor.total}-${sheet.home.total} ${sheet.home.name}`
+    : "スコア表分析";
+  const text = `${title}\nコンテニューコード: ${code}`;
+  const url = shareUrl(code);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return "shared";
+    } catch {
+      return null; // 共有シートを閉じただけ
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    return "copied";
+  } catch {
+    window.prompt("このテキストをコピーしてください", `${text}\n${url}`);
+    return null;
+  }
+}
+
 /** 試合のカードを画面の上（固定ヘッダーのすぐ下）に合わせる */
 function scrollToGame(code: string | undefined | null) {
   if (!code) return;
@@ -117,7 +146,14 @@ function scrollToGame(code: string | undefined | null) {
   }, 80);
 }
 
-export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean }) {
+export default function ScoreSheetApp({
+  embedded = false,
+  initialCode,
+}: {
+  embedded?: boolean;
+  /** 共有リンク（?code=）で開いたときのコード。呼び出して開く */
+  initialCode?: string | null;
+}) {
   const [tab, setTab] = useState<Tab>("analysis");
   const [sheets, setSheets] = useState<ScoreSheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +180,28 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
     setSheets(loadLocal());
     setLoading(false);
   }, []);
+
+  // 共有リンクで開いたとき: そのコードを呼び出して一覧に入れ、開く
+  const [sharedError, setSharedError] = useState("");
+  useEffect(() => {
+    const code = initialCode ? normalizeContinueCode(initialCode) : null;
+    if (!code) return;
+    (async () => {
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`).catch(() => null);
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok && d.sheet) {
+        remember(d.sheet);
+        rememberCode(code);
+        setOpened(d.sheet);
+        scrollToGame(code);
+      } else {
+        setSharedError(d.message ?? "共有されたコンテニューコードの試合を呼び出せませんでした。");
+      }
+    })();
+    // 開いたときに1回だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode]);
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   function remember(sheet: ScoreSheet) {
     setSheets((cur) => {
@@ -365,6 +423,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 setOpened(null);
               }}
             />
+            {sharedError && <p className="text-xs text-red-300 bg-red-900/30 border border-red-800/60 rounded px-3 py-2">{sharedError}</p>}
             {!loading && (
               <SheetList
                 sheets={sheets}
@@ -387,6 +446,23 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                         setOpened(updated);
                       }}
                     />
+                    {s.continueCode && (
+                      <button
+                        onClick={async () => {
+                          const r = await shareGame(s.continueCode!, s);
+                          if (r === "copied") {
+                            setShareNote(s.continueCode!);
+                            setTimeout(() => setShareNote(null), 2500);
+                          }
+                        }}
+                        data-track="スコア表 共有"
+                        className={`w-full py-2.5 rounded-lg text-sm font-medium ${
+                          shareNote === s.continueCode ? "bg-green-600 text-white" : "bg-blue-600 text-white"
+                        }`}
+                      >
+                        {shareNote === s.continueCode ? "コードとリンクをコピーしました" : "🔗 コンテニューコードとリンクを共有"}
+                      </button>
+                    )}
                     <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
                       <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">
                         閉じる
@@ -711,7 +787,7 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
         <p className="text-xs text-gray-400 leading-relaxed">
           このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。コードが分かれば誰でも呼び出せるので、人に教えるときは気をつけてください。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
         </p>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={async () => {
               try {
@@ -721,11 +797,17 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
                 window.prompt("コンテニューコード", code);
               }
             }}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium ${copied ? "bg-green-600 text-white" : "bg-gray-800 border border-gray-700 text-gray-200"}`}
+            className={`py-2.5 rounded-lg text-sm font-medium ${copied ? "bg-green-600 text-white" : "bg-gray-800 border border-gray-700 text-gray-200"}`}
           >
-            {copied ? "コピーしました" : "コピー"}
+            {copied ? "コピーしました" : "コードをコピー"}
           </button>
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white">
+          <button
+            onClick={() => shareGame(code)}
+            className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm font-medium text-gray-200"
+          >
+            🔗 共有
+          </button>
+          <button onClick={onClose} className="col-span-2 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white">
             分析を見る
           </button>
         </div>
