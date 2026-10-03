@@ -62,6 +62,8 @@ export interface ScoreSheet {
   savedAt?: string;
   /** 登録時に残っていた食い違い（要確認）。エラーがあっても登録できるようにしたので記録しておく */
   issues?: string[];
+  /** 呼び出し用のコンテニューコード（保存時に発行） */
+  continueCode?: string;
 }
 
 export const DIVISIONS = ["Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over"];
@@ -406,4 +408,22 @@ export function sanitizeSheet(raw: unknown): ScoreSheet {
       return side ? [{ side, half: toHalf(p.half), no: text(p.no), time: text(p.time), minutes: count(p.minutes, 20), reason: text(p.reason) }] : [];
     }),
   };
+}
+
+// ───────── コンテニューコード ─────────
+// 会員登録なしで、保存したデータを呼び出すためのコード（例 "K7QM-3XRA"）。
+// 読み間違えやすい 0/O・1/I/L は使わない（31文字 × 8桁 ≒ 8500億通り）。
+
+export const CONTINUE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+/** 入力されたコードを "XXXX-XXXX" に揃える（形が違えば null） */
+export function normalizeContinueCode(input: string): string | null {
+  const raw = input
+    .toUpperCase()
+    .replace(/[０-９Ａ-Ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[^A-Z0-9]/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
+  if (raw.length !== 8 || [...raw].some((c) => !CONTINUE_ALPHABET.includes(c))) return null;
+  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
 }

@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import ScoreSheetApp from "@/components/ScoreSheetApp";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "スコア表分析 - Rinnavi MHL/CxC",
-  description: "試合のスコア表を登録して、セーブ率・決定率・パワープレー得点などを分析します。",
-};
-
+// スコア表分析はデータページの「分析」タブに移した（古いリンク用）
 export default function ScoreSheetPage() {
-  return <ScoreSheetApp />;
+  redirect("/player-ranking?mode=analysis");
 }

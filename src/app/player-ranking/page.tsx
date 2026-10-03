@@ -10,6 +10,7 @@ import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
 import ScoringRatePanel, { MultiDivisionCard } from "@/components/ScoringRatePanel";
+import ScoreSheetApp from "@/components/ScoreSheetApp";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 
@@ -34,7 +35,7 @@ function getDivisionColor(division: string): string {
   return "bg-gray-500";
 }
 
-type Mode = "search" | "ranking" | "score" | "matchup";
+type Mode = "search" | "ranking" | "score" | "matchup" | "analysis";
 
 function PlayerRankingContent() {
   const router = useRouter();
@@ -68,7 +69,7 @@ function PlayerRankingContent() {
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
-    if (m === "search" || m === "ranking" || m === "score" || m === "matchup") return m;
+    if (m === "search" || m === "ranking" || m === "score" || m === "matchup" || m === "analysis") return m;
     // 後方互換: 旧URL（?q=...）はそのまま個人ランク検索を開く
     if (searchParams.get("q")) return "search";
     return "ranking";
@@ -249,14 +250,14 @@ function PlayerRankingContent() {
     if (mode !== "ranking") params.set("mode", mode);
     if (mode === "search") {
       if (query) params.set("q", query);
-    } else {
+    } else if (mode !== "analysis") {
       if (selectedDivision !== "Platinum") params.set("div", selectedDivision);
     }
     if (mode === "matchup") {
       if (matchup.season !== undefined) params.set("season", String(matchup.season));
       if (matchup.a) params.set("a", matchup.a);
       if (matchup.b) params.set("b", matchup.b);
-    } else if (selectedPastSeason !== undefined) {
+    } else if (selectedPastSeason !== undefined && mode !== "analysis") {
       // シーズンの選択は個人ランク・チームランキング・スコアで共通
       params.set("season", String(selectedPastSeason));
     }
@@ -393,6 +394,7 @@ function PlayerRankingContent() {
               { key: "score", label: "スコア", short: "スコア" },
               { key: "search", label: "個人ランク", short: "個人" },
               { key: "matchup", label: "チーム相性", short: "相性" },
+              { key: "analysis", label: "スコア表分析", short: "分析" },
             ] as { key: Mode; label: string; short: string }[]
           ).map((t) => (
             <button
@@ -407,6 +409,8 @@ function PlayerRankingContent() {
             </button>
           ))}
         </div>
+
+        {mode === "analysis" && <ScoreSheetApp embedded />}
 
         {mode === "matchup" && (
           <TeamMatchup

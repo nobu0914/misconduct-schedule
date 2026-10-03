@@ -1,34 +1,52 @@
 import { kv } from "@vercel/kv";
+import { randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminPasscode } from "@/lib/adminAuth";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
-import { checkSheet, isBlankSheet, sanitizeSheet, sheetId, type ScoreSheet } from "@/lib/scoreSheet";
+import {
+  checkSheet,
+  CONTINUE_ALPHABET,
+  isBlankSheet,
+  normalizeContinueCode,
+  sanitizeSheet,
+  type ScoreSheet,
+} from "@/lib/scoreSheet";
 
-// ユーザーが登録したスコア表（KV: scoresheet:{id}、一覧は set scoresheet:index）。
-// 同じ試合（日付＋試合番号）は先に登録されたものを残す（上書きによるいたずらを防ぐ）。消せるのは管理者だけ。
-// 食い違いがあっても登録できる（ユーザー指示）。残った食い違いは issues に入れて「要確認」と表示する。
+// 利用者が自分で使うスコア表のデータ。会員登録なし・共有の一覧なし（ほかの人のデータは見えない）。
+// 保存するとコンテニューコードを発行し、そのコードでいつでも呼び出せる（KV: scoresheet:cc:{CODE}）。
+// 写真は保存しない。食い違いがあっても保存でき、残りは issues（要確認）に入れる。
 
 export const dynamic = "force-dynamic";
 
-const INDEX = "scoresheet:index";
-const key = (id: string) => `scoresheet:${id}`;
+const KEEP_SECONDS = 2 * 365 * 86400; // 2年
+const key = (code: string) => `scoresheet:cc:${code}`;
 
-export async function GET() {
+function newCode(): string {
+  const c = Array.from({ length: 8 }, () => CONTINUE_ALPHABET[randomInt(CONTINUE_ALPHABET.length)]).join("");
+  return `${c.slice(0, 4)}-${c.slice(4)}`;
+}
+
+/** コンテニューコードで呼び出す */
+export async function GET(req: NextRequest) {
+  // 総当たりを防ぐため、呼び出しの回数を IP ごとに制限する
+  if (await isRateLimited(`scoresheet:lookup:${clientIp(req)}`, 30, 3600)) {
+    return NextResponse.json({ error: "limit", message: "しばらく時間をおいてからお試しください。" }, { status: 429 });
+  }
+  const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
+  if (!code) return NextResponse.json({ error: "bad_code", message: "コンテニューコードは8文字（例 K7QM-3XRA）です。" }, { status: 400 });
   try {
-    const ids = ((await kv.smembers(INDEX)) ?? []).map(String);
-    if (ids.length === 0) return NextResponse.json({ sheets: [] });
-    const sheets = (await kv.mget<(ScoreSheet | null)[]>(...ids.map(key))).filter((s): s is ScoreSheet => !!s);
-    sheets.sort((a, b) => (b.savedAt ?? "").localeCompare(a.savedAt ?? ""));
-    return NextResponse.json({ sheets });
+    const sheet = await kv.get<ScoreSheet>(key(code));
+    if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
+    return NextResponse.json({ sheet: { ...sheet, continueCode: code } });
   } catch (e) {
-    console.error("scoresheets list failed", e);
-    return NextResponse.json({ sheets: [], error: "unavailable" }, { status: 503 });
+    console.error("scoresheet lookup failed", e);
+    return NextResponse.json({ error: "unavailable", message: "いまは呼び出せません。時間をおいてお試しください。" }, { status: 503 });
   }
 }
 
+/** 保存してコンテニューコードを発行する */
 export async function POST(req: NextRequest) {
   if (await isRateLimited(`scoresheet:save:${clientIp(req)}`, 30, 86400)) {
-    return NextResponse.json({ error: "limit", message: "今日の登録回数の上限です。" }, { status: 429 });
+    return NextResponse.json({ error: "limit", message: "今日の保存回数の上限です。" }, { status: 429 });
   }
   let raw: unknown;
   try {
@@ -40,30 +58,34 @@ export async function POST(req: NextRequest) {
   if (isBlankSheet(sheet)) return NextResponse.json({ error: "blank", message: "内容が入っていません。" }, { status: 400 });
   const { errors } = checkSheet(sheet);
   if (errors.length > 0) sheet.issues = errors.slice(0, 20);
-
-  // 日付・試合番号が読めないものは重複判定できないので、一意なキーで保存する
-  const id = sheetId(sheet) ?? `x-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  sheet.id = id;
   sheet.savedAt = new Date().toISOString();
+
   try {
-    const created = await kv.set(key(id), sheet, { nx: true });
-    if (!created) {
-      return NextResponse.json({ error: "exists", id, message: "この試合はすでに登録されています。" }, { status: 409 });
+    for (let i = 0; i < 5; i++) {
+      const code = newCode();
+      sheet.continueCode = code;
+      if (await kv.set(key(code), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        return NextResponse.json({ ok: true, continueCode: code, sheet });
+      }
     }
-    await kv.sadd(INDEX, id);
-    return NextResponse.json({ ok: true, id });
+    return NextResponse.json({ error: "unavailable", message: "保存できませんでした。もう一度お試しください。" }, { status: 503 });
   } catch (e) {
     console.error("scoresheet save failed", e);
     return NextResponse.json({ error: "unavailable", message: "保存できませんでした。時間をおいてもう一度お試しください。" }, { status: 503 });
   }
 }
 
+/** コンテニューコードを知っている人が自分のデータを消す */
 export async function DELETE(req: NextRequest) {
-  const auth = await verifyAdminPasscode(req, req.headers.get("x-admin-passcode"));
-  if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: auth.status });
-  const id = req.nextUrl.searchParams.get("id") ?? "";
-  if (!/^[\w-]{1,40}$/.test(id)) return NextResponse.json({ error: "bad_id" }, { status: 400 });
-  await kv.del(key(id));
-  await kv.srem(INDEX, id);
-  return NextResponse.json({ ok: true });
+  if (await isRateLimited(`scoresheet:lookup:${clientIp(req)}`, 30, 3600)) {
+    return NextResponse.json({ error: "limit" }, { status: 429 });
+  }
+  const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
+  if (!code) return NextResponse.json({ error: "bad_code" }, { status: 400 });
+  try {
+    await kv.del(key(code));
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "unavailable" }, { status: 503 });
+  }
 }

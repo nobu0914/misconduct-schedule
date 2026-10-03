@@ -3,7 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
 import { GameDetail, LeagueAnalysis } from "@/components/ScoreSheetAnalysis";
-import { checkSheet, emptySheet, isBlankSheet, type ScoreSheet } from "@/lib/scoreSheet";
+import { checkSheet, emptySheet, isBlankSheet, normalizeContinueCode, type ScoreSheet } from "@/lib/scoreSheet";
+
+// この端末で保存・呼び出した試合（会員登録なし。別の端末ではコンテニューコードで呼び出す）
+const LOCAL_KEY = "rinnavi_scoresheets";
+
+function loadLocal(): ScoreSheet[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocal(sheets: ScoreSheet[]) {
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(sheets));
+  } catch {
+    // 保存できなくても、コンテニューコードで呼び出せる
+  }
+}
+
+/** 同じコードは1件にまとめて、新しい順に */
+function upsert(list: ScoreSheet[], sheet: ScoreSheet): ScoreSheet[] {
+  return [sheet, ...list.filter((s) => s.continueCode !== sheet.continueCode)];
+}
 
 type Tab = "analysis" | "add";
 
@@ -29,7 +54,8 @@ async function shrinkImage(file: File): Promise<{ base64: string; mediaType: str
   }
 }
 
-export default function ScoreSheetApp() {
+/** embedded: データページの「分析」タブの中に出すとき（外枠・余白を付けない） */
+export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState<Tab>("analysis");
   const [sheets, setSheets] = useState<ScoreSheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,16 +70,29 @@ export default function ScoreSheetApp() {
   const fileRef = useRef<HTMLInputElement>(null);
   const fileObj = useRef<File | null>(null);
 
-  async function loadSheets() {
-    const d = await fetch("/api/scoresheets")
-      .then((r) => r.json())
-      .catch(() => ({ sheets: [] }));
-    setSheets(d.sheets ?? []);
-    setLoading(false);
-  }
+  const [issued, setIssued] = useState<string | null>(null);
+
   useEffect(() => {
-    loadSheets();
+    setSheets(loadLocal());
+    setLoading(false);
   }, []);
+
+  function remember(sheet: ScoreSheet) {
+    setSheets((cur) => {
+      const next = upsert(cur, sheet);
+      saveLocal(next);
+      return next;
+    });
+  }
+
+  function forget(code: string | undefined) {
+    setSheets((cur) => {
+      const next = cur.filter((s) => s.continueCode !== code);
+      saveLocal(next);
+      return next;
+    });
+    setOpened(null);
+  }
 
   useEffect(() => () => void (photo && URL.revokeObjectURL(photo)), [photo]);
 
@@ -111,9 +150,10 @@ export default function ScoreSheetApp() {
         body: JSON.stringify(draft),
       });
       const d = await res.json().catch(() => ({}));
-      if (res.ok) {
-        await loadSheets();
-        setOpened({ ...draft, id: d.id });
+      if (res.ok && d.sheet) {
+        remember(d.sheet);
+        setOpened(d.sheet);
+        setIssued(d.continueCode);
         setDraft(null);
         setPhoto(null);
         fileObj.current = null;
@@ -130,12 +170,12 @@ export default function ScoreSheetApp() {
   const blank = draft ? isBlankSheet(draft) : true;
 
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+    <div className={embedded ? "" : "min-h-screen bg-gray-950"}>
+      <div className={embedded ? "space-y-4" : "max-w-2xl mx-auto px-4 py-6 space-y-4"}>
         <div>
           <h1 className="text-xl font-bold text-white">スコア表分析</h1>
           <p className="text-xs text-gray-500 mt-1">
-            試合のスコア表を登録すると、セーブ率・決定率・パワープレー得点など、公式サイトに無い数字を分析できます。
+            スコア表の写真から、セーブ率・決定率・パワープレー得点などを分析します。会員登録は不要です。保存するとコンテニューコードが出るので、メモしておけばいつでも呼び出せます。
           </p>
         </div>
 
@@ -143,7 +183,7 @@ export default function ScoreSheetApp() {
           {(
             [
               ["analysis", "分析を見る"],
-              ["add", "スコア表を登録"],
+              ["add", "スコア表を読み込む"],
             ] as [Tab, string][]
           ).map(([k, label]) => (
             <button
@@ -156,12 +196,30 @@ export default function ScoreSheetApp() {
           ))}
         </div>
 
+        {issued && <ContinueCodeModal code={issued} onClose={() => setIssued(null)} />}
+
         {tab === "analysis" && (
           <>
+            <ContinueCodeInput
+              onLoaded={(s) => {
+                remember(s);
+                setOpened(s);
+              }}
+            />
             {opened && (
               <div className="space-y-2">
                 <GameDetail sheet={opened} />
-                <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">閉じる</button>
+                <div className="flex gap-4">
+                  <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">閉じる</button>
+                  <button
+                    onClick={() => {
+                      if (confirm("この端末の一覧から外します（コンテニューコードでまた呼び出せます）。")) forget(opened.continueCode);
+                    }}
+                    className="text-xs text-gray-500 underline"
+                  >
+                    この端末から外す
+                  </button>
+                </div>
               </div>
             )}
             {loading ? (
@@ -259,6 +317,94 @@ function ReadingOverlay({ elapsed }: { elapsed: number }) {
           <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
         <p className="text-[11px] text-gray-500">このままお待ちください。読み取りが終わると下の欄に入ります。</p>
+      </div>
+    </div>
+  );
+}
+
+/** コンテニューコードで呼び出す */
+function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function load() {
+    const c = normalizeContinueCode(code);
+    if (!c) return setError("コンテニューコードは8文字です（例 K7QM-3XRA）。");
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}`);
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.sheet) {
+        onLoaded(d.sheet);
+        setCode("");
+      } else {
+        setError(d.message ?? "呼び出せませんでした。");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+      <p className="text-xs text-gray-400">コンテニューコードで呼び出す</p>
+      <div className="flex gap-2">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && load()}
+          placeholder="K7QM-3XRA"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white tracking-widest placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button onClick={load} disabled={busy || !code.trim()} className="px-4 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40">
+          {busy ? "…" : "呼び出す"}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-300">{error}</p>}
+    </section>
+  );
+}
+
+/** 保存直後にコンテニューコードを見せる */
+function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="コンテニューコード"
+        className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4 text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-base font-bold text-white">保存しました</p>
+        <div>
+          <p className="text-xs text-gray-400">コンテニューコード</p>
+          <p className="text-3xl font-bold text-white tracking-[0.2em] mt-1 select-all">{code}</p>
+        </div>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。会員登録が無いので、コードを無くすと呼び出せません。メモかスクリーンショットで残してください。
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(code);
+                setCopied(true);
+              } catch {
+                window.prompt("コンテニューコード", code);
+              }
+            }}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-medium ${copied ? "bg-green-600 text-white" : "bg-gray-800 border border-gray-700 text-gray-200"}`}
+          >
+            {copied ? "コピーしました" : "コピー"}
+          </button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white">
+            分析を見る
+          </button>
+        </div>
       </div>
     </div>
   );

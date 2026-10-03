@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-1913`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-1931`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -249,6 +249,12 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   53rd 4/9、52nd 5/9 ディビジョンだけ。チーム相性のカードは結果があれば「プレイオフ 🏆優勝」を大きく、順位は添え書き。
 
 ### 2026-10-03（スコア表分析）
+- **10/3 夜 方針変更（ユーザー指示）**: 利用者が自由に使う個人用の機能。会員登録なし・**共有の一覧や公式データとの照合はしない**。
+  保存すると**コンテニューコード**（`XXXX-XXXX`、0/O/1/I/L を除く31文字×8桁）を発行し、KV `scoresheet:cc:{CODE}`（2年で失効）に保存。
+  `GET /api/scoresheets?code=` で呼び出し（IPごと30回/時）、`DELETE ?code=` で本人が削除。一覧は端末の localStorage
+  `rinnavi_scoresheets`。旧方式（`scoresheet:{date_no}`・`scoresheet:index`・先着1件）は廃止し、データは削除。写真は従来どおり保存しない。
+  画面はデータ（旧「ランク」）ページの「分析」タブ（`?mode=analysis`、`ScoreSheetApp embedded`）。`/scoresheet` はそこへ転送。
+  以下の「誰でも登録・先着のみ」の記述は旧方式。
 - `/scoresheet`（メニュー「スコア表分析」）。**誰でも**スコア表を登録・分析を閲覧できる（ユーザー指示）。
   - 写真 → `POST /api/scoresheets/read` → Anthropic Messages API（`claude-sonnet-5-5`、tool_use で JSON）→ `normalizeAiSheet()` →
     画面で人が確認・修正 → `POST /api/scoresheets`（`sanitizeSheet()` + `checkSheet()` でエラーなら 400）。**写真は保存しない**

@@ -6,13 +6,12 @@ import { VISIT_BUCKETS } from "@/lib/analyticsConstants";
 
 const PAGE_LABELS: Record<string, string> = {
   "/": "ゲーム情報",
-  "/player-ranking": "ランク検索",
+  "/player-ranking": "データ（ランク）",
   "/rental": "リンク予定",
   "/events": "イベント",
   "/contact": "お問い合わせ",
   "/disclaimer": "免責事項",
   "/changelog": "バージョン履歴",
-  "/scoresheet": "スコア表分析",
 };
 
 interface DayData {

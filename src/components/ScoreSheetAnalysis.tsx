@@ -39,6 +39,11 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-800">
+        {sheet.continueCode && (
+          <p className="text-[11px] text-gray-500 mb-1">
+            コンテニューコード <span className="text-gray-200 font-semibold tracking-wider select-all">{sheet.continueCode}</span>
+          </p>
+        )}
         <p className="text-xs text-gray-500">
           {sheet.date} {sheet.division} {sheet.gameNo && `#${sheet.gameNo}`}
           {sheet.issues?.length ? <span className="ml-2 text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
@@ -110,7 +115,13 @@ export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpe
   const agg = useMemo(() => aggregate(inDiv), [inDiv]);
 
   if (sheets.length === 0) {
-    return <p className="text-sm text-gray-500 text-center py-10">まだ登録されたスコア表がありません。</p>;
+    return (
+      <p className="text-sm text-gray-500 text-center py-10">
+        この端末に保存した試合はまだありません。
+        <br />
+        「スコア表を読み込む」から始めるか、コンテニューコードで呼び出してください。
+      </p>
+    );
   }
 
   return (
@@ -184,10 +195,10 @@ export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpe
         )}
       </Card>
 
-      <Card title={`登録済みの試合（${inDiv.length}）`}>
+      <Card title={`保存した試合（${inDiv.length}）`}>
         <div className="space-y-1">
           {inDiv.map((s) => (
-            <button key={s.id ?? `${s.date}${s.gameNo}`} onClick={() => onOpen(s)} className="w-full flex items-center gap-2 text-xs text-left py-1">
+            <button key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`} onClick={() => onOpen(s)} className="w-full flex items-center gap-2 text-xs text-left py-1">
               <span className="text-gray-500 w-20">{s.date}</span>
               <span className="text-gray-200 flex-1 truncate">
                 {s.visitor.name} {s.visitor.total}−{s.home.total} {s.home.name}
@@ -200,7 +211,7 @@ export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpe
       </Card>
 
       <p className="text-xs text-gray-600">
-        ※ ユーザーが登録したスコア表だけの集計です（全試合ではありません）。
+        ※ この端末に保存（またはコンテニューコードで呼び出し）した試合だけの集計です。
         <button onClick={() => setShowBasis(true)} className="ml-1 text-blue-400 underline underline-offset-2">
           数値の根拠
         </button>
@@ -251,7 +262,8 @@ const BASIS: [string, string][] = [
   ["先制時勝率", "先に点を取った試合のうち勝った割合。"],
   ["逆転勝ち", "前半を負けて終えたのに勝った試合の数。"],
   ["アシスト → ゴール", "1人目のアシスト（A）から得点（G）につながった回数。"],
-  ["集計の範囲", "このページで登録されたスコア表だけが対象です。同じ試合（日付＋試合番号）は最初の登録だけを使います。"],
+  ["集計の範囲", "この端末に保存した試合と、コンテニューコードで呼び出した試合だけが対象です。ほかの人のデータや公式の成績とは照合しません。"],
+  ["コンテニューコード", "保存するたびに発行される8文字のコード。入力すると、その試合のデータを別の端末でも呼び出せます。写真は保存せず、データだけを2年間残します。"],
   ["要確認", "合計が合わない・時間が読めないなどの食い違いが残ったまま登録された試合です。その部分は集計が正しく出ないことがあります（時間が読めない得点はパワープレー判定に使いません）。"],
 ];
 

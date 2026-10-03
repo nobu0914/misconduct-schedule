@@ -81,3 +81,11 @@ const pa = analyzeGame(partial);
 assert(checkSheet(partial).errors.length === 1 && pa.visitor.goalsFor === 6 && pa.home.goalie.savePct !== null, "時間が空でも集計は出る");
 import { emptySheet, isBlankSheet } from "../src/lib/scoreSheet";
 assert(isBlankSheet(emptySheet()) && !isBlankSheet(partial), "空のスコア表だけは登録しない");
+
+// コンテニューコード
+import { CONTINUE_ALPHABET, normalizeContinueCode } from "../src/lib/scoreSheet";
+assert(normalizeContinueCode("k7qm-3xra") === "K7QM-3XRA" && normalizeContinueCode(" K7QM 3XRA ") === "K7QM-3XRA", "小文字・空白でも同じコード");
+assert(normalizeContinueCode("Ｋ７ＱＭ３ＸＲＡ") === "K7QM-3XRA", "全角でも同じコード");
+assert(normalizeContinueCode("ABCD-EFG") === null && normalizeContinueCode("ABCD-EFG!") === null, "8文字でなければ null");
+assert(!/[01OIL]/.test(CONTINUE_ALPHABET) && CONTINUE_ALPHABET.length === 31, `読み間違えやすい文字は使わない (${CONTINUE_ALPHABET.length}文字)`);
+assert(normalizeContinueCode("ABCD-EFGO") === null, "O は 0 とみなすが、0 自体を使わないので無効");
