@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-1159",
+    date: "2026-10-03",
+    changes: [
+      "チーム相性に「数値の根拠」を追加（8項目それぞれの計算式・実際の数字・ディビジョン内の順位・元データを1画面で確認できます）",
+    ],
+  },
+  {
     version: "Ver.1-261003-0725",
     date: "2026-10-03",
     changes: [

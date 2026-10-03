@@ -63,6 +63,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
   const [teamA, setTeamA] = useState(initial.a ?? "");
   const [teamB, setTeamB] = useState(initial.b ?? "");
   const [copied, setCopied] = useState(false);
+  const [showBasis, setShowBasis] = useState(false);
 
   // 今シーズン（公式ページ）と保存済みの過去シーズンをまとめて読む
   useEffect(() => {
@@ -316,9 +317,116 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
 
           <p className="text-xs text-gray-600">
             ※各項目はそのシーズン・ディビジョン内での相対評価（最高=100）。順位はレギュラーシーズン。直接対決は保存済みの全シーズン通算。
+            <button
+              onClick={() => setShowBasis(true)}
+              data-track="チーム相性 数値の根拠"
+              className="ml-1 text-blue-400 underline underline-offset-2"
+            >
+              数値の根拠
+            </button>
           </p>
+
+          {showBasis && (
+            <BasisSheet
+              axes={axes}
+              a={a}
+              b={b}
+              title={`${season !== undefined ? seasonOrdinal(season) : ""} ${division}`}
+              onClose={() => setShowBasis(false)}
+            />
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+/** 8項目の数値の根拠（計算式・実際の数字・ディビジョン内の順位・元データ）をまとめて見せる */
+function BasisSheet({
+  axes,
+  a,
+  b,
+  title,
+  onClose,
+}: {
+  axes: RadarAxis[];
+  a: TeamSeasonStats;
+  b: TeamSeasonStats;
+  title: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+
+  const rank = (r: number | undefined, n: number | undefined) => (r && n ? `（${n}チーム中 ${r}位）` : "");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="数値の根拠"
+        className="w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-gray-900 border border-gray-700 rounded-t-2xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800">
+          <div>
+            <h3 className="text-base font-bold text-white">数値の根拠</h3>
+            <p className="text-xs text-gray-500">{title}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-800 text-gray-300" aria-label="閉じる">
+            ✕
+          </button>
+        </div>
+
+        <div className="px-4 py-3 space-y-4 text-sm">
+          <div className="text-xs text-gray-400 space-y-1">
+            <p>
+              八角形の各項目は、そのシーズン・ディビジョンの全チームの中での<strong className="text-gray-200">相対評価</strong>
+              です（いちばん良いチーム＝100、いちばん悪いチーム＝10、その間は比例、全チーム同じなら55、データなしは0）。直接対決だけは2チーム間の比較です。
+            </p>
+            <p>差が5未満の項目は「互角」として数えています。データはすべて公式サイトの順位表・スコア表・個人成績です。</p>
+          </div>
+
+          {axes.map((x) => (
+            <section key={x.key} className="border-t border-gray-800 pt-3">
+              <h4 className="font-bold text-white">{x.label}</h4>
+              <p className="text-xs text-gray-400 mt-0.5">{x.detail.description}</p>
+              <dl className="mt-2 space-y-1.5">
+                <div>
+                  <dt className={`text-xs font-bold ${A_COLOR.text}`}>
+                    {a.team} {rank(x.detail.rankA, x.detail.ranked)}
+                  </dt>
+                  <dd className="text-gray-200">{x.detail.calcA}</dd>
+                </div>
+                <div>
+                  <dt className={`text-xs font-bold ${B_COLOR.text}`}>
+                    {b.team} {rank(x.detail.rankB, x.detail.ranked)}
+                  </dt>
+                  <dd className="text-gray-200">{x.detail.calcB}</dd>
+                </div>
+              </dl>
+              {x.detail.best && x.detail.worst && (
+                <p className="text-xs text-gray-500 mt-1.5">
+                  ディビジョン1位 {x.detail.best.team} {x.detail.best.raw} ／ 最下位 {x.detail.worst.team} {x.detail.worst.raw}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                八角形: <span className={A_COLOR.text}>{Math.round(x.a)}</span> 対{" "}
+                <span className={B_COLOR.text}>{Math.round(x.b)}</span> ・ {x.detail.scale}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">元データ: {x.detail.source}</p>
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

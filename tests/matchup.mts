@@ -69,3 +69,18 @@ assert(h.a === h.b && h.rawA === "対戦なし", "対戦なしは互角");
 
 const adv = countAdvantages(axes);
 assert(adv.a + adv.b + adv.even === 8 && adv.a > adv.b, `優勢な軸の数 (Apples ${adv.a} / サイコ ${adv.b} / 互角 ${adv.even})`);
+
+// 「数値の根拠」シート: 実際の数字を入れた計算式・ディビジョン内の順位・元データ
+const d = Object.fromEntries(axes.map((x) => [x.key, x.detail]));
+assert(d.attack.calcA === "8得点 ÷ 2試合 ＝ 4.0", `FW力の計算 (=${d.attack.calcA})`);
+assert(d.attack.rankA === 1 && d.attack.ranked === 3, "FW力はディビジョン3チーム中1位");
+assert(d.defense.rankA === 1 && d.defense.best?.team === "Team Apples", "DF力は失点が少ないほど上位");
+assert(d.winRate.calcB === "（1勝 ＋ 0分×0.5）÷ 2試合 ＝ 50%", `勝率の計算 (=${d.winRate.calcB})`);
+assert(d.ace.calcA === "A1：5ゴール ＋ 2アシスト ＝ 7pt", `エース力の内訳 (=${d.ace.calcA})`);
+assert(d.depth.calcA === "1ゴール以上の選手 2人（個人成績に載っている 2人中）", "得点の層の内訳");
+assert(d.discipline.calcB === "PIM合計 6分 ÷ 2試合 ＝ 3.0分", `規律の計算 (=${d.discipline.calcB})`);
+assert(d.h2h.calcA.startsWith("1勝0敗1分 → 勝点 3（75%）"), `直接対決の勝点 (=${d.h2h.calcA})`);
+assert(d.winRate.source.includes("公式順位表"), "勝敗の元データは順位表");
+const dNo = Object.fromEntries(radarAxes(noRecord, noRecord[0], noRecord[1], headToHead([], "a", "b")).map((x) => [x.key, x.detail]));
+assert(dNo.winRate.source.includes("スコア表から数えた"), "順位表に勝敗が無ければスコア表と明記");
+assert(vsNasdaq.find((x) => x.key === "depth")!.detail.calcB === "個人成績のデータがありません", "データなしは理由を出す");

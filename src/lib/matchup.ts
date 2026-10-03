@@ -52,8 +52,12 @@ export interface TeamSeasonStats {
   goalsAgainst: number;
   /** 1点以上取った選手の数 */
   scorers: number;
-  ace?: { name: string; points: number };
+  /** 個人成績に載っている選手の数 */
+  players: number;
+  ace?: { name: string; goals: number; points: number };
   pim: number;
+  /** 勝敗を順位表ではなくスコア表から数えた（順位表に勝敗が無いシーズン） */
+  recordFromScores: boolean;
 }
 
 function isPlayed(g: ScoreRow): g is ScoreRow & { awayScore: number; homeScore: number } {
@@ -70,7 +74,7 @@ export function buildDivisionStats(
   const byKey = new Map<string, TeamSeasonStats>();
   const blank = (team: string): TeamSeasonStats => ({
     key: teamKey(team), team, gp: 0, wins: 0, losses: 0, ties: 0, points: 0,
-    games: 0, goalsFor: 0, goalsAgainst: 0, scorers: 0, pim: 0,
+    games: 0, goalsFor: 0, goalsAgainst: 0, scorers: 0, players: 0, pim: 0, recordFromScores: false,
   });
 
   for (const s of standings) {
@@ -115,6 +119,7 @@ export function buildDivisionStats(
       t.losses = r.l;
       t.ties = r.t;
       t.points = r.w * 2 + r.t;
+      t.recordFromScores = true;
     }
   }
 
@@ -122,9 +127,10 @@ export function buildDivisionStats(
     if (p.divisionLabel !== division) continue;
     const t = byKey.get(teamKey(p.team));
     if (!t) continue;
+    t.players += 1;
     if (p.goals > 0) t.scorers += 1;
     t.pim += p.pim;
-    if (!t.ace || p.points > t.ace.points) t.ace = { name: p.name, points: p.points };
+    if (!t.ace || p.points > t.ace.points) t.ace = { name: p.name, goals: p.goals, points: p.points };
   }
 
   return [...byKey.values()].sort(
@@ -180,56 +186,122 @@ export interface RadarAxis {
   rawA: string;
   rawB: string;
   hint: string;
+  detail: AxisDetail;
+}
+
+/** 「根拠」シートに出す説明（数値の出どころと計算） */
+export interface AxisDetail {
+  /** 何を表す項目か */
+  description: string;
+  /** 元データ */
+  source: string;
+  /** 各チームの実際の計算（データなしなら理由） */
+  calcA: string;
+  calcB: string;
+  /** ディビジョン内の順位（良い順。直接対決は無し） */
+  rankA?: number;
+  rankB?: number;
+  /** 順位の母数（データのあるチーム数） */
+  ranked?: number;
+  best?: { team: string; raw: string };
+  worst?: { team: string; raw: string };
+  /** 八角形の値の決め方（ひとこと） */
+  scale: string;
 }
 
 type Metric = {
   key: string;
   label: string;
   hint: string;
+  description: string;
+  source: (t: TeamSeasonStats) => string;
   /** null = データなし */
   value: (t: TeamSeasonStats) => number | null;
   format: (v: number) => string;
+  /** 実際の数字を入れた計算式（データなしなら理由） */
+  calc: (t: TeamSeasonStats) => string;
   lowerIsBetter?: boolean;
 };
+
+const SCORE_SOURCE = "公式スコア表（結果が入った試合）の得点・失点";
+const PLAYER_SOURCE = "公式の個人成績（ディビジョン別）";
+const NO_PLAYERS = "個人成績のデータがありません";
+const NO_GAMES = "結果が入った試合がありません";
+const fmt1 = (v: number) => v.toFixed(1);
 
 const perGame = (n: number, games: number) => (games > 0 ? n / games : null);
 
 export const METRICS: Metric[] = [
   {
     key: "winRate", label: "勝率", hint: "（勝ち＋引き分け×0.5）÷ 試合数",
+    description: "シーズンでどれだけ勝ったか。引き分けは0.5勝として数えます。",
+    source: (t) =>
+      t.recordFromScores
+        ? "公式スコア表から数えた勝敗（このシーズンは順位表に勝敗が載っていないため）"
+        : "公式順位表の勝敗（試合数・勝ち・負け・引き分け）",
     value: (t) => (t.gp > 0 ? (t.wins + t.ties * 0.5) / t.gp : null),
     format: (v) => `${Math.round(v * 100)}%`,
+    calc: (t) =>
+      t.gp > 0
+        ? `（${t.wins}勝 ＋ ${t.ties}分×0.5）÷ ${t.gp}試合 ＝ ${Math.round(((t.wins + t.ties * 0.5) / t.gp) * 100)}%`
+        : NO_GAMES,
   },
   {
     key: "attack", label: "FW力", hint: "1試合あたりの得点",
+    description: "攻撃力の目安。1試合に平均何点取っているかです。",
+    source: () => SCORE_SOURCE,
     value: (t) => perGame(t.goalsFor, t.games),
-    format: (v) => v.toFixed(1),
+    format: fmt1,
+    calc: (t) => (t.games > 0 ? `${t.goalsFor}得点 ÷ ${t.games}試合 ＝ ${fmt1(t.goalsFor / t.games)}` : NO_GAMES),
   },
   {
     key: "defense", label: "DF力", hint: "1試合あたりの失点（少ないほど高い）",
+    description: "守備力（ゴーリー含む）の目安。1試合に平均何点取られているかで、少ないほど高く評価します。",
+    source: () => SCORE_SOURCE,
     value: (t) => perGame(t.goalsAgainst, t.games),
-    format: (v) => v.toFixed(1),
+    format: fmt1,
+    calc: (t) => (t.games > 0 ? `${t.goalsAgainst}失点 ÷ ${t.games}試合 ＝ ${fmt1(t.goalsAgainst / t.games)}` : NO_GAMES),
     lowerIsBetter: true,
   },
   {
     key: "goalDiff", label: "得失点差", hint: "1試合あたりの得失点差",
+    description: "攻守を合わせた総合力。1試合あたり平均何点差をつけているかです。",
+    source: () => SCORE_SOURCE,
     value: (t) => perGame(t.goalsFor - t.goalsAgainst, t.games),
     format: (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}`,
+    calc: (t) => {
+      if (t.games === 0) return NO_GAMES;
+      const v = (t.goalsFor - t.goalsAgainst) / t.games;
+      return `（${t.goalsFor}得点 − ${t.goalsAgainst}失点）÷ ${t.games}試合 ＝ ${v > 0 ? "+" : ""}${fmt1(v)}`;
+    },
   },
   {
     key: "depth", label: "得点の層", hint: "1点以上取った選手の数",
+    description: "得点が一部の選手に偏らず、何人で点を取れているか。1ゴール以上挙げた選手の人数です。",
+    source: () => PLAYER_SOURCE,
     value: (t) => (t.scorers > 0 ? t.scorers : null),
     format: (v) => `${v}人`,
+    calc: (t) => (t.scorers > 0 ? `1ゴール以上の選手 ${t.scorers}人（個人成績に載っている ${t.players}人中）` : NO_PLAYERS),
   },
   {
     key: "ace", label: "エース力", hint: "チーム最多ポイントの選手",
+    description: "チームで一番ポイント（ゴール＋アシスト）を挙げた選手のポイントです。",
+    source: () => PLAYER_SOURCE,
     value: (t) => t.ace?.points ?? null,
     format: (v) => `${v}pt`,
+    calc: (t) =>
+      t.ace
+        ? `${t.ace.name}：${t.ace.goals}ゴール ＋ ${t.ace.points - t.ace.goals}アシスト ＝ ${t.ace.points}pt`
+        : NO_PLAYERS,
   },
   {
     key: "discipline", label: "規律", hint: "1試合あたりのペナルティ時間（少ないほど高い）",
+    description: "反則の少なさ。チーム全員のペナルティ時間（PIM）の合計を試合数で割ったもので、少ないほど高く評価します。",
+    source: (t) => `${PLAYER_SOURCE}のPIM合計 ÷ ${t.recordFromScores ? "スコア表" : "公式順位表"}の試合数`,
     value: (t) => (t.gp > 0 && t.scorers > 0 ? t.pim / t.gp : null),
     format: (v) => `${v.toFixed(1)}分`,
+    calc: (t) =>
+      t.gp > 0 && t.scorers > 0 ? `PIM合計 ${t.pim}分 ÷ ${t.gp}試合 ＝ ${(t.pim / t.gp).toFixed(1)}分` : NO_PLAYERS,
     lowerIsBetter: true,
   },
 ];
@@ -247,6 +319,16 @@ function relative(value: number | null, all: number[], lowerIsBetter = false): n
   return FLOOR + (100 - FLOOR) * ratio;
 }
 
+/** 良い順の順位（同じ値は同順位） */
+function rankOf(value: number | null, all: number[], lowerIsBetter = false): number | undefined {
+  if (value === null) return undefined;
+  return 1 + all.filter((v) => (lowerIsBetter ? v < value : v > value)).length;
+}
+
+function scaleText(lowerIsBetter: boolean | undefined): string {
+  return lowerIsBetter ? "少ないほど高評価" : "多いほど高評価";
+}
+
 /** 八角形の8軸（7指標＋直接対決） */
 export function radarAxes(
   division: TeamSeasonStats[],
@@ -255,9 +337,15 @@ export function radarAxes(
   h2h: HeadToHead
 ): RadarAxis[] {
   const axes: RadarAxis[] = METRICS.map((m) => {
-    const all = division.map(m.value).filter((v): v is number => v !== null);
+    const withValue = division
+      .map((t) => ({ team: t.team, v: m.value(t) }))
+      .filter((x): x is { team: string; v: number } => x.v !== null);
+    const all = withValue.map((x) => x.v);
     const va = m.value(a);
     const vb = m.value(b);
+    const ordered = [...withValue].sort((x, y) => (m.lowerIsBetter ? x.v - y.v : y.v - x.v));
+    const best = ordered[0];
+    const worst = ordered[ordered.length - 1];
     return {
       key: m.key,
       label: m.label,
@@ -266,6 +354,18 @@ export function radarAxes(
       b: relative(vb, all, m.lowerIsBetter),
       rawA: va === null ? "—" : m.format(va),
       rawB: vb === null ? "—" : m.format(vb),
+      detail: {
+        description: m.description,
+        source: m.source(a) === m.source(b) ? m.source(a) : `${a.team}: ${m.source(a)} / ${b.team}: ${m.source(b)}`,
+        calcA: m.calc(a),
+        calcB: m.calc(b),
+        rankA: rankOf(va, all, m.lowerIsBetter),
+        rankB: rankOf(vb, all, m.lowerIsBetter),
+        ranked: all.length,
+        best: best && { team: best.team, raw: m.format(best.v) },
+        worst: worst && { team: worst.team, raw: m.format(worst.v) },
+        scale: scaleText(m.lowerIsBetter),
+      },
     };
   });
 
@@ -282,6 +382,19 @@ export function radarAxes(
     b: total === 0 ? EVEN : FLOOR + (100 - FLOOR) * (bPts / total),
     rawA: h2h.games.length ? record(h2h.aWins, h2h.bWins) : "対戦なし",
     rawB: h2h.games.length ? record(h2h.bWins, h2h.aWins) : "対戦なし",
+    detail: {
+      description:
+        "2チームが直接戦った結果。勝ち＝2・引き分け＝1の勝点を、どちらがどれだけ取ったかの割合です。" +
+        "ほかの7項目と違い、シーズン・ディビジョンをまたいだ通算です。",
+      source: "保存済みの全シーズンの公式スコア表から、この2チームの対戦だけを抜き出したもの",
+      calcA: h2h.games.length
+        ? `${record(h2h.aWins, h2h.bWins)} → 勝点 ${aPts}（${Math.round((aPts / total) * 100)}%）・総得点 ${h2h.aGoals}`
+        : "対戦なし",
+      calcB: h2h.games.length
+        ? `${record(h2h.bWins, h2h.aWins)} → 勝点 ${bPts}（${Math.round((bPts / total) * 100)}%）・総得点 ${h2h.bGoals}`
+        : "対戦なし",
+      scale: "勝点の取り分で決まる・対戦なしは互角",
+    },
   });
   return axes;
 }
