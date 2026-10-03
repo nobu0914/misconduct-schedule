@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2056",
+    date: "2026-10-03",
+    changes: [
+      "ゲーム情報: 試合の詳細から「この2チームの相性をチェック」（ディビジョンと2チームを選んだ状態でチーム相性を開きます）",
+    ],
+  },
+  {
     version: "Ver.1-261003-2048",
     date: "2026-10-03",
     changes: [

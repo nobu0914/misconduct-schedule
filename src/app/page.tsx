@@ -574,6 +574,22 @@ function ScheduleContent() {
               <div className="flex items-center justify-center px-2 text-gray-600 text-xs font-bold self-stretch">vs</div>
               <TeamCompareCol name={selectedMatch.homeTeam} role="home" />
             </div>
+            {selectedMatch.division && selectedMatch.awayTeam && selectedMatch.homeTeam && (
+              <div className="px-4 pt-3">
+                <a
+                  href={`/player-ranking?${new URLSearchParams({
+                    mode: "matchup",
+                    div: selectedMatch.division,
+                    a: selectedMatch.awayTeam,
+                    b: selectedMatch.homeTeam,
+                  })}`}
+                  data-track="試合モーダル チーム相性"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                >
+                  ⚔️ この2チームの相性をチェック
+                </a>
+              </div>
+            )}
             <p className="text-xs text-gray-600 text-center px-4 py-2 border-t border-gray-800">※前シーズンの順位はレギュラーシーズン。優勝・準優勝はプレイオフの公式結果です。</p>
           </div>
         </div>

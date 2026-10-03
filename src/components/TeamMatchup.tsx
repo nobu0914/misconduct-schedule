@@ -129,6 +129,9 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
   const b: TeamSeasonStats | undefined =
     stats.find((t) => t.key === teamKey(teamB) && t.key !== a?.key) ?? stats.find((t) => t.key !== a?.key);
 
+  // 指定されたチーム（試合のモーダルや共有リンクから）がこのシーズン・ディビジョンにいないとき
+  const missing = [teamA, teamB].filter((t) => t && !stats.some((x) => x.key === teamKey(t)));
+
   const allScores = useMemo(() => Object.values(data).flatMap((d) => d.scores), [data]);
   const h2h = useMemo(() => (a && b ? headToHead(allScores, a.team, b.team) : undefined), [allScores, a, b]);
   const axes = useMemo(() => (a && b && h2h ? radarAxes(stats, a, b, h2h) : []), [stats, a, b, h2h]);
@@ -225,6 +228,13 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
         </p>
       ) : (
         <>
+          {missing.length > 0 && (
+            <p className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-3 py-2">
+              {missing.map((t) => `「${t}」`).join("・")}は {season !== undefined ? seasonOrdinal(season) : ""} の {division} に成績がないため、
+              ほかのチームを表示しています。シーズンを切り替えるか、チームを選び直してください。
+            </p>
+          )}
+
           {/* チーム選択 */}
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <TeamSelect stats={stats} value={a.key} onChange={(t) => setTeamA(t)} color={A_COLOR} />
