@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeContinueCode, type ScoreSheet } from "@/lib/scoreSheet";
 import { AiReadError, reviewScoreSheet } from "@/lib/scoreSheetAi";
+import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
 
 // AI 総評。コンテニューコードの試合について一度だけ作り、試合のデータと一緒に保存する（2回目からは保存分を返す）。
 // 文章だけの軽い呼び出しだが料金がかかるので、全体で1日100件まで（アップロードの40件とは別）。
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const review = await reviewScoreSheet(sheet);
     await kv.set(key, { ...sheet, review }, { keepTtl: true });
+    await logSheetEvent(req, { action: "review", code, game: gameLabel(sheet) });
     return NextResponse.json({ review });
   } catch (e) {
     await kv.decr(counter).catch(() => {});

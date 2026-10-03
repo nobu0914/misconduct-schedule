@@ -380,17 +380,96 @@ interface TrashEntry {
   deletedBy: { ip: string; userAgent: string; visitorId: string | null };
 }
 
+interface SheetLog {
+  at: string;
+  action: string;
+  code?: string;
+  game?: string;
+  note?: string;
+  ip: string;
+  userAgent: string;
+  visitorId: string | null;
+}
+
+const LOG_LABEL: Record<string, { label: string; cls: string }> = {
+  read: { label: "アップロード", cls: "bg-blue-700/60 text-blue-100" },
+  read_failed: { label: "読取失敗", cls: "bg-gray-700 text-gray-200" },
+  save: { label: "保存", cls: "bg-green-700/60 text-green-100" },
+  lookup: { label: "呼び出し", cls: "bg-gray-700 text-gray-200" },
+  review: { label: "AI総評", cls: "bg-violet-700/60 text-violet-100" },
+  delete: { label: "削除", cls: "bg-red-700/70 text-red-100" },
+  restore: { label: "復元", cls: "bg-amber-700/60 text-amber-100" },
+};
+
+/** スコア表分析の操作ログ（アップロード・保存・呼び出し・AI総評・削除・復元） */
+function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const shown = (log ?? []).filter((l) => !filter || l.action === filter);
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return (
+    <section className="space-y-2">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-300">スコア表の操作ログ（直近{log?.length ?? "…"}件）</h2>
+        <span className="text-xs text-blue-400">{open ? "閉じる ▲" : "開く ▼"}</span>
+      </button>
+      {open && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {[["", "すべて"], ...Object.entries(LOG_LABEL).map(([k, v]) => [k, v.label])].map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setFilter(k)}
+                className={`px-2 py-0.5 rounded-full text-[11px] ${filter === k ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 && <p className="text-xs text-gray-500">ログはありません。</p>}
+          <div className="divide-y divide-gray-800">
+            {shown.map((l, i) => {
+              const tag = LOG_LABEL[l.action] ?? { label: l.action, cls: "bg-gray-700 text-gray-200" };
+              return (
+                <div key={i} className="py-1.5 space-y-0.5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 tabular-nums">{fmt(l.at)}</span>
+                    <span className={`px-1.5 rounded text-[10px] ${tag.cls}`}>{tag.label}</span>
+                    {l.code && <span className="tracking-wider text-gray-200">{l.code}</span>}
+                  </div>
+                  {(l.game || l.note) && (
+                    <p className="text-[11px] text-gray-300">
+                      {l.game}
+                      {l.note && <span className="text-gray-500">（{l.note}）</span>}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-gray-500 break-all">
+                    IP {l.ip} ／ 端末ID {l.visitorId ?? "—"} ／ {l.userAgent}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** 利用者が削除したスコア表（バックアップ180日）と復元 */
 function ScoreSheetTrash({ passcode }: { passcode: string }) {
   const [entries, setEntries] = useState<TrashEntry[] | null>(null);
+  const [log, setLog] = useState<SheetLog[] | null>(null);
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState("");
 
   async function load() {
     const d = await fetch("/api/admin/scoresheets", { headers: { "x-admin-passcode": passcode } })
       .then((r) => r.json())
-      .catch(() => ({ entries: [] }));
+      .catch(() => ({ entries: [], log: [] }));
     setEntries(d.entries ?? []);
+    setLog(d.log ?? []);
   }
   useEffect(() => {
     load();
@@ -413,6 +492,8 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
     new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   return (
+    <>
+    <ScoreSheetLog log={log} />
     <section className="space-y-2">
       <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-300">削除されたスコア表（{entries?.length ?? "…"}）</h2>
@@ -445,6 +526,7 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
         </div>
       )}
     </section>
+    </>
   );
 }
 

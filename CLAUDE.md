@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-2043`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-2048`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -273,6 +273,9 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
     サーバーは即削除せず `scoresheet:trash:{code}_{ts}`（180日、一覧 `scoresheet:trash:index` 最大500）へ移し、
     `deletedBy`（IP・UA・端末ID `x-visitor-id`）を保存。管理画面「削除されたスコア表」から復元（`/api/admin/scoresheets`、
     元のコードが空いていれば nx で戻す）。
+  - 操作ログ（ユーザー指示）: `src/lib/scoreSheetLog.ts` が KV リスト `scoresheet:log`（最大2000件）に read / read_failed /
+    save / lookup / review / delete / restore を日時・コード・試合・IP・UA・端末ID付きで記録。管理画面「スコア表の操作ログ」で表示
+    （`GET /api/admin/scoresheets` が直近300件を返す）。
   画面はデータ（旧「ランク」）ページの「分析」タブ（`?mode=analysis`、`ScoreSheetApp embedded`）。`/scoresheet` はそこへ転送。
   以下の「誰でも登録・先着のみ」の記述は旧方式。
 - `/scoresheet`（メニュー「スコア表分析」）。**誰でも**スコア表を登録・分析を閲覧できる（ユーザー指示）。

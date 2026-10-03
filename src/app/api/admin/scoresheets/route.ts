@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPasscode } from "@/lib/adminAuth";
 import type { ScoreSheet } from "@/lib/scoreSheet";
+import { SHEET_LOG_KEY, gameLabel, logSheetEvent, type SheetLogEntry } from "@/lib/scoreSheetLog";
 
 // 管理者用: 利用者が削除したスコア表（バックアップ）の一覧と復元。
 // 削除は /api/scoresheets の DELETE が scoresheet:trash:{id} に移している（180日）。
@@ -28,10 +29,12 @@ export async function GET(req: NextRequest) {
   const a = await auth(req);
   if (!a.ok) return NextResponse.json({ error: "unauthorized" }, { status: a.status });
   try {
-    const ids = ((await kv.lrange(TRASH_INDEX, 0, 199)) ?? []).map(String);
-    if (ids.length === 0) return NextResponse.json({ entries: [] });
-    const entries = (await kv.mget<(TrashEntry | null)[]>(...ids.map(trashKey))).filter((e): e is TrashEntry => !!e);
-    return NextResponse.json({ entries });
+    const [ids, log] = await Promise.all([
+      kv.lrange(TRASH_INDEX, 0, 199).then((v) => (v ?? []).map(String)),
+      kv.lrange<SheetLogEntry>(SHEET_LOG_KEY, 0, 299).then((v) => v ?? []),
+    ]);
+    const entries = ids.length ? (await kv.mget<(TrashEntry | null)[]>(...ids.map(trashKey))).filter((e): e is TrashEntry => !!e) : [];
+    return NextResponse.json({ entries, log });
   } catch (e) {
     console.error("trash list failed", e);
     return NextResponse.json({ error: "unavailable" }, { status: 503 });
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
     }
     await kv.del(trashKey(id));
     await kv.lrem(TRASH_INDEX, 0, id);
+    await logSheetEvent(req, { action: "restore", code: entry.code, game: gameLabel(entry.sheet), note: "管理者が復元" });
     return NextResponse.json({ ok: true, code: entry.code });
   } catch (e) {
     console.error("trash restore failed", e);

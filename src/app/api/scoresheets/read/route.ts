@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp } from "@/lib/rateLimit";
 import { AiReadError, readScoreSheetImage } from "@/lib/scoreSheetAi";
+import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
 
 // スコア表の写真を AI で読み取る（誰でも使える）。写真は保存しない。
 // 料金がかかるので、1日のアップロード（読み取り）は**全体で40件まで**（ユーザー指示）。1人で使い切られないよう
@@ -104,9 +105,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const sheet = await readScoreSheetImage(image, mediaType);
+    await logSheetEvent(req, { action: "read", game: gameLabel(sheet), note: `画像 ${Math.round((image.length * 3) / 4 / 1024)}KB` });
     return NextResponse.json({ sheet });
   } catch (e) {
     await release(ip);
+    await logSheetEvent(req, { action: "read_failed", note: e instanceof AiReadError ? e.message : "error" });
     const code = e instanceof AiReadError ? e.message : "error";
     console.error("score sheet read error", code, e instanceof AiReadError ? "" : e);
     const detail = e instanceof AiReadError ? e.detail : undefined;

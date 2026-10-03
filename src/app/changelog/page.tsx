@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2048",
+    date: "2026-10-03",
+    changes: [
+      "管理画面: スコア表分析の操作ログ（アップロード・保存・呼び出し・AI総評・削除・復元）を表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-2043",
     date: "2026-10-03",
     changes: [

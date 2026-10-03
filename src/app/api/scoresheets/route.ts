@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import { randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
+import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
 import {
   checkSheet,
   isBlankSheet,
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
   try {
     const sheet = await kv.get<ScoreSheet>(key(code));
     if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
+    await logSheetEvent(req, { action: "lookup", code, game: gameLabel(sheet) });
     return NextResponse.json({ sheet: { ...sheet, continueCode: code } });
   } catch (e) {
     console.error("scoresheet lookup failed", e);
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
     if (chosen) {
       sheet.continueCode = chosen;
       if (await kv.set(key(chosen), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        await logSheetEvent(req, { action: "save", code: chosen, game: gameLabel(sheet), note: sheet.issues?.length ? `要確認${sheet.issues.length}件` : undefined });
         return NextResponse.json({ ok: true, continueCode: chosen, sheet });
       }
       return NextResponse.json(
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest) {
       const code = newCode();
       sheet.continueCode = code;
       if (await kv.set(key(code), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        await logSheetEvent(req, { action: "save", code, game: gameLabel(sheet), note: "おまかせコード" });
         return NextResponse.json({ ok: true, continueCode: code, sheet });
       }
     }
@@ -134,6 +138,7 @@ export async function DELETE(req: NextRequest) {
     await kv.lpush(TRASH_INDEX, entry.id);
     await kv.ltrim(TRASH_INDEX, 0, 499);
     await kv.del(key(code));
+    await logSheetEvent(req, { action: "delete", code, game: gameLabel(sheet), note: `バックアップ ${entry.id}` });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("scoresheet delete failed", e);

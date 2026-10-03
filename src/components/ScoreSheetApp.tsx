@@ -188,7 +188,7 @@ export default function ScoreSheetApp({
     const code = initialCode ? normalizeContinueCode(initialCode) : null;
     if (!code) return;
     (async () => {
-      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`).catch(() => null);
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } }).catch(() => null);
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && d.sheet) {
         remember(d.sheet);
@@ -305,7 +305,7 @@ export default function ScoreSheetApp({
       const { base64, mediaType } = await shrinkImage(fileObj.current);
       const res = await fetch("/api/scoresheets/read", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "" },
         body: JSON.stringify({ image: base64, mediaType }),
       });
       const d = await res.json().catch(() => ({}));
@@ -340,7 +340,7 @@ export default function ScoreSheetApp({
     try {
       const res = await fetch("/api/scoresheets", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "" },
         body: JSON.stringify({ ...draft, continueCode: code }),
       });
       const d = await res.json().catch(() => ({}));
@@ -723,7 +723,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}`);
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         onLoaded(d.sheet);

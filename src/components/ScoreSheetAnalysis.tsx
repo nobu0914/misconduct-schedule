@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getVisitorId } from "@/lib/analyticsClient";
 import { GoalieDonuts, PlayerBars, ScoreFlow, TimeBandChart, VersusBars } from "@/components/ScoreSheetCharts";
 import {
   aggregate,
@@ -128,7 +129,10 @@ function AiReviewCard({ sheet, onUpdate }: { sheet: ScoreSheet; onUpdate?: (s: S
     setState("loading");
     setError("");
     try {
-      const res = await fetch(`/api/scoresheets/review?code=${encodeURIComponent(sheet.continueCode)}`, { method: "POST" });
+      const res = await fetch(`/api/scoresheets/review?code=${encodeURIComponent(sheet.continueCode)}`, {
+        method: "POST",
+        headers: { "x-visitor-id": getVisitorId() ?? "" },
+      });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.review) {
         onUpdate?.({ ...sheet, review: d.review });
