@@ -91,6 +91,8 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  // 読み取りが終わったら写真は折りたたむ（入力欄を見やすく。見比べたいときは開ける）
+  const [photoOpen, setPhotoOpen] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const fileObj = useRef<File | null>(null);
 
@@ -134,6 +136,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
     if (!file) return;
     fileObj.current = file;
     setPhoto(URL.createObjectURL(file));
+    setPhotoOpen(true);
     setMessage("");
   }
 
@@ -151,7 +154,9 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         setDraft(d.sheet);
-        setMessage("読み取りました。写真と見比べて、違うところを直してから登録してください。");
+        setPhotoOpen(false);
+        setMessage("読み取りました。写真と見比べて（上の「写真を表示」で開けます）、違うところを直してから保存してください。");
+        setTimeout(() => document.getElementById("sheet-message")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       } else {
         setDraft((cur) => cur ?? emptySheet());
         setMessage(d.message ?? "読み取れませんでした。手入力で登録できます。");
@@ -299,13 +304,26 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 </button>
               )}
               {photo && (
-                // 入力中に見比べられるよう、写真は拡大できる大きさで表示する
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo} alt="スコア表の写真" className="w-full rounded-lg border border-gray-800" />
+                <div className="space-y-2">
+                  {draft && (
+                    <button onClick={() => setPhotoOpen((v) => !v)} className="text-xs text-blue-400 underline">
+                      {photoOpen ? "写真を折りたたむ" : "写真を表示"}
+                    </button>
+                  )}
+                  {photoOpen && (
+                    // 入力中に見比べられるよう、写真は拡大できる大きさで表示する
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photo} alt="スコア表の写真" className="w-full rounded-lg border border-gray-800" />
+                  )}
+                </div>
               )}
             </section>
 
-            {message && <p className="text-xs text-gray-300 bg-gray-800 rounded px-3 py-2">{message}</p>}
+            {message && (
+              <p id="sheet-message" className="text-xs text-gray-300 bg-gray-800 rounded px-3 py-2 scroll-mt-4">
+                {message}
+              </p>
+            )}
 
             {draft && (
               <>
@@ -316,8 +334,13 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                   data-track="スコア表 登録"
                   className={`w-full py-3 rounded-lg text-white font-medium disabled:opacity-40 ${issues ? "bg-amber-600" : "bg-green-600"}`}
                 >
-                  {saving ? "保存中…" : blank ? "チーム名や得点を入れると保存できます" : issues ? `要確認 ${issues}件のままコンテニューコードで保存` : "コンテニューコードで保存"}
+                  {saving ? "保存中…" : blank ? "チーム名や得点を入れると保存できます" : "コンテニューコードを設定して保存"}
                 </button>
+                {issues > 0 && (
+                  <p className="text-[11px] text-amber-300/80 -mt-2">
+                    要確認が {issues}件 あります（このまま保存できます）。
+                  </p>
+                )}
                 {issues > 0 && (
                   <p className="text-[11px] text-gray-500 -mt-2">
                     要確認のまま保存すると、分析の試合一覧に「要確認」と表示されます。合わない項目は集計が正しく出ないことがあります。
