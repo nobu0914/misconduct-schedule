@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
-import { GameDetail, LeagueAnalysis } from "@/components/ScoreSheetAnalysis";
-import { checkSheet, emptySheet, isBlankSheet, normalizeContinueCode, type ScoreSheet } from "@/lib/scoreSheet";
+import { GameDetail, LeagueAnalysis, SheetList } from "@/components/ScoreSheetAnalysis";
+import { checkSheet, continueCodeInput, emptySheet, isBlankSheet, normalizeContinueCode, type ScoreSheet } from "@/lib/scoreSheet";
 
 // この端末で保存・呼び出した試合（会員登録なし。別の端末ではコンテニューコードで呼び出す）
 const LOCAL_KEY = "rinnavi_scoresheets";
@@ -22,6 +22,30 @@ function saveLocal(sheets: ScoreSheet[]) {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(sheets));
   } catch {
     // 保存できなくても、コンテニューコードで呼び出せる
+  }
+}
+
+// 使ったコンテニューコードはクッキーに残し、次に開いたとき入力欄に入れる（再入力の手間を省く）
+const CODE_COOKIE = "rinnavi_cc";
+const MAX_REMEMBERED = 10;
+
+function rememberedCodes(): string[] {
+  try {
+    const raw = document.cookie.split("; ").find((c) => c.startsWith(`${CODE_COOKIE}=`))?.slice(CODE_COOKIE.length + 1) ?? "";
+    return decodeURIComponent(raw)
+      .split(",")
+      .filter((c) => normalizeContinueCode(c));
+  } catch {
+    return [];
+  }
+}
+
+function rememberCode(code: string) {
+  try {
+    const codes = [code, ...rememberedCodes().filter((c) => c !== code)].slice(0, MAX_REMEMBERED);
+    document.cookie = `${CODE_COOKIE}=${encodeURIComponent(codes.join(","))}; max-age=${2 * 365 * 86400}; path=/; samesite=lax; secure`;
+  } catch {
+    // クッキーが使えなくても、コードを入力すれば呼び出せる
   }
 }
 
@@ -71,6 +95,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
   const fileObj = useRef<File | null>(null);
 
   const [issued, setIssued] = useState<string | null>(null);
+  const [justLoaded, setJustLoaded] = useState<string | null>(null);
 
   useEffect(() => {
     setSheets(loadLocal());
@@ -152,6 +177,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         remember(d.sheet);
+        rememberCode(d.continueCode);
         setOpened(d.sheet);
         setIssued(d.continueCode);
         setDraft(null);
@@ -202,12 +228,25 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
           <>
             <ContinueCodeInput
               onLoaded={(s) => {
+                // 呼び出したデータは一覧に入れる（詳細は一覧からタップ）
                 remember(s);
-                setOpened(s);
+                setJustLoaded(s.continueCode ?? null);
+                setOpened(null);
               }}
             />
+            {!loading && (
+              <SheetList
+                sheets={sheets}
+                highlight={justLoaded}
+                onOpen={(s) => {
+                  setOpened(s);
+                  setJustLoaded(null);
+                  setTimeout(() => document.getElementById("sheet-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                }}
+              />
+            )}
             {opened && (
-              <div className="space-y-2">
+              <div id="sheet-detail" className="space-y-2 scroll-mt-4">
                 <GameDetail sheet={opened} />
                 <div className="flex gap-4">
                   <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">閉じる</button>
@@ -227,13 +266,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
               </div>
             ) : (
-              <LeagueAnalysis
-                sheets={sheets}
-                onOpen={(s) => {
-                  setOpened(s);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              />
+              <LeagueAnalysis sheets={sheets} />
             )}
           </>
         )}
@@ -283,11 +316,11 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                   data-track="スコア表 登録"
                   className={`w-full py-3 rounded-lg text-white font-medium disabled:opacity-40 ${issues ? "bg-amber-600" : "bg-green-600"}`}
                 >
-                  {saving ? "登録中…" : blank ? "チーム名や得点を入れると登録できます" : issues ? `要確認 ${issues}件のまま登録する` : "この内容で登録する"}
+                  {saving ? "保存中…" : blank ? "チーム名や得点を入れると保存できます" : issues ? `要確認 ${issues}件のままコンテニューコードで保存` : "コンテニューコードで保存"}
                 </button>
                 {issues > 0 && (
                   <p className="text-[11px] text-gray-500 -mt-2">
-                    要確認のまま登録すると、分析の試合一覧に「要確認」と表示されます。合わない項目は集計が正しく出ないことがあります。
+                    要確認のまま保存すると、分析の試合一覧に「要確認」と表示されます。合わない項目は集計が正しく出ないことがあります。
                   </p>
                 )}
               </>
@@ -322,14 +355,20 @@ function ReadingOverlay({ elapsed }: { elapsed: number }) {
   );
 }
 
-/** コンテニューコードで呼び出す */
+/** コンテニューコードで呼び出す（前に使ったコードはクッキーから入れておく） */
 function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) {
   const [code, setCode] = useState("");
+  const [recent, setRecent] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function load() {
-    const c = normalizeContinueCode(code);
-    if (!c) return setError("コンテニューコードは8文字です（例 K7QM-3XRA）。");
+  useEffect(() => {
+    const codes = rememberedCodes();
+    setRecent(codes);
+    if (codes[0]) setCode(codes[0]);
+  }, []);
+  async function load(input = code) {
+    const c = normalizeContinueCode(input);
+    if (!c) return setError("コンテニューコードは半角の大文字と数字の8文字です（例 K7QM3XRA）。0・O・1・I・L は使っていません。");
     setBusy(true);
     setError("");
     try {
@@ -337,7 +376,8 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         onLoaded(d.sheet);
-        setCode("");
+        rememberCode(c);
+        setRecent(rememberedCodes());
       } else {
         setError(d.message ?? "呼び出せませんでした。");
       }
@@ -351,18 +391,37 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
       <div className="flex gap-2">
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => setCode(continueCodeInput(e.target.value))}
           onKeyDown={(e) => e.key === "Enter" && load()}
-          placeholder="K7QM-3XRA"
+          placeholder="K7QM3XRA"
+          inputMode="text"
+          pattern="[A-Z0-9]{8}"
           autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}
           className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white tracking-widest placeholder-gray-600 focus:outline-none focus:border-blue-500"
         />
-        <button onClick={load} disabled={busy || !code.trim()} className="px-4 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40">
+        <button onClick={() => load()} disabled={busy || !code.trim()} className="px-4 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40">
           {busy ? "…" : "呼び出す"}
         </button>
       </div>
+      {recent.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-gray-500">前に使ったコード</span>
+          {recent.map((c) => (
+            <button
+              key={c}
+              onClick={() => {
+                setCode(c);
+                load(c);
+              }}
+              className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 tracking-wider"
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
       {error && <p className="text-xs text-red-300">{error}</p>}
     </section>
   );
@@ -385,7 +444,7 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
           <p className="text-3xl font-bold text-white tracking-[0.2em] mt-1 select-all">{code}</p>
         </div>
         <p className="text-xs text-gray-400 leading-relaxed">
-          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。会員登録が無いので、コードを無くすと呼び出せません。メモかスクリーンショットで残してください。
+          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
         </p>
         <div className="flex gap-2">
           <button

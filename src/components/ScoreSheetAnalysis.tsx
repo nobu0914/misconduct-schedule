@@ -105,8 +105,50 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
   );
 }
 
-/** 登録済みのスコア表をまとめた分析 */
-export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpen: (s: ScoreSheet) => void }) {
+/** 保存・呼び出した試合の一覧（全ディビジョン、新しく保存・呼び出した順）。タップで詳細 */
+export function SheetList({
+  sheets,
+  onOpen,
+  highlight,
+}: {
+  sheets: ScoreSheet[];
+  onOpen: (s: ScoreSheet) => void;
+  highlight?: string | null;
+}) {
+  if (sheets.length === 0) return null;
+  return (
+    <Card title={`保存・呼び出した試合（${sheets.length}）`}>
+      <div className="divide-y divide-gray-800">
+        {sheets.map((s) => (
+          <button
+            key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`}
+            onClick={() => onOpen(s)}
+            className={`w-full text-left py-2 px-1 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}
+          >
+            <div className="flex items-center gap-2 text-[11px] text-gray-500">
+              <span>{s.date || "日付なし"}</span>
+              <span>{s.division}</span>
+              {s.gameNo && <span>#{s.gameNo}</span>}
+              {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
+              <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm mt-0.5">
+              <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
+              <span className="text-white font-bold">
+                {s.visitor.total} − {s.home.total}
+              </span>
+              <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
+              <span className="text-blue-400 text-xs">詳細</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** 保存・呼び出したスコア表をまとめた分析 */
+export function LeagueAnalysis({ sheets }: { sheets: ScoreSheet[] }) {
   const divisions = useMemo(() => [...new Set(sheets.map((s) => s.division))].sort(), [sheets]);
   const [division, setDivision] = useState("");
   const [showBasis, setShowBasis] = useState(false);
@@ -195,21 +237,6 @@ export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpe
         )}
       </Card>
 
-      <Card title={`保存した試合（${inDiv.length}）`}>
-        <div className="space-y-1">
-          {inDiv.map((s) => (
-            <button key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`} onClick={() => onOpen(s)} className="w-full flex items-center gap-2 text-xs text-left py-1">
-              <span className="text-gray-500 w-20">{s.date}</span>
-              <span className="text-gray-200 flex-1 truncate">
-                {s.visitor.name} {s.visitor.total}−{s.home.total} {s.home.name}
-              </span>
-              {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-              <span className="text-blue-400">詳細</span>
-            </button>
-          ))}
-        </div>
-      </Card>
-
       <p className="text-xs text-gray-600">
         ※ この端末に保存（またはコンテニューコードで呼び出し）した試合だけの集計です。
         <button onClick={() => setShowBasis(true)} className="ml-1 text-blue-400 underline underline-offset-2">
@@ -263,7 +290,7 @@ const BASIS: [string, string][] = [
   ["逆転勝ち", "前半を負けて終えたのに勝った試合の数。"],
   ["アシスト → ゴール", "1人目のアシスト（A）から得点（G）につながった回数。"],
   ["集計の範囲", "この端末に保存した試合と、コンテニューコードで呼び出した試合だけが対象です。ほかの人のデータや公式の成績とは照合しません。"],
-  ["コンテニューコード", "保存するたびに発行される8文字のコード。入力すると、その試合のデータを別の端末でも呼び出せます。写真は保存せず、データだけを2年間残します。"],
+  ["コンテニューコード", "保存するたびに発行される8文字のコード（半角の大文字と数字）。入力すると、その試合のデータを別の端末でも呼び出せます。写真は保存せず、データだけを2年間残します。"],
   ["要確認", "合計が合わない・時間が読めないなどの食い違いが残ったまま登録された試合です。その部分は集計が正しく出ないことがあります（時間が読めない得点はパワープレー判定に使いません）。"],
 ];
 

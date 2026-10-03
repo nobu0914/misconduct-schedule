@@ -411,19 +411,21 @@ export function sanitizeSheet(raw: unknown): ScoreSheet {
 }
 
 // ───────── コンテニューコード ─────────
-// 会員登録なしで、保存したデータを呼び出すためのコード（例 "K7QM-3XRA"）。
-// 読み間違えやすい 0/O・1/I/L は使わない（31文字 × 8桁 ≒ 8500億通り）。
+// 会員登録なしで、保存したデータを呼び出すためのコード（例 "K7QM3XRA"）。
+// 半角の大文字と数字だけ（ユーザー指示）。読み間違えやすい 0/O・1/I/L は使わない（31文字 × 8桁 ≒ 8500億通り）。
 
 export const CONTINUE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-/** 入力されたコードを "XXXX-XXXX" に揃える（形が違えば null） */
+/** 正しいコンテニューコード（半角大文字・数字8桁、使う文字だけ）なら そのまま、違えば null */
 export function normalizeContinueCode(input: string): string | null {
-  const raw = input
+  return new RegExp(`^[${CONTINUE_ALPHABET}]{8}$`).test(input) ? input : null;
+}
+
+/** 入力欄で打った文字を、使える文字（半角大文字・数字）だけにする */
+export function continueCodeInput(typed: string): string {
+  return typed
+    .replace(/[ａ-ｚＡ-Ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
     .toUpperCase()
-    .replace(/[０-９Ａ-Ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
     .replace(/[^A-Z0-9]/g, "")
-    .replace(/O/g, "0")
-    .replace(/[IL]/g, "1");
-  if (raw.length !== 8 || [...raw].some((c) => !CONTINUE_ALPHABET.includes(c))) return null;
-  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    .slice(0, 8);
 }

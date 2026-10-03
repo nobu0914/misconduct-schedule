@@ -21,8 +21,7 @@ const KEEP_SECONDS = 2 * 365 * 86400; // 2年
 const key = (code: string) => `scoresheet:cc:${code}`;
 
 function newCode(): string {
-  const c = Array.from({ length: 8 }, () => CONTINUE_ALPHABET[randomInt(CONTINUE_ALPHABET.length)]).join("");
-  return `${c.slice(0, 4)}-${c.slice(4)}`;
+  return Array.from({ length: 8 }, () => CONTINUE_ALPHABET[randomInt(CONTINUE_ALPHABET.length)]).join("");
 }
 
 /** コンテニューコードで呼び出す */
@@ -32,7 +31,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "limit", message: "しばらく時間をおいてからお試しください。" }, { status: 429 });
   }
   const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
-  if (!code) return NextResponse.json({ error: "bad_code", message: "コンテニューコードは8文字（例 K7QM-3XRA）です。" }, { status: 400 });
+  if (!code) return NextResponse.json({ error: "bad_code", message: "コンテニューコードは半角の大文字と数字の8文字です（例 K7QM3XRA）。" }, { status: 400 });
   try {
     const sheet = await kv.get<ScoreSheet>(key(code));
     if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
