@@ -41,7 +41,15 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
       <div className="px-4 py-3 border-b border-gray-800">
         <p className="text-xs text-gray-500">
           {sheet.date} {sheet.division} {sheet.gameNo && `#${sheet.gameNo}`}
+          {sheet.issues?.length ? <span className="ml-2 text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
         </p>
+        {sheet.issues?.length ? (
+          <ul className="mt-1 text-[11px] text-amber-200/80 list-disc pl-4">
+            {sheet.issues.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        ) : null}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-1">
           <span className="text-sm font-bold text-blue-400 truncate">{sheet.visitor.name}</span>
           <span className="text-xl font-bold text-white">
@@ -184,6 +192,7 @@ export function LeagueAnalysis({ sheets, onOpen }: { sheets: ScoreSheet[]; onOpe
               <span className="text-gray-200 flex-1 truncate">
                 {s.visitor.name} {s.visitor.total}−{s.home.total} {s.home.name}
               </span>
+              {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
               <span className="text-blue-400">詳細</span>
             </button>
           ))}
@@ -243,6 +252,7 @@ const BASIS: [string, string][] = [
   ["逆転勝ち", "前半を負けて終えたのに勝った試合の数。"],
   ["アシスト → ゴール", "1人目のアシスト（A）から得点（G）につながった回数。"],
   ["集計の範囲", "このページで登録されたスコア表だけが対象です。同じ試合（日付＋試合番号）は最初の登録だけを使います。"],
+  ["要確認", "合計が合わない・時間が読めないなどの食い違いが残ったまま登録された試合です。その部分は集計が正しく出ないことがあります（時間が読めない得点はパワープレー判定に使いません）。"],
 ];
 
 function BasisSheet({ onClose }: { onClose: () => void }) {

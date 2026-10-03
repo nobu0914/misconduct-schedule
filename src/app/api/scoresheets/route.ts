@@ -2,10 +2,11 @@ import { kv } from "@vercel/kv";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPasscode } from "@/lib/adminAuth";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
-import { checkSheet, sanitizeSheet, sheetId, type ScoreSheet } from "@/lib/scoreSheet";
+import { checkSheet, isBlankSheet, sanitizeSheet, sheetId, type ScoreSheet } from "@/lib/scoreSheet";
 
 // ユーザーが登録したスコア表（KV: scoresheet:{id}、一覧は set scoresheet:index）。
 // 同じ試合（日付＋試合番号）は先に登録されたものを残す（上書きによるいたずらを防ぐ）。消せるのは管理者だけ。
+// 食い違いがあっても登録できる（ユーザー指示）。残った食い違いは issues に入れて「要確認」と表示する。
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
   const sheet = sanitizeSheet(raw);
+  if (isBlankSheet(sheet)) return NextResponse.json({ error: "blank", message: "内容が入っていません。" }, { status: 400 });
   const { errors } = checkSheet(sheet);
-  if (errors.length > 0) return NextResponse.json({ error: "invalid", errors }, { status: 400 });
+  if (errors.length > 0) sheet.issues = errors.slice(0, 20);
 
-  const id = sheetId(sheet);
+  // 日付・試合番号が読めないものは重複判定できないので、一意なキーで保存する
+  const id = sheetId(sheet) ?? `x-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   sheet.id = id;
   sheet.savedAt = new Date().toISOString();
   try {

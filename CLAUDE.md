@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-1338`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-1913`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -259,6 +259,9 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   - 集計 `src/lib/scoreSheet.ts`: セーブ率（相手SOG − 失点）、決定率、前後半、PP/SH（2分以下の反則は相手得点で明ける）、
     先制時勝率、逆転勝ち（前半負け→勝ち）、アシスト→ゴールの組み合わせ。テスト `tests/scoresheet.mts` は
     実物の 2026/9/6 Bronze #257 WSJ 6-10 サイコペッカーズ（`tests/fixtures/scoresheet-257.json`）で検証。
+  - 10/3 夕: 食い違い（checkSheet の errors）が残っても登録可（ユーザー指示）。残りは `issues` に保存し「要確認」表示。
+    空のスコア表（チーム名・得点なし）だけは拒否。日付・番号が無いものは `x-…` の一意キー（重複判定なし）。
+    読み取り中は全面に経過秒数・進み具合を出す（`ReadingOverlay`）。
   - キー設定後の実地確認（同じ写真）: 得点 15/16・スコア・SOG・ゴーリー・反則が一致。読めない1件は時間を空欄で返し、
     入力チェックが赤で止める。1回 約33秒。`claude-sonnet-5-5` は tool_choice の強制不可（auto＋指示）、max_tokens 4096 では
     Home 側が欠けたので 16000・`maxDuration` 120。失敗時は API の error type/message を `detail` で返す。

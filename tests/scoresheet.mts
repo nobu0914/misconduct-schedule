@@ -72,3 +72,12 @@ assert(fromAi.visitor.total === 0, "数でない Total は0（人が確認して
 // 誰でも送れる保存APIの整形: 余計な値・長すぎる文字列・不正なディビジョンを落とす
 const dirty = sanitizeSheet({ ...sheet, division: "Hacker", visitor: { ...sheet.visitor, name: "x".repeat(500) }, goals: [...sheet.goals, { side: "evil", half: 9, time: "1:00", scorer: "1" }], extra: "<script>" });
 assert(dirty.division === "" && dirty.visitor.name.length === 40 && dirty.goals.length === 16 && !("extra" in dirty), "保存前の整形");
+
+// 要確認のまま登録できるように: 日付・番号が無ければキーは null（API 側で一意なキーを作る）、集計は止まらない
+assert(sheetId({ date: "", gameNo: "", division: "Bronze" }) === null, "日付が無ければ保存キーは null");
+const partial: ScoreSheet = structuredClone(sheet);
+partial.goals[4].time = ""; // 実物の読み取りで空欄だった前半 19:58
+const pa = analyzeGame(partial);
+assert(checkSheet(partial).errors.length === 1 && pa.visitor.goalsFor === 6 && pa.home.goalie.savePct !== null, "時間が空でも集計は出る");
+import { emptySheet, isBlankSheet } from "../src/lib/scoreSheet";
+assert(isBlankSheet(emptySheet()) && !isBlankSheet(partial), "空のスコア表だけは登録しない");

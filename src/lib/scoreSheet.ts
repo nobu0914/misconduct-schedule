@@ -60,6 +60,8 @@ export interface ScoreSheet {
   goals: SheetGoal[];
   penalties: SheetPenalty[];
   savedAt?: string;
+  /** 登録時に残っていた食い違い（要確認）。エラーがあっても登録できるようにしたので記録しておく */
+  issues?: string[];
 }
 
 export const DIVISIONS = ["Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over"];
@@ -80,16 +82,22 @@ export function parseClock(time: string): number | null {
   return Number(m[2]) < 60 ? sec : null;
 }
 
-export function sheetId(s: Pick<ScoreSheet, "date" | "gameNo" | "division">): string {
+/** 何も入っていない（チーム名も得点も無い）か。要確認でも登録できるが、空は登録しない */
+export function isBlankSheet(s: ScoreSheet): boolean {
+  return !s.visitor.name && !s.home.name && s.goals.length === 0 && s.visitor.total + s.home.total === 0;
+}
+
+/** 保存キー。日付も試合番号も読めないときは null（呼び出し側で一意なキーを作る） */
+export function sheetId(s: Pick<ScoreSheet, "date" | "gameNo" | "division">): string | null {
   const date = s.date.replace(/[^\d]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const no = s.gameNo.replace(/[^\w]/g, "") || s.division.replace(/[^\w]/g, "");
-  return `${date}_${no}`;
+  return date && no ? `${date}_${no}` : null;
 }
 
 const sideName = (s: Side) => (s === "visitor" ? "Visitor" : "Home");
 const halfName = (h: Half) => (h === 1 ? "前半" : h === 2 ? "後半" : "OT");
 
-/** 保存前のチェック。errors は保存不可、warnings は確認だけ */
+/** 保存前のチェック。errors は分析が正しく出ない食い違い、warnings は確認だけ（どちらがあっても登録はできる） */
 export function checkSheet(s: ScoreSheet): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];

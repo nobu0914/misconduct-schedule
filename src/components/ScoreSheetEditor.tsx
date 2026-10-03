@@ -72,7 +72,7 @@ export default function ScoreSheetEditor({ sheet, onChange }: Props) {
       {(errors.length > 0 || warnings.length > 0) && (
         <section className="space-y-1.5">
           {errors.map((e) => (
-            <p key={e} className="text-xs text-red-300 bg-red-900/30 border border-red-800/60 rounded px-2 py-1.5">{e}</p>
+            <p key={e} className="text-xs text-red-300 bg-red-900/30 border border-red-800/60 rounded px-2 py-1.5">要確認: {e}</p>
           ))}
           {warnings.map((w) => (
             <p key={w} className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-2 py-1.5">確認: {w}</p>

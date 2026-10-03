@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-1913",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: 合計が合わない・時間が読めないなどの食い違いがあっても登録できるように（「要確認」と表示）",
+      "スコア表分析: 写真の読み取り中に、経過秒数と進み具合を表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-1338",
     date: "2026-10-03",
     changes: [

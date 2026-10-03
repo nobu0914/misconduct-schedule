@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
 import { GameDetail, LeagueAnalysis } from "@/components/ScoreSheetAnalysis";
-import { checkSheet, emptySheet, type ScoreSheet } from "@/lib/scoreSheet";
+import { checkSheet, emptySheet, isBlankSheet, type ScoreSheet } from "@/lib/scoreSheet";
 
 type Tab = "analysis" | "add";
 
@@ -40,6 +40,7 @@ export default function ScoreSheetApp() {
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const fileObj = useRef<File | null>(null);
 
@@ -55,6 +56,15 @@ export default function ScoreSheetApp() {
   }, []);
 
   useEffect(() => () => void (photo && URL.revokeObjectURL(photo)), [photo]);
+
+  // 読み取り中の経過秒（だいたい30秒かかるので、止まっていないことが分かるように）
+  useEffect(() => {
+    if (!reading) return;
+    setElapsed(0);
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [reading]);
 
   function pickPhoto(file: File | undefined) {
     if (!file) return;
@@ -116,7 +126,8 @@ export default function ScoreSheetApp() {
     }
   }
 
-  const canSave = draft !== null && checkSheet(draft).errors.length === 0;
+  const issues = draft ? checkSheet(draft).errors.length : 0;
+  const blank = draft ? isBlankSheet(draft) : true;
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -169,6 +180,8 @@ export default function ScoreSheetApp() {
           </>
         )}
 
+        {reading && <ReadingOverlay elapsed={elapsed} />}
+
         {tab === "add" && (
           <div className="space-y-4">
             <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-3">
@@ -186,7 +199,7 @@ export default function ScoreSheetApp() {
                   data-track="スコア表 読み取り"
                   className="flex-1 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  {reading ? "読み取り中…（30秒ほど）" : "写真から読み取る"}
+                  {reading ? "読み取り中…" : "写真から読み取る"}
                 </button>
               </div>
               {!draft && (
@@ -208,16 +221,44 @@ export default function ScoreSheetApp() {
                 <ScoreSheetEditor sheet={draft} onChange={setDraft} />
                 <button
                   onClick={save}
-                  disabled={!canSave || saving}
+                  disabled={saving || reading || blank}
                   data-track="スコア表 登録"
-                  className="w-full py-3 rounded-lg bg-green-600 text-white font-medium disabled:opacity-40"
+                  className={`w-full py-3 rounded-lg text-white font-medium disabled:opacity-40 ${issues ? "bg-amber-600" : "bg-green-600"}`}
                 >
-                  {saving ? "登録中…" : canSave ? "この内容で登録する" : "赤い項目を直すと登録できます"}
+                  {saving ? "登録中…" : blank ? "チーム名や得点を入れると登録できます" : issues ? `要確認 ${issues}件のまま登録する` : "この内容で登録する"}
                 </button>
+                {issues > 0 && (
+                  <p className="text-[11px] text-gray-500 -mt-2">
+                    要確認のまま登録すると、分析の試合一覧に「要確認」と表示されます。合わない項目は集計が正しく出ないことがあります。
+                  </p>
+                )}
               </>
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 読み取り中の表示（画面のどこにいても見えるように全面に出す） */
+function ReadingOverlay({ elapsed }: { elapsed: number }) {
+  const progress = Math.min(95, (elapsed / 35) * 100);
+  const step = elapsed < 5 ? "写真を送っています" : elapsed < 25 ? "スコア表を読み取っています" : "仕上げています";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6" role="status" aria-live="polite">
+      <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4 text-center">
+        <div className="mx-auto animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+        <div>
+          <p className="text-base font-bold text-white">{step}…</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {elapsed}秒経過（いつも30秒ほどかかります）
+          </p>
+        </div>
+        <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="text-[11px] text-gray-500">このままお待ちください。読み取りが終わると下の欄に入ります。</p>
       </div>
     </div>
   );
