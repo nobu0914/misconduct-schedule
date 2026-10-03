@@ -14,6 +14,9 @@ import {
   type ScoreSheet,
 } from "@/lib/scoreSheet";
 
+/** アップロードできる写真の大きさ（元のファイル。送るときは縮める） */
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
 const browserRandom = (n: number) => {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
@@ -180,8 +183,28 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
     return () => clearInterval(timer);
   }, [reading]);
 
+  // 今日のアップロードの残り（全体）。カウンター表示と、0件のときにボタンを止めるのに使う
+  const [quota, setQuota] = useState<{ limit: number; remaining: number | null } | null>(null);
+  async function loadQuota() {
+    const d = await fetch("/api/scoresheets/read", { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (d && typeof d.limit === "number") setQuota({ limit: d.limit, remaining: d.remaining });
+  }
+  useEffect(() => {
+    if (tab === "add") loadQuota();
+  }, [tab]);
+
   function pickPhoto(file: File | undefined) {
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("アップロードできるのは画像（写真）だけです。");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setMessage(`写真が大きすぎます（${(file.size / 1024 / 1024).toFixed(1)}MB）。10MBまでの画像を選んでください。`);
+      return;
+    }
     fileObj.current = file;
     setPhoto(URL.createObjectURL(file));
     setPhotoOpen(true);
@@ -214,6 +237,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
       setMessage("読み取れませんでした。手入力で登録できます。");
     } finally {
       setReading(false);
+      loadQuota();
     }
   }
 
@@ -356,13 +380,21 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 </button>
                 <button
                   onClick={readPhoto}
-                  disabled={!photo || reading}
+                  disabled={!photo || reading || quota?.remaining === 0}
                   data-track="スコア表 読み取り"
                   className="flex-1 py-2.5 rounded-lg bg-blue-600 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  {reading ? "読み取り中…" : "写真から読み取る"}
+                  {reading ? "読み取り中…" : quota?.remaining === 0 ? "今日の上限に達しました" : "写真から読み取る"}
                 </button>
               </div>
+              <p className="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
+                <span>画像のみ・10MBまで</span>
+                {quota && quota.remaining !== null && (
+                  <span className={quota.remaining === 0 ? "text-amber-300" : quota.remaining <= 5 ? "text-amber-200" : ""}>
+                    今日のアップロード 残り <b className="text-gray-200">{quota.remaining}</b> / {quota.limit} 件（全員で共通・0時に戻ります）
+                  </span>
+                )}
+              </p>
               {!draft && (
                 <button onClick={() => setDraft(emptySheet())} className="text-xs text-blue-400 underline">
                   写真なしで手入力する

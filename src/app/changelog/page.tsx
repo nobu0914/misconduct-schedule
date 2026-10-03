@@ -6,6 +6,14 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-1952",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: 写真のアップロード（自動読み取り）は全体で1日40件まで。今日の残り件数を表示",
+      "スコア表分析: アップロードできるのは画像だけ・10MBまで",
+    ],
+  },
+  {
     version: "Ver.1-261003-1947",
     date: "2026-10-03",
     changes: [

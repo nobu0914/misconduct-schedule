@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-1947`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-1952`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -267,7 +267,8 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
     画面で人が確認・修正 → `POST /api/scoresheets`（`sanitizeSheet()` + `checkSheet()` でエラーなら 400）。**写真は保存しない**
     （クライアントで長辺2000pxの JPEG に縮めて送るだけ）。
   - AI キーは **Rinnavi 専用の `ANTHROPIC_API_KEY`**（JUNROS 等と共有しない方針。ユーザー確認済み）。未設定なら 503 で手入力のみ。
-    料金の上限: IPごと10回/日・全体60回/日（KV、使えないときは読み取りを止める）。
+    料金の上限: **全体40件/日**（ユーザー指示、JST 0時リセット）＋IPごと10件/日。失敗した読み取りは数えない（release）。
+    `GET /api/scoresheets/read` が今日の残りを返し、画面にカウンター表示。写真は画像のみ・元ファイル10MBまで（画面側でチェック）。
   - KV: `scoresheet:{date_gameNo}`（`nx` で先着のみ。いたずら上書き防止）、一覧 `scoresheet:index`。削除は管理者パスコードのみ（`DELETE`）。
   - 集計 `src/lib/scoreSheet.ts`: セーブ率（相手SOG − 失点）、決定率、前後半、PP/SH（2分以下の反則は相手得点で明ける）、
     先制時勝率、逆転勝ち（前半負け→勝ち）、アシスト→ゴールの組み合わせ。テスト `tests/scoresheet.mts` は
