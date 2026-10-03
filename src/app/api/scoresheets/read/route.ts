@@ -7,7 +7,7 @@ import { AiReadError, readScoreSheetImage } from "@/lib/scoreSheetAi";
 // 料金がかかるので、1人あたり・全体で1日の回数に上限を付ける。KV が使えないときは読み取りを止める（手入力は使える）。
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const PER_IP_PER_DAY = 10;
 const TOTAL_PER_DAY = 60;

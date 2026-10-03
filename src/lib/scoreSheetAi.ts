@@ -25,7 +25,8 @@ const PROMPT = `これは日本のアイスホッケーリーグ「Misconduct Ho
 - 読めない値は推測せず空にする。数字の欄で空なら 0（SOG が空なら null）
 - 時間は "m:ss" の形（例 "1:29"、"10:06"）
 - ディビジョン名は Platinum / Gold / Silver / Bronze / Brass / Copper / Iron / Women Gold / Women Bronze / 35&Over のどれか
-- 名前はカタカナのまま`;
+- 名前はカタカナのまま
+- Visitor と Home の両方について、得点の記録（scoring）と反則の記録（penalties）を漏れなく入れる`;
 
 const team = {
   type: "object",
@@ -44,9 +45,6 @@ const team = {
           no: { type: "string" },
           name: { type: "string" },
           role: { type: "string", description: "C / A / 空" },
-          goals: { type: "integer" },
-          assists: { type: "integer" },
-          pim: { type: "integer" },
         },
         required: ["no", "name"],
       },
@@ -166,7 +164,7 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 16000,
       tools: [TOOL],
       // このモデルはツールの強制（type "tool" / "any"）に対応しないので、プロンプトで呼ぶよう指示する
       tool_choice: { type: "auto" },
@@ -180,7 +178,7 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
         },
       ],
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(110_000),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -194,7 +192,12 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
     }
     throw new AiReadError(`api_${res.status}`, detail);
   }
-  const body = (await res.json()) as { content?: { type: string; input?: Record<string, unknown>; text?: string }[] };
+  const body = (await res.json()) as {
+    content?: { type: string; input?: Record<string, unknown>; text?: string }[];
+    stop_reason?: string;
+  };
+  // 出力が上限で切れると後半（Home の欄など）が欠けるので、使わずにエラーにする
+  if (body.stop_reason === "max_tokens") throw new AiReadError("truncated", "出力が長すぎて途中で切れました");
   const input = body.content?.find((c) => c.type === "tool_use")?.input ?? jsonFromText(body.content);
   if (!input) throw new AiReadError("no_result");
   return normalizeAiSheet(input);
