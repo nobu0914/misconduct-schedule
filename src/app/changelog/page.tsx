@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-1204",
+    date: "2026-10-03",
+    changes: [
+      "個人ランクに「得点率（1試合あたり）」を追加。ゴール・ポイントの本人の値とディビジョン内順位、ディビジョン平均を、表示中のシーズンと前シーズンで比較。所属チームの勝率も表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-1159",
     date: "2026-10-03",
     changes: [

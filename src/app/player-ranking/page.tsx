@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, Suspense } from "react";
+import { useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlayerStat } from "../api/player-stats/route";
 import type { PrevPlayerStat } from "../api/prev-season-players/route";
@@ -9,6 +9,7 @@ import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
+import ScoringRatePanel from "@/components/ScoringRatePanel";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 
@@ -138,24 +139,56 @@ function PlayerRankingContent() {
     if (Array.isArray(d.available)) setPastTeamSeasonList(d.available);
   }
 
+  // 今シーズンの順位表と、過去シーズンの一覧（チームランキング・個人ランクの得点率で使う）
+  function loadStandings() {
+    setStandingsLoading(true);
+    Promise.all([
+      fetch("/api/standings")
+        .then((r) => r.json())
+        .then((d) => {
+          setStandings(d.standings ?? []);
+          if (d.season) setCurrentSeasonLabel(d.season);
+        })
+        .catch(() => {}),
+      loadPastTeams(),
+    ]).finally(() => {
+      setStandingsLoading(false);
+      setStandingsLoaded(true);
+    });
+  }
+
+  // 個人ランクの得点率: 表示中のシーズンと前シーズンの、全選手・順位表を読む（1回ずつ）
+  const rateSeason = selectedPastSeason ?? currentSeasonNum;
+  const requested = useRef(new Set<string>());
+  useEffect(() => {
+    if (mode !== "search" || rateSeason === undefined || !query.trim()) return;
+    const once = (key: string, load: () => void) => {
+      if (requested.current.has(key)) return;
+      requested.current.add(key);
+      load();
+    };
+    if (rateSeason === currentSeasonNum && !standingsLoaded && !standingsLoading) once("standings", loadStandings);
+    for (const n of [rateSeason, rateSeason - 1]) {
+      if (n === currentSeasonNum || !pastSeasonList.includes(n)) continue;
+      if (!pastPlayers[n]) once(`players:${n}`, () => void loadPastSeason(n));
+      if (!pastTeams[n]) once(`teams:${n}`, () => void loadPastTeams(n));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, rateSeason, query, pastSeasonList, standingsLoaded, standingsLoading]);
+
+  /** 得点率パネルに渡すシーズン別データ（表示中のシーズン → 前シーズン） */
+  function rateSeasons(n: number | undefined) {
+    if (n === undefined) return [];
+    const of = (s: number) =>
+      s === currentSeasonNum
+        ? { season: s, players, standings }
+        : { season: s, players: pastPlayers[s], standings: pastTeams[s] };
+    return [of(n), of(n - 1)];
+  }
+
   // ranking モード初回ロード時に取得（今シーズンの順位表と、過去シーズンの一覧）
   useEffect(() => {
-    if (mode === "ranking" && !standingsLoaded && !standingsLoading) {
-      setStandingsLoading(true);
-      Promise.all([
-        fetch("/api/standings")
-          .then((r) => r.json())
-          .then((d) => {
-            setStandings(d.standings ?? []);
-            if (d.season) setCurrentSeasonLabel(d.season);
-          })
-          .catch(() => {}),
-        loadPastTeams(),
-      ]).finally(() => {
-        setStandingsLoading(false);
-        setStandingsLoaded(true);
-      });
-    }
+    if (mode === "ranking" && !standingsLoaded && !standingsLoading) loadStandings();
     if (mode === "score" && !scoresLoaded && !scoresLoading) {
       setScoresLoading(true);
       Promise.all([
@@ -543,6 +576,8 @@ function PlayerRankingContent() {
                         );
                       })()}
 
+                      <ScoringRatePanel name={p.name} division={p.divisionLabel} seasons={rateSeasons(currentSeasonNum)} />
+
                       <div className="flex justify-end">
                         <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
                           全体ランキング（公式）
@@ -598,6 +633,8 @@ function PlayerRankingContent() {
                         <span className="text-white font-bold text-lg">{p.divisionRank}<span className="text-gray-400 text-sm font-normal">位</span></span>
                       </div>
                     </div>
+
+                    <ScoringRatePanel name={p.name} division={p.divisionLabel} seasons={rateSeasons(selectedPastSeason)} />
                   </div>
                 </div>
               ))}
