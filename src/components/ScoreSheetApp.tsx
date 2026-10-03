@@ -550,7 +550,7 @@ function ReadingOverlay({ elapsed }: { elapsed: number }) {
         <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
           <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
-        <p className="text-[11px] text-gray-500">このままお待ちください。読み取りが終わると下の欄に入ります。</p>
+        <p className="text-[11px] text-gray-500">このままお待ちください。</p>
       </div>
     </div>
   );
