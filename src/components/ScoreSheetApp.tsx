@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
 import { GameDetail, SheetList } from "@/components/ScoreSheetAnalysis";
+import { getVisitorId } from "@/lib/analyticsClient";
 import {
   checkSheet,
   CONTINUE_MIN,
@@ -212,25 +213,32 @@ export default function ScoreSheetApp({
   }
 
   /** データを削除（サーバーからも消すので、コンテニューコードでも呼び出せなくなる） */
-  async function deleteSheet(sheet: ScoreSheet) {
+  // 削除はコンテニューコードを入力してもらってから（DeleteDialog）
+  const [deleting, setDeleting] = useState<ScoreSheet | null>(null);
+  function deleteSheet(sheet: ScoreSheet) {
+    setDeleting(sheet);
+  }
+
+  /** 削除を実行（サーバーではバックアップに移し、削除した人の情報を記録する） */
+  async function confirmDelete(sheet: ScoreSheet): Promise<string | null> {
     const code = sheet.continueCode;
-    const label = `${sheet.date || "日付なし"} ${sheet.visitor.name || "?"} ${sheet.visitor.total}−${sheet.home.total} ${sheet.home.name || "?"}`;
-    if (!confirm(`この試合のデータを削除します。\n${label}\n\nコンテニューコード ${code ?? ""} でも呼び出せなくなります。よろしいですか？`)) return;
     if (code) {
       try {
-        const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { method: "DELETE" });
-        if (!res.ok && res.status !== 400 && res.status !== 404) {
-          alert("いまは削除できませんでした。時間をおいてもう一度お試しください。");
-          return;
-        }
+        const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, {
+          method: "DELETE",
+          headers: { "x-visitor-id": getVisitorId() ?? "" },
+        });
+        if (!res.ok && res.status !== 400 && res.status !== 404) return "いまは削除できませんでした。時間をおいてもう一度お試しください。";
       } catch {
-        alert("いまは削除できませんでした。通信状況を確かめてもう一度お試しください。");
-        return;
+        return "いまは削除できませんでした。通信状況を確かめてもう一度お試しください。";
       }
       forgetCode(code);
     }
     forget(code);
+    setDeleting(null);
+    return null;
   }
+
 
   /** 一覧の並びは変えずに中身だけ差し替える（AI 総評が付いたときなど） */
   function replaceLocal(sheet: ScoreSheet) {
@@ -402,6 +410,8 @@ export default function ScoreSheetApp({
             </button>
           ))}
         </div>
+
+        {deleting && <DeleteDialog sheet={deleting} onCancel={() => setDeleting(null)} onDelete={confirmDelete} />}
 
         {issued && (
           <ContinueCodeModal
@@ -839,5 +849,78 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
         );
       })}
     </ol>
+  );
+}
+
+/** 削除の確認。コンテニューコードを入力しないと削除できない。削除した人の情報が記録されることも伝える */
+function DeleteDialog({
+  sheet,
+  onCancel,
+  onDelete,
+}: {
+  sheet: ScoreSheet;
+  onCancel: () => void;
+  onDelete: (s: ScoreSheet) => Promise<string | null>;
+}) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const code = sheet.continueCode ?? "";
+  const plain = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const matches = code !== "" && plain(typed) === plain(code);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6" onClick={onCancel}>
+      <div
+        role="dialog"
+        aria-label="データの削除"
+        className="w-full max-w-sm bg-gray-900 border border-red-800/60 rounded-2xl p-5 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-base font-bold text-white">この試合のデータを削除</p>
+        <p className="text-xs text-gray-300">
+          {sheet.date || "日付なし"} {sheet.division} ／ {sheet.visitor.name || "?"} {sheet.visitor.total} − {sheet.home.total} {sheet.home.name || "?"}
+        </p>
+        <div className="text-[11px] leading-relaxed text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-2 py-1.5 space-y-1">
+          <p>削除すると、このコンテニューコードでは呼び出せなくなります。</p>
+          <p>
+            <b>削除した人の情報（日時・IPアドレス・ブラウザ・端末ID）を記録します。</b>
+            誤って削除したときやいたずらに備えて、管理者がデータを一定期間保管し、復元できるようにしています。
+          </p>
+        </div>
+        <label className="block text-xs text-gray-400" htmlFor="delete-code">
+          確認のため、コンテニューコード <b className="text-gray-200 tracking-wider">{code}</b> を入力してください
+        </label>
+        <input
+          id="delete-code"
+          value={typed}
+          onChange={(e) => {
+            setTyped(e.target.value.toUpperCase());
+            setError("");
+          }}
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white tracking-widest focus:outline-none focus:border-red-500"
+        />
+        {error && <p className="text-xs text-red-300">{error}</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onCancel} className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200">
+            やめる
+          </button>
+          <button
+            disabled={!matches || busy}
+            onClick={async () => {
+              setBusy(true);
+              const err = await onDelete(sheet);
+              setBusy(false);
+              if (err) setError(err);
+            }}
+            className="py-2.5 rounded-lg bg-red-600 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {busy ? "削除中…" : "削除する"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

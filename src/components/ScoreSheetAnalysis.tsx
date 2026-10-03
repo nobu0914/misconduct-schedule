@@ -335,7 +335,9 @@ export function SheetList({
           );
         })}
       </div>
-      {editing && <p className="text-[11px] text-gray-500">削除したデータは元に戻せず、コンテニューコードでも呼び出せなくなります。</p>}
+      {editing && (
+        <p className="text-[11px] text-gray-500">削除するにはコンテニューコードの入力が必要です。削除した人の情報（日時・IPアドレス・ブラウザ・端末ID）は記録されます。</p>
+      )}
     </section>
   );
 }

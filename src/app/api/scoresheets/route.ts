@@ -19,6 +19,17 @@ export const dynamic = "force-dynamic";
 
 const KEEP_SECONDS = 2 * 365 * 86400; // 2年
 const key = (code: string) => `scoresheet:cc:${code}`;
+const TRASH_SECONDS = 180 * 86400; // 削除したデータのバックアップは180日
+const TRASH_INDEX = "scoresheet:trash:index";
+const trashKey = (id: string) => `scoresheet:trash:${id}`;
+
+interface TrashEntry {
+  id: string;
+  code: string;
+  sheet: ScoreSheet;
+  deletedAt: string;
+  deletedBy: { ip: string; userAgent: string; visitorId: string | null };
+}
 
 const newCode = () => suggestContinueCode(randomInt);
 
@@ -91,7 +102,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** コンテニューコードを知っている人が自分のデータを消す */
+/**
+ * コンテニューコードを知っている人がデータを消す。すぐには消さず、管理者が戻せるようにバックアップに移す
+ * （180日）。誰が消したか分かるよう、日時・IP・ブラウザ・端末ID を一緒に記録する（画面で利用者に明示している）。
+ */
 export async function DELETE(req: NextRequest) {
   if (await isRateLimited(`scoresheet:lookup:${clientIp(req)}`, 30, 3600)) {
     return NextResponse.json({ error: "limit" }, { status: 429 });
@@ -102,9 +116,27 @@ export async function DELETE(req: NextRequest) {
   const code = normalizeContinueCode(raw) ?? legacy;
   if (!code) return NextResponse.json({ error: "bad_code" }, { status: 400 });
   try {
+    const sheet = await kv.get<ScoreSheet>(key(code));
+    if (!sheet) return NextResponse.json({ ok: true, missing: true });
+    const vid = req.headers.get("x-visitor-id") ?? "";
+    const entry: TrashEntry = {
+      id: `${code}_${Date.now().toString(36)}`,
+      code,
+      sheet,
+      deletedAt: new Date().toISOString(),
+      deletedBy: {
+        ip: clientIp(req),
+        userAgent: (req.headers.get("user-agent") ?? "").slice(0, 300),
+        visitorId: /^[A-Za-z0-9-]{8,64}$/.test(vid) ? vid : null,
+      },
+    };
+    await kv.set(trashKey(entry.id), entry, { ex: TRASH_SECONDS });
+    await kv.lpush(TRASH_INDEX, entry.id);
+    await kv.ltrim(TRASH_INDEX, 0, 499);
     await kv.del(key(code));
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("scoresheet delete failed", e);
     return NextResponse.json({ error: "unavailable" }, { status: 503 });
   }
 }

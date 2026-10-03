@@ -366,6 +366,88 @@ function groupByMonth(days: DayData[]): { month: string; days: DayData[]; total:
 }
 
 // --- アナリティクス表示 ---
+interface TrashEntry {
+  id: string;
+  code: string;
+  sheet: {
+    date: string;
+    division: string;
+    gameNo: string;
+    visitor: { name: string; total: number };
+    home: { name: string; total: number };
+  };
+  deletedAt: string;
+  deletedBy: { ip: string; userAgent: string; visitorId: string | null };
+}
+
+/** 利用者が削除したスコア表（バックアップ180日）と復元 */
+function ScoreSheetTrash({ passcode }: { passcode: string }) {
+  const [entries, setEntries] = useState<TrashEntry[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    const d = await fetch("/api/admin/scoresheets", { headers: { "x-admin-passcode": passcode } })
+      .then((r) => r.json())
+      .catch(() => ({ entries: [] }));
+    setEntries(d.entries ?? []);
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passcode]);
+
+  async function restore(e: TrashEntry) {
+    if (!confirm(`コード ${e.code} の試合を復元しますか？`)) return;
+    const res = await fetch("/api/admin/scoresheets", {
+      method: "POST",
+      headers: { "x-admin-passcode": passcode, "content-type": "application/json" },
+      body: JSON.stringify({ id: e.id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setMsg(res.ok ? `${e.code} を復元しました。` : d.message ?? "復元できませんでした。");
+    load();
+  }
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <section className="space-y-2">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-300">削除されたスコア表（{entries?.length ?? "…"}）</h2>
+        <span className="text-xs text-blue-400">{open ? "閉じる ▲" : "開く ▼"}</span>
+      </button>
+      {open && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+          <p className="text-[11px] text-gray-500">利用者が削除したデータは180日間ここに残ります。復元すると元のコンテニューコードで呼び出せるようになります。</p>
+          {msg && <p className="text-xs text-green-300">{msg}</p>}
+          {entries && entries.length === 0 && <p className="text-xs text-gray-500">削除されたデータはありません。</p>}
+          {entries?.map((e) => (
+            <div key={e.id} className="border border-gray-800 rounded-lg p-2 space-y-1">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400">{e.sheet.date} {e.sheet.division} #{e.sheet.gameNo}</span>
+                <span className="ml-auto tracking-wider text-gray-200">{e.code}</span>
+              </div>
+              <p className="text-sm text-gray-100">
+                {e.sheet.visitor.name} {e.sheet.visitor.total} − {e.sheet.home.total} {e.sheet.home.name}
+              </p>
+              <p className="text-[11px] text-gray-500 break-all">
+                削除 {fmt(e.deletedAt)} ／ IP {e.deletedBy.ip} ／ 端末ID {e.deletedBy.visitorId ?? "—"}
+                <br />
+                {e.deletedBy.userAgent}
+              </p>
+              <button onClick={() => restore(e)} className="px-3 py-1 rounded bg-blue-600 text-white text-xs">
+                復元する
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function AnalyticsDashboard({ passcode }: { passcode: string }) {
   const [data, setData] = useState<DayData[] | null>(null);
   const [events, setEvents] = useState<Record<string, Record<string, number>>>({});
@@ -457,6 +539,8 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
         <TrackingToggle />
 
         {visitors && <VisitorsSection v={visitors} days={data} todayStr={todayStr} />}
+
+        <ScoreSheetTrash passcode={passcode} />
 
         {/* 月別PV（アコーディオン） */}
         <section className="space-y-2">

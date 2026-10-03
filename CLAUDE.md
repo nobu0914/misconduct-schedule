@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-2029`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-2043`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -269,6 +269,10 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
     SOG は Total 欄が空ならハーフの合計を使う（`shotsOf`。10/3 Brass #4 で Total 空 → 決定率・セーブ率が出なかった）。
   - 共有: 試合の分析内「🔗 コンテニューコードとリンクを共有」と保存直後の画面の「共有」。リンクは
     `/player-ranking?mode=analysis&code=XXXX`（開くと呼び出して一覧に入れて開く。page の `sharedCode` → `ScoreSheetApp initialCode`）。
+  - 削除（ユーザー指示）: 確認画面でコンテニューコードの入力が必須（`DeleteDialog`）。削除した人の情報を記録すると明記。
+    サーバーは即削除せず `scoresheet:trash:{code}_{ts}`（180日、一覧 `scoresheet:trash:index` 最大500）へ移し、
+    `deletedBy`（IP・UA・端末ID `x-visitor-id`）を保存。管理画面「削除されたスコア表」から復元（`/api/admin/scoresheets`、
+    元のコードが空いていれば nx で戻す）。
   画面はデータ（旧「ランク」）ページの「分析」タブ（`?mode=analysis`、`ScoreSheetApp embedded`）。`/scoresheet` はそこへ転送。
   以下の「誰でも登録・先着のみ」の記述は旧方式。
 - `/scoresheet`（メニュー「スコア表分析」）。**誰でも**スコア表を登録・分析を閲覧できる（ユーザー指示）。
