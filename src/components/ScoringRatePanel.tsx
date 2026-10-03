@@ -104,10 +104,9 @@ export default function ScoringRatePanel({ name, division, seasons }: Props) {
           <thead>
             <tr className="bg-gray-800 text-gray-400">
               <th className="py-1 pl-2 text-left font-medium w-[30%]" />
-              {cols.map((c, i) => (
+              {cols.map((c) => (
                 <th key={c.season} className="py-1 text-center font-medium">
                   {seasonOrdinal(c.season)}
-                  {i > 0 && <span className="text-gray-500 font-normal">（前季）</span>}
                 </th>
               ))}
             </tr>
@@ -133,7 +132,7 @@ export default function ScoringRatePanel({ name, division, seasons }: Props) {
         </table>
       </div>
       <p className="text-[10px] text-gray-500">
-        {cols.some((c) => !c.profile) && "前季「—」はこのディビジョンに出場なし。"}
+        {cols.some((c) => !c.profile) && "「—」はそのシーズンこのディビジョンに出場なし。"}
         緑＝ディビジョン平均より上。
         <button onClick={() => setShowBasis(true)} data-track="個人 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
           数値の根拠
@@ -154,7 +153,7 @@ const BASIS: { label: string; text: string }[] = [
   { label: "反則", text: "本人のペナルティ時間（PIM）÷ 出場試合数。少ないほど上位です。" },
   { label: "タイプ", text: "ポイントのうちゴールが6割以上なら「ゴール型」、4割以下なら「アシスト型」、その間は「バランス型」。" },
   { label: "チーム勝率", text: "所属チームの（勝ち＋引き分け×0.5）÷ 試合数（公式順位表）。公式には個人が出場した試合ごとの勝敗が無いため、個人の勝率は出していません。" },
-  { label: "前季", text: "1つ前のシーズンの同じディビジョンの成績。そのディビジョンに出ていなければ「—」です。" },
+  { label: "シーズンの列", text: "表示中のシーズンと、その1つ前のシーズンの同じディビジョンの成績を並べています。そのディビジョンに出ていなければ「—」です。" },
 ];
 
 function BasisSheet({ onClose }: { onClose: () => void }) {
