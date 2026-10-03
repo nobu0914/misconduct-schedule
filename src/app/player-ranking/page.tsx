@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlayerStat } from "../api/player-stats/route";
 import type { PrevPlayerStat } from "../api/prev-season-players/route";
@@ -15,6 +15,8 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
+import { standingsGaps, type GapMatch } from "@/lib/standingsGap";
+import { GapDetail, GapLine, GapNote } from "@/components/StandingsGap";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -68,6 +70,10 @@ function PlayerRankingContent() {
   const [standingsLoaded, setStandingsLoaded] = useState(false);
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scoresLoaded, setScoresLoaded] = useState(false);
+  // チームランキングの「上を抜くには」で使う日程（残り試合・直接対決の残り）
+  const [matches, setMatches] = useState<GapMatch[] | undefined>(undefined);
+  // 内訳を開いている行（"シーズン:チーム"）
+  const [openGap, setOpenGap] = useState<string | null>(null);
   // 今シーズン（"54th" など）。APIが返すので表記を固定しない
   const [currentSeasonLabel, setCurrentSeasonLabel] = useState("");
 
@@ -196,6 +202,7 @@ function PlayerRankingContent() {
     setPastScores({});
     setStandingsLoaded(false);
     setScoresLoaded(false);
+    setMatches(undefined);
     const d = await fetch("/api/player-stats", { cache: "no-store" })
       .then((r) => r.json())
       .catch(() => null);
@@ -223,9 +230,18 @@ function PlayerRankingContent() {
   // ranking モード初回ロード時に取得（今シーズンの順位表と、過去シーズンの一覧）
   useEffect(() => {
     if (mode === "ranking" && !standingsLoaded && !standingsLoading) loadStandings();
+    // 直接対決の消化数はスコア表から数える
+    if (mode === "ranking" && !scoresLoaded && !scoresLoading) loadScores();
+    if (mode === "ranking" && matches === undefined) {
+      setMatches([]);
+      fetch("/api/schedule")
+        .then((r) => r.json())
+        .then((d) => setMatches(d.matches ?? []))
+        .catch(() => {});
+    }
     if (mode === "score" && !scoresLoaded && !scoresLoading) loadScores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, standingsLoaded, scoresLoaded, standingsLoading, scoresLoading]);
+  }, [mode, standingsLoaded, scoresLoaded, standingsLoading, scoresLoading, matches]);
 
   function loadScores() {
     setScoresLoading(true);
@@ -321,6 +337,18 @@ function PlayerRankingContent() {
             .sort((a, b) => a.rank - b.rank),
     [pastTeams, selectedPastSeason, selectedDivision]
   );
+
+  // 上のチームを抜くには（今シーズンは日程から残り試合を数える。過去シーズンは最終の差だけ）
+  const currentGaps = useMemo(
+    () =>
+      standingsGaps(divisionStandings, {
+        season: currentSeasonLabel,
+        matches: matches?.length ? matches : undefined,
+        scores: games,
+      }),
+    [divisionStandings, currentSeasonLabel, matches, games]
+  );
+  const pastGaps = useMemo(() => standingsGaps(pastDivisionStandings, { final: true }), [pastDivisionStandings]);
 
   // /api/scores は前シーズン（保存済み）・今シーズン・次シーズンが混在して返るので、今シーズンの試合だけを使う
   // （次シーズンの日程は、そのシーズンが始まってから今シーズンとして出る）。
@@ -792,8 +820,17 @@ function PlayerRankingContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pastDivisionStandings.map((s) => (
-                        <tr key={`${s.divisionLabel}-${s.team}`} className="border-b border-gray-800 last:border-b-0">
+                      {pastDivisionStandings.map((s, i) => {
+                        const gap = pastGaps.find((g) => g.team === s.team);
+                        const key = `${selectedPastSeason}:${s.team}`;
+                        const open = openGap === key && !!gap;
+                        return (
+                        <Fragment key={`${s.divisionLabel}-${s.team}`}>
+                        <tr
+                          onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
+                          data-feature={gap ? `チーム > 上との差 > ${s.divisionLabel}` : undefined}
+                          className={`border-b border-gray-800 ${i === pastDivisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
+                        >
                           <td className="py-2 px-2 text-center text-white font-semibold">{s.rank}</td>
                           <td className="py-2 px-2 text-white">
                             {s.team}
@@ -805,6 +842,12 @@ function PlayerRankingContent() {
                                 return <span className="ml-1.5 bg-gray-600/40 text-gray-300 text-[10px] px-1.5 py-0.5 rounded font-medium">準優勝</span>;
                               return null;
                             })()}
+                            {gap && (
+                              <div className="text-[11px] leading-tight mt-0.5">
+                                <GapLine gap={gap} final />
+                                <span className="ml-1 text-gray-600">{open ? "▴" : "▾"}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-2 text-center text-gray-300">{s.gp ?? "-"}</td>
                           <td className="py-2 px-1 text-center text-green-400">{s.wins ?? "-"}</td>
@@ -812,10 +855,20 @@ function PlayerRankingContent() {
                           <td className="py-2 px-1 text-center text-gray-400">{s.ties ?? "-"}</td>
                           <td className="py-2 px-2 text-center text-white font-bold">{s.points ?? "-"}</td>
                         </tr>
-                      ))}
+                        {open && (
+                          <tr className="border-b border-gray-800 bg-gray-800/40">
+                            <td colSpan={7} className="px-3 pb-3 pt-1">
+                              <GapDetail gap={gap!} gaps={pastGaps} final />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                {pastGaps.length > 0 && <GapNote final />}
               </div>
             )}
 
@@ -835,8 +888,17 @@ function PlayerRankingContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {divisionStandings.map((s) => (
-                        <tr key={`${s.divisionLabel}-${s.team}`} className="border-b border-gray-800 last:border-b-0">
+                      {divisionStandings.map((s, i) => {
+                        const gap = currentGaps.find((g) => g.team === s.team);
+                        const key = `now:${s.team}`;
+                        const open = openGap === key && !!gap;
+                        return (
+                        <Fragment key={`${s.divisionLabel}-${s.team}`}>
+                        <tr
+                          onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
+                          data-feature={gap ? `チーム > 上との差 > ${s.divisionLabel}` : undefined}
+                          className={`border-b border-gray-800 ${i === divisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
+                        >
                           <td className="py-2 px-2 text-center text-white font-semibold">
                             <div className="flex items-center justify-center gap-1">
                               <span>{s.rank}</span>
@@ -844,17 +906,35 @@ function PlayerRankingContent() {
                               {s.rankChange < 0 && <span className="text-red-400 text-[10px]">↓{Math.abs(s.rankChange)}</span>}
                             </div>
                           </td>
-                          <td className="py-2 px-2 text-white">{s.team}</td>
+                          <td className="py-2 px-2 text-white">
+                            {s.team}
+                            {gap && (
+                              <div className="text-[11px] leading-tight mt-0.5">
+                                <GapLine gap={gap} />
+                                <span className="ml-1 text-gray-600">{open ? "▴" : "▾"}</span>
+                              </div>
+                            )}
+                          </td>
                           <td className="py-2 px-2 text-center text-gray-300">{s.gp}</td>
                           <td className="py-2 px-1 text-center text-green-400">{s.wins}</td>
                           <td className="py-2 px-1 text-center text-red-400">{s.losses}</td>
                           <td className="py-2 px-1 text-center text-gray-400">{s.ties}</td>
                           <td className="py-2 px-2 text-center text-white font-bold">{s.points}</td>
                         </tr>
-                      ))}
+                        {open && (
+                          <tr className="border-b border-gray-800 bg-gray-800/40">
+                            <td colSpan={7} className="px-3 pb-3 pt-1">
+                              <GapDetail gap={gap!} gaps={currentGaps} />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                {currentGaps.length > 0 && <GapNote />}
               </div>
             )}
 

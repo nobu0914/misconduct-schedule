@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2303",
+    date: "2026-10-03",
+    changes: [
+      "チームランキング: 各チームに「上のチームまで何差か」と「自力で逆転可／他力／逆転不可」を表示。行をタップすると、抜く・並ぶのに必要な勝点と勝ち数、残り試合、直接対決の残りを表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-2251",
     date: "2026-10-03",
     changes: [
