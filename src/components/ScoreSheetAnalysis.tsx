@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   aggregate,
   analyzeGame,
   goalOrder,
   goalSituations,
+  parseClock,
   playerName,
   type GameAnalysis,
   type ScoreSheet,
@@ -17,6 +18,7 @@ const halfLabel = (h: number) => (h === 1 ? "前半" : h === 2 ? "後半" : "OT"
 
 /** 1試合の分析（スコア表1枚から） */
 export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
+  const [showBasis, setShowBasis] = useState(false);
   const a = analyzeGame(sheet);
   const situations = goalSituations(sheet);
   const timeline = sheet.goals.map((g, i) => ({ g, tag: situations[i] })).sort((x, y) => goalOrder(x.g, y.g));
@@ -101,197 +103,239 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
           );
         })}
       </div>
-    </div>
-  );
-}
 
-/** 保存・呼び出した試合の一覧（全ディビジョン、新しく保存・呼び出した順）。タップで詳細 */
-export function SheetList({
-  sheets,
-  onOpen,
-  highlight,
-}: {
-  sheets: ScoreSheet[];
-  onOpen: (s: ScoreSheet) => void;
-  highlight?: string | null;
-}) {
-  if (sheets.length === 0) return null;
-  return (
-    <Card title={`保存・呼び出した試合（${sheets.length}）`}>
-      <div className="divide-y divide-gray-800">
-        {sheets.map((s) => (
-          <button
-            key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`}
-            onClick={() => onOpen(s)}
-            className={`w-full text-left py-2 px-1 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}
-          >
-            <div className="flex items-center gap-2 text-[11px] text-gray-500">
-              <span>{s.date || "日付なし"}</span>
-              <span>{s.division}</span>
-              {s.gameNo && <span>#{s.gameNo}</span>}
-              {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-              <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm mt-0.5">
-              <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
-              <span className="text-white font-bold">
-                {s.visitor.total} − {s.home.total}
-              </span>
-              <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
-              <span className="text-blue-400 text-xs">詳細</span>
-            </div>
+      <div className="px-4 pb-3 space-y-4">
+        <PlayerTable sheet={sheet} />
+        <TimeBands sheet={sheet} />
+        <Combos sheet={sheet} />
+        <PenaltyList sheet={sheet} />
+        <p className="text-[11px] text-gray-600">
+          ※ このスコア表1枚から出した数字です。
+          <button onClick={() => setShowBasis(true)} className="ml-1 text-blue-400 underline underline-offset-2">
+            数値の根拠
           </button>
-        ))}
+        </p>
       </div>
-    </Card>
-  );
-}
-
-/** 保存・呼び出したスコア表をまとめた分析 */
-export function LeagueAnalysis({ sheets }: { sheets: ScoreSheet[] }) {
-  const divisions = useMemo(() => [...new Set(sheets.map((s) => s.division))].sort(), [sheets]);
-  const [division, setDivision] = useState("");
-  const [showBasis, setShowBasis] = useState(false);
-  const div = division && divisions.includes(division) ? division : divisions[0] ?? "";
-  const inDiv = sheets.filter((s) => s.division === div);
-  const agg = useMemo(() => aggregate(inDiv), [inDiv]);
-
-  if (sheets.length === 0) {
-    return (
-      <p className="text-sm text-gray-500 text-center py-10">
-        この端末に保存した試合はまだありません。
-        <br />
-        「アップロード」から始めるか、コンテニューコードで呼び出してください。
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {divisions.map((d) => (
-          <button
-            key={d}
-            onClick={() => setDivision(d)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium ${d === div ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"}`}
-          >
-            {d}（{sheets.filter((s) => s.division === d).length}）
-          </button>
-        ))}
-      </div>
-
-      <Card title="ゴーリー（セーブ率順）">
-        <Table
-          head={["ゴーリー", "試合", "被シュート", "セーブ率"]}
-          rows={agg.goalies.map((g) => [
-            <span key="n">
-              {g.name || `#${g.no}`}
-              <span className="block text-[10px] text-gray-500">{g.team}</span>
-            </span>,
-            g.games,
-            g.shotsFaced,
-            <b key="p" className="text-white">{pct(g.saves, g.shotsFaced)}</b>,
-          ])}
-        />
-      </Card>
-
-      <Card title="チーム">
-        <Table
-          head={["チーム", "勝敗", "前半", "後半", "決定率", "PP"]}
-          rows={agg.teams.map((t) => [
-            t.team,
-            `${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ""}`,
-            `${t.goalsFor[0]}-${t.goalsAgainst[0]}`,
-            `${t.goalsFor[1]}-${t.goalsAgainst[1]}`,
-            pct(t.shotGoals, t.shots),
-            t.powerPlayGoals,
-          ])}
-        />
-        <Table
-          head={["チーム", "先制時勝率", "逆転勝ち", "SH", "反則/試合"]}
-          rows={agg.teams.map((t) => [
-            t.team,
-            t.scoredFirstGames ? `${pct(t.scoredFirstWins, t.scoredFirstGames)}（${t.scoredFirstWins}/${t.scoredFirstGames}）` : "—",
-            t.comebacks,
-            t.shortHandedGoals,
-            `${(t.penaltyMinutes / t.games).toFixed(1)}分`,
-          ])}
-        />
-      </Card>
-
-      <Card title="アシスト → ゴールの組み合わせ">
-        {agg.combos.length === 0 ? (
-          <p className="text-xs text-gray-500">アシスト付きの得点がまだありません。</p>
-        ) : (
-          <div className="space-y-1">
-            {agg.combos.slice(0, 10).map((c, i) => (
-              <div key={i} className="flex items-baseline gap-2 text-xs">
-                <span className="text-gray-300 flex-1">
-                  {c.from} → {c.to}
-                  <span className="text-gray-500">（{c.team}）</span>
-                </span>
-                <b className="text-white">{c.count}回</b>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <p className="text-xs text-gray-600">
-        ※ この端末に保存（またはコンテニューコードで呼び出し）した試合だけの集計です。
-        <button onClick={() => setShowBasis(true)} className="ml-1 text-blue-400 underline underline-offset-2">
-          数値の根拠
-        </button>
-      </p>
       {showBasis && <BasisSheet onClose={() => setShowBasis(false)} />}
     </div>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+const sideColor = (side: "visitor" | "home") => (side === "visitor" ? "text-blue-300" : "text-orange-300");
+
+/** この試合の個人成績（得点の記録から数える） */
+function PlayerTable({ sheet }: { sheet: ScoreSheet }) {
+  const rows = (["visitor", "home"] as const).flatMap((side) => {
+    const team = sheet[side];
+    const m = new Map<string, { g: number; a: number }>();
+    const add = (no: string | undefined, k: "g" | "a") => {
+      if (!no) return;
+      const r = m.get(no) ?? { g: 0, a: 0 };
+      r[k] += 1;
+      m.set(no, r);
+    };
+    for (const g of sheet.goals.filter((x) => x.side === side)) {
+      add(g.scorer, "g");
+      add(g.assist1, "a");
+      add(g.assist2, "a");
+    }
+    return [...m.entries()]
+      .map(([no, r]) => ({ side, team: team.name, no, name: playerName(team, no), ...r, p: r.g + r.a }))
+      .sort((x, y) => y.p - x.p || y.g - x.g);
+  });
+  if (rows.length === 0) return null;
   return (
-    <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
-      <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
-      {children}
+    <section>
+      <p className="text-xs text-gray-400 mb-1">個人（この試合）</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-gray-500 border-b border-gray-800">
+            <th className="py-1 text-left font-medium">選手</th>
+            <th className="py-1 font-medium">G</th>
+            <th className="py-1 font-medium">A</th>
+            <th className="py-1 font-medium">P</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.side}${r.no}`} className="border-b border-gray-800/60 last:border-0">
+              <td className={`py-1 ${sideColor(r.side)}`}>
+                #{r.no} {r.name}
+              </td>
+              <td className="py-1 text-center text-gray-300">{r.g || ""}</td>
+              <td className="py-1 text-center text-gray-300">{r.a || ""}</td>
+              <td className="py-1 text-center text-white font-semibold">{r.p}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }
 
-function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
+/** 時間帯ごとの得点（各ハーフを5分ずつ） */
+function TimeBands({ sheet }: { sheet: ScoreSheet }) {
+  const bands = [
+    [0, 5],
+    [5, 10],
+    [10, 15],
+    [15, 20],
+  ];
+  const count = (side: "visitor" | "home", half: number, from: number, to: number) =>
+    sheet.goals.filter((g) => {
+      const sec = parseClock(g.time);
+      return g.side === side && g.half === half && sec !== null && sec >= from * 60 && (to === 20 ? sec <= 20 * 60 : sec < to * 60);
+    }).length;
+  if (sheet.goals.length === 0) return null;
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="text-gray-500 border-b border-gray-800">
-          {head.map((h, i) => (
-            <th key={h} className={`py-1 font-medium ${i === 0 ? "text-left" : "text-center"}`}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i} className="border-b border-gray-800/60 last:border-0">
-            {r.map((c, j) => (
-              <td key={j} className={`py-1.5 ${j === 0 ? "text-left text-gray-200" : "text-center text-gray-300"}`}>{c}</td>
-            ))}
+    <section>
+      <p className="text-xs text-gray-400 mb-1">時間帯ごとの得点</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-gray-500 border-b border-gray-800">
+            <th className="py-1 text-left font-medium">分</th>
+            <th className="py-1 font-medium text-blue-300">{sheet.visitor.name || "Visitor"}</th>
+            <th className="py-1 font-medium text-orange-300">{sheet.home.name || "Home"}</th>
           </tr>
+        </thead>
+        <tbody>
+          {[1, 2].flatMap((half) =>
+            bands.map(([from, to]) => (
+              <tr key={`${half}-${from}`} className="border-b border-gray-800/60 last:border-0">
+                <td className="py-1 text-gray-500">
+                  {halfLabel(half)} {from}〜{to}
+                </td>
+                <td className="py-1 text-center text-gray-200">{count("visitor", half, from, to) || ""}</td>
+                <td className="py-1 text-center text-gray-200">{count("home", half, from, to) || ""}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+/** この試合のアシスト → ゴール */
+function Combos({ sheet }: { sheet: ScoreSheet }) {
+  const combos = aggregate([sheet]).combos;
+  if (combos.length === 0) return null;
+  return (
+    <section>
+      <p className="text-xs text-gray-400 mb-1">アシスト → ゴール</p>
+      <div className="space-y-1">
+        {combos.map((c, i) => (
+          <div key={i} className="flex items-baseline gap-2 text-xs">
+            <span className={`flex-1 ${c.team === sheet.visitor.name ? "text-blue-300" : "text-orange-300"}`}>
+              {c.from} → {c.to}
+            </span>
+            <b className="text-white">{c.count}回</b>
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </section>
+  );
+}
+
+/** 反則の記録 */
+function PenaltyList({ sheet }: { sheet: ScoreSheet }) {
+  if (sheet.penalties.length === 0) return null;
+  const list = [...sheet.penalties].sort((a, b) => a.half - b.half || (parseClock(a.time) ?? 0) - (parseClock(b.time) ?? 0));
+  return (
+    <section>
+      <p className="text-xs text-gray-400 mb-1">反則</p>
+      <div className="space-y-1">
+        {list.map((p, i) => (
+          <div key={i} className="flex items-baseline gap-2 text-xs">
+            <span className="text-gray-500 w-16 flex-shrink-0">
+              {halfLabel(p.half)} {p.time}
+            </span>
+            <span className={`flex-1 ${sideColor(p.side)}`}>
+              #{p.no} {playerName(sheet[p.side], p.no)}
+            </span>
+            <span className="text-gray-400">
+              {p.reason} {p.minutes}分
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** 保存・呼び出した試合の一覧（全ディビジョン、新しく保存・呼び出した順）。タップでその試合の分析、「削除する」で各行に削除ボタン */
+export function SheetList({
+  sheets,
+  onOpen,
+  onDelete,
+  highlight,
+}: {
+  sheets: ScoreSheet[];
+  onOpen: (s: ScoreSheet) => void;
+  onDelete: (s: ScoreSheet) => void;
+  highlight?: string | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (sheets.length === 0) return null;
+  return (
+    <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+      <div className="flex items-center">
+        <h3 className="text-sm font-semibold text-gray-300">保存・呼び出した試合（{sheets.length}）</h3>
+        <button onClick={() => setEditing((v) => !v)} className={`ml-auto text-xs ${editing ? "text-gray-300" : "text-red-400"}`}>
+          {editing ? "完了" : "削除する"}
+        </button>
+      </div>
+      <div className="divide-y divide-gray-800">
+        {sheets.map((s) => (
+          <div
+            key={s.continueCode ?? s.id ?? `${s.date}${s.gameNo}`}
+            className={`flex items-center gap-2 rounded ${s.continueCode && s.continueCode === highlight ? "bg-blue-900/30" : ""}`}
+          >
+            <button onClick={() => onOpen(s)} className="flex-1 min-w-0 text-left py-2 px-1">
+              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                <span>{s.date || "日付なし"}</span>
+                <span>{s.division}</span>
+                {s.gameNo && <span>#{s.gameNo}</span>}
+                {s.issues?.length ? <span className="text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
+                <span className="ml-auto tracking-wider text-gray-400">{s.continueCode}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm mt-0.5">
+                <span className="text-blue-300 flex-1 truncate">{s.visitor.name || "?"}</span>
+                <span className="text-white font-bold">
+                  {s.visitor.total} − {s.home.total}
+                </span>
+                <span className="text-orange-300 flex-1 truncate text-right">{s.home.name || "?"}</span>
+                {!editing && <span className="text-blue-400 text-xs">分析</span>}
+              </div>
+            </button>
+            {editing && (
+              <button
+                onClick={() => onDelete(s)}
+                className="flex-shrink-0 px-3 py-1.5 rounded bg-red-600/80 text-white text-xs font-medium"
+                aria-label={`${s.continueCode ?? ""} を削除`}
+              >
+                削除
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {editing && <p className="text-[11px] text-gray-500">削除したデータは元に戻せず、コンテニューコードでも呼び出せなくなります。</p>}
+    </section>
   );
 }
 
 const BASIS: [string, string][] = [
-  ["セーブ率", "ゴーリーが止めたシュート ÷ 受けたシュート。受けたシュート＝相手チームの SOG（Shots on Goal）合計、止めた数＝それ − 失点。"],
-  ["決定率", "得点 ÷ 自チームの SOG 合計。"],
-  ["前半・後半", "そのハーフの 得点−失点 の合計。"],
+  ["シュート・決定率", "シュートはスコア表の SOG（Shots on Goal）の合計。決定率＝得点 ÷ 自チームのシュート。"],
+  ["ゴーリー・セーブ", "受けたシュート＝相手チームの SOG 合計、セーブ＝それ − 失点。セーブ率＝セーブ ÷ 受けたシュート。"],
   ["PP（パワープレー）得点", "相手が反則で退場している間（自チームは退場者なし）の得点。2分の反則は、その間に得点されたらそこで明けるものとして数えます。"],
   ["SH（ショートハンド）得点", "自チームが退場者を出している間（相手は退場者なし）の得点。"],
-  ["先制時勝率", "先に点を取った試合のうち勝った割合。"],
-  ["逆転勝ち", "前半を負けて終えたのに勝った試合の数。"],
+  ["先制・逆転勝ち", "先制＝最初の得点を取ったチーム。逆転勝ち＝前半を負けて終えたのに勝った。"],
+  ["個人（この試合）", "得点の記録の G（得点者）と A（アシスト）を背番号ごとに数えたもの。P＝G＋A。名前はスコア表の選手欄から。"],
+  ["時間帯ごとの得点", "各ハーフを5分ずつに分けて数えた得点。時間が読めなかった得点は入りません。"],
   ["アシスト → ゴール", "1人目のアシスト（A）から得点（G）につながった回数。"],
-  ["集計の範囲", "この端末に保存した試合と、コンテニューコードで呼び出した試合だけが対象です。ほかの人のデータや公式の成績とは照合しません。"],
-  ["コンテニューコード", "保存するたびに発行される8文字のコード（半角の大文字と数字）。入力すると、その試合のデータを別の端末でも呼び出せます。写真は保存せず、データだけを2年間残します。"],
-  ["要確認", "合計が合わない・時間が読めないなどの食い違いが残ったまま登録された試合です。その部分は集計が正しく出ないことがあります（時間が読めない得点はパワープレー判定に使いません）。"],
+  ["要確認", "合計が合わない・時間が読めないなど、食い違いが残ったまま保存した試合。その部分は数字が正しく出ないことがあります。"],
+  ["コンテニューコード", "保存するときに決める4〜8文字のコード（半角の大文字と数字）。入力すると、その試合のデータを別の端末でも呼び出せます。写真は保存せず、データだけを2年間残します。"],
 ];
 
 function BasisSheet({ onClose }: { onClose: () => void }) {

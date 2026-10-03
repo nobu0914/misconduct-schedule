@@ -412,13 +412,22 @@ export function sanitizeSheet(raw: unknown): ScoreSheet {
 
 // ───────── コンテニューコード ─────────
 // 会員登録なしで、保存したデータを呼び出すためのコード（例 "K7QM3XRA"）。
-// 半角の大文字と数字だけ（ユーザー指示）。読み間違えやすい 0/O・1/I/L は使わない（31文字 × 8桁 ≒ 8500億通り）。
+// 半角の大文字と数字だけで、利用者が自由に決められる（4〜8文字。ユーザー指示は「最大8文字」、
+// 短すぎると他人に当てられて見られる・消されるので4文字以上にした）。
+// おまかせで作る候補だけは、読み間違えやすい 0/O・1/I/L を使わない（31文字 × 8桁）。
+export const CONTINUE_MIN = 4;
+export const CONTINUE_MAX = 8;
 
 export const CONTINUE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-/** 正しいコンテニューコード（半角大文字・数字8桁、使う文字だけ）なら そのまま、違えば null */
+/** 正しいコンテニューコード（半角大文字・数字 4〜8文字）なら そのまま、違えば null */
 export function normalizeContinueCode(input: string): string | null {
-  return new RegExp(`^[${CONTINUE_ALPHABET}]{8}$`).test(input) ? input : null;
+  return new RegExp(`^[A-Z0-9]{${CONTINUE_MIN},${CONTINUE_MAX}}$`).test(input) ? input : null;
+}
+
+/** おまかせのコード（8文字、読み間違えにくい文字だけ） */
+export function suggestContinueCode(random: (n: number) => number): string {
+  return Array.from({ length: CONTINUE_MAX }, () => CONTINUE_ALPHABET[random(CONTINUE_ALPHABET.length)]).join("");
 }
 
 /** 入力欄で打った文字を、使える文字（半角大文字・数字）だけにする */
@@ -427,5 +436,5 @@ export function continueCodeInput(typed: string): string {
     .replace(/[ａ-ｚＡ-Ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 8);
+    .slice(0, CONTINUE_MAX);
 }

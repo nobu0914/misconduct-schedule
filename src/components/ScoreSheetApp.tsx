@@ -2,8 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
-import { GameDetail, LeagueAnalysis, SheetList } from "@/components/ScoreSheetAnalysis";
-import { checkSheet, continueCodeInput, emptySheet, isBlankSheet, normalizeContinueCode, type ScoreSheet } from "@/lib/scoreSheet";
+import { GameDetail, SheetList } from "@/components/ScoreSheetAnalysis";
+import {
+  checkSheet,
+  CONTINUE_MIN,
+  continueCodeInput,
+  emptySheet,
+  isBlankSheet,
+  normalizeContinueCode,
+  suggestContinueCode,
+  type ScoreSheet,
+} from "@/lib/scoreSheet";
+
+const browserRandom = (n: number) => {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % n;
+};
 
 // この端末で保存・呼び出した試合（会員登録なし。別の端末ではコンテニューコードで呼び出す）
 const LOCAL_KEY = "rinnavi_scoresheets";
@@ -37,6 +52,15 @@ function rememberedCodes(): string[] {
       .filter((c) => normalizeContinueCode(c));
   } catch {
     return [];
+  }
+}
+
+function forgetCode(code: string) {
+  try {
+    const codes = rememberedCodes().filter((c) => c !== code);
+    document.cookie = `${CODE_COOKIE}=${encodeURIComponent(codes.join(","))}; max-age=${2 * 365 * 86400}; path=/; samesite=lax; secure`;
+  } catch {
+    // 無視
   }
 }
 
@@ -97,6 +121,9 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
   const fileObj = useRef<File | null>(null);
 
   const [issued, setIssued] = useState<string | null>(null);
+  // 保存するときのコンテニューコード（自由に決められる。最初はおまかせの候補を入れておく）
+  const [newCode, setNewCode] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [justLoaded, setJustLoaded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,6 +137,27 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
       saveLocal(next);
       return next;
     });
+  }
+
+  /** データを削除（サーバーからも消すので、コンテニューコードでも呼び出せなくなる） */
+  async function deleteSheet(sheet: ScoreSheet) {
+    const code = sheet.continueCode;
+    const label = `${sheet.date || "日付なし"} ${sheet.visitor.name || "?"} ${sheet.visitor.total}−${sheet.home.total} ${sheet.home.name || "?"}`;
+    if (!confirm(`この試合のデータを削除します。\n${label}\n\nコンテニューコード ${code ?? ""} でも呼び出せなくなります。よろしいですか？`)) return;
+    if (code) {
+      try {
+        const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 400 && res.status !== 404) {
+          alert("いまは削除できませんでした。時間をおいてもう一度お試しください。");
+          return;
+        }
+      } catch {
+        alert("いまは削除できませんでした。通信状況を確かめてもう一度お試しください。");
+        return;
+      }
+      forgetCode(code);
+    }
+    forget(code);
   }
 
   function forget(code: string | undefined) {
@@ -171,13 +219,19 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
 
   async function save() {
     if (!draft) return;
+    const code = normalizeContinueCode(newCode);
+    if (!code) {
+      setCodeError(`コンテニューコードは半角の大文字と数字で${CONTINUE_MIN}〜8文字にしてください。`);
+      return;
+    }
+    setCodeError("");
     setSaving(true);
     setMessage("");
     try {
       const res = await fetch("/api/scoresheets", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, continueCode: code }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
@@ -186,16 +240,23 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
         setOpened(d.sheet);
         setIssued(d.continueCode);
         setDraft(null);
+        setNewCode("");
         setPhoto(null);
         fileObj.current = null;
         setTab("analysis");
+      } else if (d.error === "taken" || d.error === "bad_code") {
+        setCodeError(d.message);
       } else {
-        setMessage(d.message ?? (d.errors ? d.errors.join(" / ") : "登録できませんでした。"));
+        setMessage(d.message ?? "保存できませんでした。");
       }
     } finally {
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (draft && !newCode) setNewCode(suggestContinueCode(browserRandom));
+  }, [draft, newCode]);
 
   const issues = draft ? checkSheet(draft).errors.length : 0;
   const blank = draft ? isBlankSheet(draft) : true;
@@ -233,7 +294,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
           <>
             <ContinueCodeInput
               onLoaded={(s) => {
-                // 呼び出したデータは一覧に入れる（詳細は一覧からタップ）
+                // 呼び出したデータは一覧に入れる（分析は一覧からタップ）
                 remember(s);
                 setJustLoaded(s.continueCode ?? null);
                 setOpened(null);
@@ -243,6 +304,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
               <SheetList
                 sheets={sheets}
                 highlight={justLoaded}
+                onDelete={deleteSheet}
                 onOpen={(s) => {
                   setOpened(s);
                   setJustLoaded(null);
@@ -253,8 +315,11 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
             {opened && (
               <div id="sheet-detail" className="space-y-2 scroll-mt-4">
                 <GameDetail sheet={opened} />
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
                   <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">閉じる</button>
+                  <button onClick={() => deleteSheet(opened)} className="text-xs text-red-400 underline">
+                    このデータを削除
+                  </button>
                   <button
                     onClick={() => {
                       if (confirm("この端末の一覧から外します（コンテニューコードでまた呼び出せます）。")) forget(opened.continueCode);
@@ -266,12 +331,12 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 </div>
               </div>
             )}
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-              </div>
-            ) : (
-              <LeagueAnalysis sheets={sheets} />
+            {!loading && sheets.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-10">
+                この端末に保存した試合はまだありません。
+                <br />
+                「アップロード」から始めるか、コンテニューコードで呼び出してください。
+              </p>
             )}
           </>
         )}
@@ -328,6 +393,37 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
             {draft && (
               <>
                 <ScoreSheetEditor sheet={draft} onChange={setDraft} />
+                <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+                  <label className="block text-xs text-gray-400" htmlFor="new-continue-code">
+                    コンテニューコード（半角の大文字と数字・{CONTINUE_MIN}〜8文字。自由に決められます）
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="new-continue-code"
+                      value={newCode}
+                      onChange={(e) => {
+                        setNewCode(continueCodeInput(e.target.value));
+                        setCodeError("");
+                      }}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      inputMode="text"
+                      className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white tracking-widest focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={() => {
+                        setNewCode(suggestContinueCode(browserRandom));
+                        setCodeError("");
+                      }}
+                      className="px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300"
+                    >
+                      おまかせ
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-500">短いコードや分かりやすい言葉は、ほかの人に当てられて見られることがあります。</p>
+                  {codeError && <p className="text-xs text-red-300">{codeError}</p>}
+                </section>
                 <button
                   onClick={save}
                   disabled={saving || reading || blank}
@@ -391,7 +487,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
   }, []);
   async function load(input = code) {
     const c = normalizeContinueCode(input);
-    if (!c) return setError("コンテニューコードは半角の大文字と数字の8文字です（例 K7QM3XRA）。0・O・1・I・L は使っていません。");
+    if (!c) return setError("コンテニューコードは半角の大文字と数字の4〜8文字です（例 K7QM3XRA）。");
     setBusy(true);
     setError("");
     try {

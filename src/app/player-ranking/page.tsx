@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { PlayerStat } from "../api/player-stats/route";
 import type { PrevPlayerStat } from "../api/prev-season-players/route";
@@ -11,6 +11,8 @@ import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
 import ScoringRatePanel, { MultiDivisionCard } from "@/components/ScoringRatePanel";
 import ScoreSheetApp from "@/components/ScoreSheetApp";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 
@@ -180,6 +182,29 @@ function PlayerRankingContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, rateSeason, query, pastSeasonList, standingsLoaded, standingsLoading, scoresLoaded, scoresLoading]);
+
+  // 下に引っぱって更新: 読み込み済みのデータを捨てて読み直す（入力中のスコア表は消さない）
+  const [reloadKey, setReloadKey] = useState(0);
+  const refresh = useCallback(async () => {
+    requested.current.clear();
+    setPastPlayers({});
+    setPastTeams({});
+    setPastScores({});
+    setStandingsLoaded(false);
+    setScoresLoaded(false);
+    const d = await fetch("/api/player-stats", { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (d) {
+      setPlayers(d.players ?? []);
+      setCurrentSeasonLabel(d.season ?? "");
+      const current = parseSeasonNumber(d.season);
+      if (current !== undefined) await loadPastSeason(current - 1);
+    }
+    setReloadKey((k) => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const { pulling, refreshing, pullDistance, threshold } = usePullToRefresh(refresh);
 
   /** 得点率パネルに渡すシーズン別データ（表示中のシーズン → 前シーズン） */
   function rateSeasons(n: number | undefined) {
@@ -384,6 +409,7 @@ function PlayerRankingContent() {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* モード切替トグル */}
         <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-lg p-1 mb-4">
@@ -414,6 +440,7 @@ function PlayerRankingContent() {
 
         {mode === "matchup" && (
           <TeamMatchup
+            key={reloadKey}
             divisions={DIVISIONS}
             division={selectedDivision}
             onDivisionChange={setSelectedDivision}

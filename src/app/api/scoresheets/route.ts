@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
 import {
   checkSheet,
-  CONTINUE_ALPHABET,
   isBlankSheet,
   normalizeContinueCode,
   sanitizeSheet,
+  suggestContinueCode,
   type ScoreSheet,
 } from "@/lib/scoreSheet";
 
@@ -20,9 +20,7 @@ export const dynamic = "force-dynamic";
 const KEEP_SECONDS = 2 * 365 * 86400; // 2年
 const key = (code: string) => `scoresheet:cc:${code}`;
 
-function newCode(): string {
-  return Array.from({ length: 8 }, () => CONTINUE_ALPHABET[randomInt(CONTINUE_ALPHABET.length)]).join("");
-}
+const newCode = () => suggestContinueCode(randomInt);
 
 /** コンテニューコードで呼び出す */
 export async function GET(req: NextRequest) {
@@ -31,7 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "limit", message: "しばらく時間をおいてからお試しください。" }, { status: 429 });
   }
   const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
-  if (!code) return NextResponse.json({ error: "bad_code", message: "コンテニューコードは半角の大文字と数字の8文字です（例 K7QM3XRA）。" }, { status: 400 });
+  if (!code) return NextResponse.json({ error: "bad_code", message: "コンテニューコードは半角の大文字と数字の4〜8文字です（例 K7QM3XRA）。" }, { status: 400 });
   try {
     const sheet = await kv.get<ScoreSheet>(key(code));
     if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
@@ -53,6 +51,15 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
+  // 利用者が決めたコード（無ければおまかせ）
+  const wanted = (raw as { continueCode?: unknown } | null)?.continueCode;
+  const chosen = typeof wanted === "string" && wanted !== "" ? normalizeContinueCode(wanted) : undefined;
+  if (chosen === null) {
+    return NextResponse.json(
+      { error: "bad_code", message: "コンテニューコードは半角の大文字と数字で4〜8文字にしてください。" },
+      { status: 400 }
+    );
+  }
   const sheet = sanitizeSheet(raw);
   if (isBlankSheet(sheet)) return NextResponse.json({ error: "blank", message: "内容が入っていません。" }, { status: 400 });
   const { errors } = checkSheet(sheet);
@@ -60,6 +67,16 @@ export async function POST(req: NextRequest) {
   sheet.savedAt = new Date().toISOString();
 
   try {
+    if (chosen) {
+      sheet.continueCode = chosen;
+      if (await kv.set(key(chosen), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        return NextResponse.json({ ok: true, continueCode: chosen, sheet });
+      }
+      return NextResponse.json(
+        { error: "taken", message: `「${chosen}」はすでに使われています。別のコンテニューコードにしてください。` },
+        { status: 409 }
+      );
+    }
     for (let i = 0; i < 5; i++) {
       const code = newCode();
       sheet.continueCode = code;
@@ -79,7 +96,10 @@ export async function DELETE(req: NextRequest) {
   if (await isRateLimited(`scoresheet:lookup:${clientIp(req)}`, 30, 3600)) {
     return NextResponse.json({ error: "limit" }, { status: 429 });
   }
-  const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
+  const raw = req.nextUrl.searchParams.get("code") ?? "";
+  // 10/3 夜に形式を変える前に発行した "XXXX-XXXX" も、消すことだけはできるようにしておく
+  const legacy = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw) ? raw : null;
+  const code = normalizeContinueCode(raw) ?? legacy;
   if (!code) return NextResponse.json({ error: "bad_code" }, { status: 400 });
   try {
     await kv.del(key(code));

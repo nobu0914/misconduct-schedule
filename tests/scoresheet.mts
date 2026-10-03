@@ -82,10 +82,13 @@ assert(checkSheet(partial).errors.length === 1 && pa.visitor.goalsFor === 6 && p
 import { emptySheet, isBlankSheet } from "../src/lib/scoreSheet";
 assert(isBlankSheet(emptySheet()) && !isBlankSheet(partial), "空のスコア表だけは登録しない");
 
-// コンテニューコード（半角大文字・数字の8桁だけ）
-import { CONTINUE_ALPHABET, continueCodeInput, normalizeContinueCode } from "../src/lib/scoreSheet";
-assert(normalizeContinueCode("K7QM3XRA") === "K7QM3XRA", "正しいコードはそのまま");
+// コンテニューコード（半角大文字・数字、利用者が4〜8文字で自由に決める）
+import { CONTINUE_ALPHABET, continueCodeInput, normalizeContinueCode, suggestContinueCode } from "../src/lib/scoreSheet";
+assert(normalizeContinueCode("K7QM3XRA") === "K7QM3XRA" && normalizeContinueCode("SAIKO257") === "SAIKO257", "8文字以内の大文字・数字はそのまま");
+assert(normalizeContinueCode("ABCD") === "ABCD" && normalizeContinueCode("ABC") === null, "4文字から（短すぎると他人に当てられる）");
+assert(normalizeContinueCode("ABCDEFGHJ") === null, "9文字は無効（最大8文字）");
 assert(normalizeContinueCode("k7qm3xra") === null && normalizeContinueCode("K7QM-3XRA") === null && normalizeContinueCode("Ｋ７ＱＭ３ＸＲＡ") === null, "小文字・記号・全角は受け付けない");
-assert(normalizeContinueCode("K7QM3XR") === null && normalizeContinueCode("K7QM3XRO") === null, "7文字や使わない文字（O）は無効");
-assert(continueCodeInput("k7qm-3xra") === "K7QM3XRA" && continueCodeInput("Ｋ７ＱＭ３ＸＲＡ９９") === "K7QM3XRA", "入力欄では半角大文字・数字だけにして8文字まで");
-assert(!/[01OIL]/.test(CONTINUE_ALPHABET) && CONTINUE_ALPHABET.length === 31 && /^[A-Z0-9]+$/.test(CONTINUE_ALPHABET), "使う文字は半角大文字・数字のうち読み間違えにくい31文字");
+assert(continueCodeInput("saiko-257!") === "SAIKO257" && continueCodeInput("Ｋ７ＱＭ３ＸＲＡ９９") === "K7QM3XRA", "入力欄では半角大文字・数字だけにして8文字まで");
+const sug = suggestContinueCode((n) => Math.floor(Math.random() * n));
+assert(sug.length === 8 && !/[01OIL]/.test(sug) && normalizeContinueCode(sug) === sug, `おまかせは8文字・読み間違えにくい文字だけ (${sug})`);
+assert(!/[01OIL]/.test(CONTINUE_ALPHABET) && /^[A-Z0-9]+$/.test(CONTINUE_ALPHABET), "おまかせに使う文字");
