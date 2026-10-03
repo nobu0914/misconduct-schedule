@@ -1,42 +1,53 @@
-// 個人ランクの得点率・ディビジョン平均・チーム勝率（src/lib/scoringRate.ts）。実行: npx tsx tests/scoring-rate.mts
-import { divisionRates, playerRates, rateRank, teamRecord } from "../src/lib/scoringRate";
+// 個人ランクの詳細スタッツ（src/lib/scoringRate.ts）。実行: npx tsx tests/scoring-rate.mts
+import { multiDivisionTotal, playerProfile, teamRecord } from "../src/lib/scoringRate";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) { console.error("FAIL:", msg); process.exitCode = 1; } else { console.log("ok  :", msg); }
 }
 const near = (a: number | undefined, b: number) => a !== undefined && Math.abs(a - b) < 1e-9;
 
+const pl = (name: string, team: string, divisionLabel: string, gp: number, goals: number, assists: number, pim = 0) =>
+  ({ name, team, divisionLabel, gp, goals, assists, points: goals + assists, pim });
+
 const players = [
-  { team: "サイコ", divisionLabel: "Brass", gp: 10, goals: 15, points: 25 },
-  { team: "サイコ", divisionLabel: "Brass", gp: 5, goals: 0, points: 1 },
-  { team: "NASDAQ", divisionLabel: "Brass", gp: 0, goals: 0, points: 0 }, // 出場0試合は分母に入れない
-  { team: "Change-zero", divisionLabel: "Copper", gp: 10, goals: 13, points: 18 },
+  pl("八藤信幸", "サイコ", "Brass", 10, 15, 10, 0),
+  pl("森悠", "サイコ", "Brass", 10, 5, 17, 4),
+  pl("控え", "サイコ", "Brass", 5, 0, 1, 2),
+  pl("出場なし", "NASDAQ", "Brass", 0, 0, 0),
+  pl("八藤 信幸", "Change-zero", "Copper", 10, 13, 5, 2), // 表記ゆれ・別ディビジョン
 ];
-
-const me = playerRates(players[0]);
-assert(near(me?.goals, 1.5) && near(me?.points, 2.5), "本人: 15G ÷ 10試合 = 1.50、25P ÷ 10試合 = 2.50");
-assert(playerRates(players[2]) === undefined, "出場0試合は率なし");
-
-const brass = divisionRates(players, "Brass");
-assert(near(brass?.goals, 15 / 15) && near(brass?.points, 26 / 15), "平均 = 全ゴール ÷ 出場試合の合計（15G / 15試合）");
-assert(brass?.players === 2, "出場した選手だけ数える");
-assert(divisionRates(players, "Gold") === undefined, "データの無いディビジョンは undefined");
-
 const standings = [
   { team: "サイコ", divisionLabel: "Brass", rank: 2, totalTeams: 10, gp: 10, wins: 8, losses: 2, ties: 0 },
   { team: "Early Bird", divisionLabel: "Brass", rank: 4, gp: 10, wins: 5, losses: 3, ties: 2 },
-  { team: "サイコ", divisionLabel: "Silver", rank: 1, gp: 10, wins: 10, losses: 0, ties: 0 },
-  { team: "古いシーズン", divisionLabel: "Brass", rank: 9 }, // 勝敗なし
 ];
-const psycho = teamRecord(standings, "サイコ", "Brass");
-assert(near(psycho?.winRate, 0.8) && psycho?.rank === 2 && psycho.totalTeams === 10, "サイコ（Brass）80%・10チーム中2位");
-assert(near(teamRecord(standings, "EarlyBird", "Brass")?.winRate, 0.6), "引き分けは0.5勝・表記ゆれも同じチーム");
-assert(teamRecord(standings, "Early Bird", "Brass")?.totalTeams === 3, "totalTeams が無ければディビジョンの行数");
-assert(teamRecord(standings, "古いシーズン", "Brass") === undefined, "勝敗が無ければ undefined");
+const games = [
+  { awayTeam: "サイコ", homeTeam: "NASDAQ", awayScore: 30, homeScore: 2, divisionLabel: "Brass" },
+  { awayTeam: "Team Apples", homeTeam: "ｻｲｺ", awayScore: 1, homeScore: 20, divisionLabel: "Brass" }, // 表記ゆれ
+  { awayTeam: "サイコ", homeTeam: "NASDAQ", awayScore: null, homeScore: null, divisionLabel: "Brass" }, // 未消化
+];
 
-// 得点率のディビジョン内順位（出場した選手の中で）
-const r1 = rateRank(players, "Brass", "goals", 1.5);
-assert(r1.rank === 1 && r1.of === 2, `1.50 は Brass 2人中1位 (=${r1.rank}/${r1.of})`);
-assert(rateRank(players, "Brass", "points", 0.2).rank === 2, "0.20pt は2位");
-const tie = [...players, { team: "X", divisionLabel: "Brass", gp: 2, goals: 3, points: 3 }];
-assert(rateRank(tie, "Brass", "goals", 1.5).rank === 1 && rateRank(tie, "Brass", "goals", 0).rank === 3, "同じ値は同順位");
+const p = playerProfile({ players, standings, games }, "八藤信幸", "Brass")!;
+assert(near(p.goals.value, 1.5) && near(p.points.value, 2.5) && near(p.assists.value, 1.0), "1試合あたり G1.50 / P2.50 / A1.00");
+assert(p.goals.rank === 1 && p.goals.of === 3, `ゴール率は出場3人中1位 (=${p.goals.rank}/${p.goals.of})`);
+assert(near(p.goals.avg, 20 / 25) && near(p.points.avg, 48 / 25), "平均 = 合計 ÷ 出場試合の合計（出場0試合は除く）");
+assert(p.pim.rank === 1, "反則は少ないほど上位（0分で1位）");
+assert(near(p.pointsVsAvg, 2.5 / (48 / 25)), "ポイント率は平均の何倍か");
+assert(p.topPercent === 34 && p.deviation > 50, `上位%・偏差値 (=${p.topPercent}%, ${p.deviation.toFixed(1)})`);
+assert(p.teamGoals?.total === 50 && p.teamGoals.from === "scores", "チーム総得点はスコア表から（表記ゆれ込み・未消化除く）");
+assert(near(p.involvement, 25 / 50) && near(p.goalShare, 15 / 50), "関与率 50%・ゴールシェア 30%");
+assert(p.teamGames === 10 && near(p.attendance, 1), "出場率 = GP ÷ チームの試合数（順位表）");
+assert(p.style === "ゴール型", "G15:A10 はゴール型");
+assert(near(p.teamRecord?.winRate, 0.8), "チーム勝率 80%");
+
+const noScores = playerProfile({ players }, "森悠", "Brass")!;
+assert(noScores.teamGoals?.total === 20 && noScores.teamGoals.from === "players", "スコア表が無ければ所属選手のゴール合計");
+assert(noScores.teamGames === 10 && noScores.style === "アシスト型" && noScores.teamRecord === undefined, "順位表が無くても試合数は選手の最大GP");
+assert(playerProfile({ players }, "出場なし", "Brass") === undefined, "出場0試合はなし");
+assert(playerProfile({ players }, "八藤信幸", "Gold") === undefined, "そのディビジョンにいなければなし");
+
+const total = multiDivisionTotal(players, "八藤信幸")!;
+assert(total.divisions.length === 2 && total.points === 43 && total.gp === 20, "掛け持ちは全ディビジョン合計（表記ゆれ込み）");
+assert(multiDivisionTotal(players, "森悠") === undefined, "1ディビジョンだけなら合計は出さない");
+
+assert(near(teamRecord(standings, "EarlyBird", "Brass")?.winRate, 0.6), "引き分けは0.5勝・表記ゆれも同じチーム");
+assert(teamRecord(standings, "Early Bird", "Brass")?.totalTeams === 2, "totalTeams が無ければディビジョンの行数");

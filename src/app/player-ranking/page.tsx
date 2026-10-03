@@ -9,7 +9,7 @@ import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName } from "@/lib/teamName";
-import ScoringRatePanel from "@/components/ScoringRatePanel";
+import ScoringRatePanel, { MultiDivisionCard } from "@/components/ScoringRatePanel";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 
@@ -167,43 +167,49 @@ function PlayerRankingContent() {
       requested.current.add(key);
       load();
     };
-    if (rateSeason === currentSeasonNum && !standingsLoaded && !standingsLoading) once("standings", loadStandings);
+    if (rateSeason === currentSeasonNum) {
+      if (!standingsLoaded && !standingsLoading) once("standings", loadStandings);
+      if (!scoresLoaded && !scoresLoading) once("scores", loadScores);
+    }
     for (const n of [rateSeason, rateSeason - 1]) {
       if (n === currentSeasonNum || !pastSeasonList.includes(n)) continue;
       if (!pastPlayers[n]) once(`players:${n}`, () => void loadPastSeason(n));
       if (!pastTeams[n]) once(`teams:${n}`, () => void loadPastTeams(n));
+      if (!pastScores[n]) once(`scores:${n}`, () => void loadPastScores(n));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, rateSeason, query, pastSeasonList, standingsLoaded, standingsLoading]);
+  }, [mode, rateSeason, query, pastSeasonList, standingsLoaded, standingsLoading, scoresLoaded, scoresLoading]);
 
   /** 得点率パネルに渡すシーズン別データ（表示中のシーズン → 前シーズン） */
   function rateSeasons(n: number | undefined) {
     if (n === undefined) return [];
     const of = (s: number) =>
       s === currentSeasonNum
-        ? { season: s, players, standings }
-        : { season: s, players: pastPlayers[s], standings: pastTeams[s] };
+        ? { season: s, ctx: { players, standings, games: games.filter((g) => g.season === currentSeasonLabel) } }
+        : { season: s, ctx: pastPlayers[s] && { players: pastPlayers[s], standings: pastTeams[s], games: pastScores[s] } };
     return [of(n), of(n - 1)];
   }
 
   // ranking モード初回ロード時に取得（今シーズンの順位表と、過去シーズンの一覧）
   useEffect(() => {
     if (mode === "ranking" && !standingsLoaded && !standingsLoading) loadStandings();
-    if (mode === "score" && !scoresLoaded && !scoresLoading) {
-      setScoresLoading(true);
-      Promise.all([
-        fetch("/api/scores")
-          .then((r) => r.json())
-          .then((d) => setGames(d.games ?? []))
-          .catch(() => {}),
-        loadPastScores(),
-      ]).finally(() => {
-        setScoresLoading(false);
-        setScoresLoaded(true);
-      });
-    }
+    if (mode === "score" && !scoresLoaded && !scoresLoading) loadScores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, standingsLoaded, scoresLoaded, standingsLoading, scoresLoading]);
+
+  function loadScores() {
+    setScoresLoading(true);
+    Promise.all([
+      fetch("/api/scores")
+        .then((r) => r.json())
+        .then((d) => setGames(d.games ?? []))
+        .catch(() => {}),
+      loadPastScores(),
+    ]).finally(() => {
+      setScoresLoading(false);
+      setScoresLoaded(true);
+    });
+  }
 
   async function loadPastScores(n?: number) {
     const d = await fetch(`/api/past-scores${n !== undefined ? `?season=${n}` : ""}`)
@@ -455,6 +461,17 @@ function PlayerRankingContent() {
             )}
 
             <div className="mt-4 space-y-4">
+              {/* 同じ選手が複数ディビジョンに出ていれば、まず全ディビジョン合計 */}
+              {rateSeason !== undefined &&
+                [...new Map(results.map((p) => [normalizeName(p.name), p.name])).values()].map((name) => (
+                  <MultiDivisionCard
+                    key={`total-${name}`}
+                    name={name}
+                    season={rateSeason}
+                    players={showingCurrent ? players : pastPlayers[rateSeason] ?? []}
+                  />
+                ))}
+
               {showingCurrent && currentResults.map((p, i) => {
                 const divisionPlayers = players.filter((x) => x.divisionLabel === p.divisionLabel);
                 const abovePlayers = divisionPlayers
