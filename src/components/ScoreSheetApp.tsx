@@ -453,7 +453,38 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
               </section>
             )}
 
-            {/* ③ 確認して保存：写真は折りたたみ */}
+            {/* ③ 確認して保存：写真は折りたたみ。読み直し（再アップロード）もここから */}
+            {draft && (
+              <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] text-gray-400">読み取りがうまくいかなかったときは、やり直せます（入力中の内容は消えます）。</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      if (!confirm("入力中の内容を消して、別の写真を選び直しますか？")) return;
+                      setDraft(null);
+                      setMessage("");
+                      fileRef.current?.click();
+                    }}
+                    className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-100"
+                  >
+                    📷 別の写真で読み直す
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!confirm("入力中の内容を消して、同じ写真をもう一度読み取りますか？（アップロード1件として数えます）")) return;
+                      readPhoto();
+                    }}
+                    disabled={!photo || reading || quota?.remaining === 0}
+                    className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-100 disabled:opacity-40"
+                  >
+                    🔄 同じ写真を読み直す
+                  </button>
+                </div>
+                {quota && quota.remaining !== null && (
+                  <p className="text-[10px] text-gray-500 text-center">今日のアップロード 残り {quota.remaining} / {quota.limit} 件</p>
+                )}
+              </section>
+            )}
             {draft && photo && (
               <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
                 <button onClick={() => setPhotoOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-gray-300">

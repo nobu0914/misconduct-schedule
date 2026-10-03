@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2016",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: 読み取り後に「別の写真で読み直す」「同じ写真を読み直す」を追加",
+    ],
+  },
+  {
     version: "Ver.1-261003-2010",
     date: "2026-10-03",
     changes: [
