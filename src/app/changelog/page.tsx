@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2024",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: 保存したあと・試合を開いたときに、その試合が画面の一番上に来るように",
+    ],
+  },
+  {
     version: "Ver.1-261003-2016",
     date: "2026-10-03",
     changes: [

@@ -106,6 +106,17 @@ async function shrinkImage(file: File): Promise<{ base64: string; mediaType: str
 }
 
 /** embedded: データページの「分析」タブの中に出すとき（外枠・余白を付けない） */
+/** 試合のカードを画面の上（固定ヘッダーのすぐ下）に合わせる */
+function scrollToGame(code: string | undefined | null) {
+  if (!code) return;
+  setTimeout(() => {
+    const el = document.getElementById(`row-${code}`);
+    if (!el) return;
+    const header = document.querySelector("header")?.getBoundingClientRect().height ?? 0;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - header - 8, behavior: "smooth" });
+  }, 80);
+}
+
 export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState<Tab>("analysis");
   const [sheets, setSheets] = useState<ScoreSheet[]>([]);
@@ -334,7 +345,15 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
           ))}
         </div>
 
-        {issued && <ContinueCodeModal code={issued} onClose={() => setIssued(null)} />}
+        {issued && (
+          <ContinueCodeModal
+            code={issued}
+            onClose={() => {
+              scrollToGame(issued);
+              setIssued(null);
+            }}
+          />
+        )}
 
         {tab === "analysis" && (
           <>
@@ -356,9 +375,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                   setJustLoaded(null);
                   const closing = opened?.continueCode === s.continueCode;
                   setOpened(closing ? null : s);
-                  if (!closing) {
-                    setTimeout(() => document.getElementById(`row-${s.continueCode}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                  }
+                  if (!closing) scrollToGame(s.continueCode);
                 }}
                 renderDetail={(s) => (
                   <div className="space-y-2 pb-2">
