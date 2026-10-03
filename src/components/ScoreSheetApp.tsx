@@ -494,7 +494,10 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                       おまかせ
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-500">短いコードや分かりやすい言葉は、ほかの人に当てられて見られることがあります。</p>
+                  <p className="text-[11px] leading-relaxed text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-2 py-1.5">
+                    ⚠ コンテニューコードが分かれば、<b>誰でもこのデータを呼び出せます</b>（削除もできます）。
+                    「1234」「AAAA」やチーム名のような簡単なコード、ほかの人と重なりやすいコードは使わないでください。迷ったら「おまかせ」がおすすめです。
+                  </p>
                   {codeError && <p className="text-xs text-red-300">{codeError}</p>}
                 </section>
                 <button
@@ -642,7 +645,7 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
           <p className="text-3xl font-bold text-white tracking-[0.2em] mt-1 select-all">{code}</p>
         </div>
         <p className="text-xs text-gray-400 leading-relaxed">
-          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
+          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。コードが分かれば誰でも呼び出せるので、人に教えるときは気をつけてください。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
         </p>
         <div className="flex gap-2">
           <button

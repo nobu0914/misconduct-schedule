@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2001",
+    date: "2026-10-03",
+    changes: [
+      "スコア表分析: コンテニューコードが分かれば誰でも呼び出せること、簡単なコード・重なりやすいコードは避けることを保存画面に明記",
+    ],
+  },
+  {
     version: "Ver.1-261003-1959",
     date: "2026-10-03",
     changes: [
