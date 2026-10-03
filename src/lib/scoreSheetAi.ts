@@ -147,7 +147,14 @@ export function normalizeAiSheet(raw: Record<string, unknown>): ScoreSheet {
   return s;
 }
 
-export class AiReadError extends Error {}
+export class AiReadError extends Error {
+  /** API が返したエラーの種類と説明（秘密情報は含まない。原因の切り分け用） */
+  detail?: string;
+  constructor(code: string, detail?: string) {
+    super(code);
+    this.detail = detail;
+  }
+}
 
 export async function readScoreSheetImage(base64: string, mediaType: string): Promise<ScoreSheet> {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -173,8 +180,16 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
     signal: AbortSignal.timeout(55_000),
   });
   if (!res.ok) {
-    console.error("score sheet AI read failed", res.status, (await res.text()).slice(0, 500));
-    throw new AiReadError(`api_${res.status}`);
+    const text = await res.text();
+    console.error("score sheet AI read failed", res.status, text.slice(0, 500));
+    let detail: string | undefined;
+    try {
+      const e = (JSON.parse(text) as { error?: { type?: string; message?: string } }).error;
+      detail = [e?.type, e?.message].filter(Boolean).join(": ").slice(0, 200) || undefined;
+    } catch {
+      // 本文が JSON でなければ詳細なし
+    }
+    throw new AiReadError(`api_${res.status}`, detail);
   }
   const body = (await res.json()) as { content?: { type: string; input?: Record<string, unknown> }[] };
   const input = body.content?.find((c) => c.type === "tool_use")?.input;

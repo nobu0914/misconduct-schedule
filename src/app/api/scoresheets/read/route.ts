@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const code = e instanceof AiReadError ? e.message : "error";
     console.error("score sheet read error", code, e instanceof AiReadError ? "" : e);
-    return NextResponse.json({ error: code, message: "読み取りに失敗しました。手入力で登録できます。" }, { status: 502 });
+    const detail = e instanceof AiReadError ? e.detail : undefined;
+    return NextResponse.json({ error: code, detail, message: "読み取りに失敗しました。手入力で登録できます。" }, { status: 502 });
   }
 }
