@@ -259,6 +259,9 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   - 集計 `src/lib/scoreSheet.ts`: セーブ率（相手SOG − 失点）、決定率、前後半、PP/SH（2分以下の反則は相手得点で明ける）、
     先制時勝率、逆転勝ち（前半負け→勝ち）、アシスト→ゴールの組み合わせ。テスト `tests/scoresheet.mts` は
     実物の 2026/9/6 Bronze #257 WSJ 6-10 サイコペッカーズ（`tests/fixtures/scoresheet-257.json`）で検証。
+  - キー設定後の実地確認（同じ写真）: 得点 15/16・スコア・SOG・ゴーリー・反則が一致。読めない1件は時間を空欄で返し、
+    入力チェックが赤で止める。1回 約33秒。`claude-sonnet-5-5` は tool_choice の強制不可（auto＋指示）、max_tokens 4096 では
+    Home 側が欠けたので 16000・`maxDuration` 120。失敗時は API の error type/message を `detail` で返す。
 
 ### 2026-10-03（個人ランクの得点率）
 - 個人ランクのカードに「得点率（1試合あたり）」（`src/components/ScoringRatePanel.tsx`、計算は `src/lib/scoringRate.ts`）。
