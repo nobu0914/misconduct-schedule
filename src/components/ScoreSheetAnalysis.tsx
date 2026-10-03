@@ -161,7 +161,7 @@ export function LeagueAnalysis({ sheets }: { sheets: ScoreSheet[] }) {
       <p className="text-sm text-gray-500 text-center py-10">
         この端末に保存した試合はまだありません。
         <br />
-        「スコア表を読み込む」から始めるか、コンテニューコードで呼び出してください。
+        「アップロード」から始めるか、コンテニューコードで呼び出してください。
       </p>
     );
   }

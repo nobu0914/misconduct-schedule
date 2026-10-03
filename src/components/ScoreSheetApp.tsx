@@ -209,7 +209,7 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
           {(
             [
               ["analysis", "分析を見る"],
-              ["add", "スコア表を読み込む"],
+              ["add", "アップロード"],
             ] as [Tab, string][]
           ).map(([k, label]) => (
             <button
