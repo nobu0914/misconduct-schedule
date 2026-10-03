@@ -3,7 +3,7 @@
 // キーは Rinnavi 専用の ANTHROPIC_API_KEY（他サービスと共有しない方針）。未設定なら読み取りは使えず、
 // 画面は手入力で動く。読み取り結果は必ず人が確認してから保存する（手書きの読み違いがあるため）。
 
-import { emptySheet, type Half, type ScoreSheet, type SheetTeam, type Side } from "./scoreSheet";
+import { analyzeGame, emptySheet, goalOrder, goalSituations, playerName, type Half, type ScoreSheet, type SheetTeam, type Side } from "./scoreSheet";
 
 const MODEL = "claude-sonnet-5-5";
 
@@ -214,4 +214,93 @@ function jsonFromText(content: { type: string; text?: string }[] | undefined): R
   } catch {
     return undefined;
   }
+}
+
+// ───────── AI 総評（試合の分析から、両チームへのアドバイスを書く） ─────────
+
+export interface AiReview {
+  summary: string;
+  teams: { team: string; good: string[]; improve: string[] }[];
+  players: string[];
+  createdAt: string;
+}
+
+function reviewInput(s: ScoreSheet): string {
+  const a = analyzeGame(s);
+  const sit = goalSituations(s);
+  const pct = (v: number | null) => (v === null ? "不明" : `${Math.round(v * 100)}%`);
+  const who = (side: Side, no?: string) => (no ? `#${no}${playerName(s[side], no) ? ` ${playerName(s[side], no)}` : ""}` : "");
+  const lines = [
+    `試合: ${s.date} ${s.division} #${s.gameNo}`,
+    `スコア: ${s.visitor.name} ${s.visitor.total} - ${s.home.total} ${s.home.name}`,
+  ];
+  for (const side of ["visitor", "home"] as Side[]) {
+    const x = a[side];
+    lines.push(
+      `【${x.team}】得点 前半${x.byHalf.for[0]} 後半${x.byHalf.for[1]} OT${x.byHalf.for[2]} / 失点 前半${x.byHalf.against[0]} 後半${x.byHalf.against[1]}` +
+        ` / シュート ${x.shots ?? "記録なし"} 決定率 ${pct(x.shootingPct)}` +
+        ` / ゴーリー ${x.goalie.name || x.goalie.no || "不明"} セーブ率 ${pct(x.goalie.savePct)}（${x.goalie.saves ?? "?"}/${x.goalie.shotsFaced ?? "?"}）` +
+        ` / PP得点 ${x.powerPlayGoals} SH得点 ${x.shortHandedGoals} 反則 ${x.penaltyMinutes}分` +
+        `${x.scoredFirst ? " / 先制" : ""}${x.comeback ? " / 逆転勝ち" : ""}`
+    );
+  }
+  lines.push("得点経過:");
+  [...s.goals]
+    .map((g, i) => ({ g, tag: sit[i] }))
+    .sort((p, q) => goalOrder(p.g, q.g))
+    .forEach(({ g, tag }) => {
+      const assists = [who(g.side, g.assist1), who(g.side, g.assist2)].filter(Boolean).join("・");
+      lines.push(`- ${g.half === 1 ? "前半" : g.half === 2 ? "後半" : "OT"} ${g.time} ${s[g.side].name} ${who(g.side, g.scorer)}${assists ? `（A ${assists}）` : ""}${tag ? ` [${tag}]` : ""}`);
+    });
+  if (s.penalties.length) {
+    lines.push("反則:");
+    for (const p of s.penalties) lines.push(`- ${p.half === 1 ? "前半" : "後半"} ${p.time} ${s[p.side].name} ${who(p.side, p.no)} ${p.reason} ${p.minutes}分`);
+  }
+  return lines.join("\n");
+}
+
+const REVIEW_PROMPT = `あなたはアマチュアのアイスホッケーリーグ（MHL）の試合を見るコーチです。
+次の1試合のスコア表の集計だけをもとに、両チームの選手向けに「AI総評」を日本語で書いてください。
+
+ルール:
+- データに無いこと（戦術・体格・プレー内容の推測など）は書かない。数字から言えることだけ
+- 前向きで具体的に。負けたチームにも良かった点を必ず挙げる
+- 選手名は「#番号 名前」の形
+- シュート数（SOG）が記録なしなら、決定率・セーブ率には触れない
+
+次の JSON だけを返してください（前後に文章を付けない）:
+{"summary":"試合全体の総評（2〜3文）","teams":[{"team":"チーム名","good":["良かった点（各40字以内、1〜3個）"],"improve":["次への改善点（各40字以内、1〜3個）"]}],"players":["注目選手と理由（各40字以内、1〜3個）"]}`;
+
+export async function reviewScoreSheet(s: ScoreSheet): Promise<AiReview> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new AiReadError("no_key");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 4000,
+      messages: [{ role: "user", content: `${REVIEW_PROMPT}\n\n---\n${reviewInput(s)}` }],
+    }),
+    signal: AbortSignal.timeout(55_000),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("score sheet review failed", res.status, text.slice(0, 500));
+    throw new AiReadError(`api_${res.status}`);
+  }
+  const body = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const raw = jsonFromText(body.content);
+  if (!raw || typeof raw.summary !== "string") throw new AiReadError("no_result");
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 3) : []);
+  return {
+    summary: raw.summary.slice(0, 400),
+    teams: (Array.isArray(raw.teams) ? raw.teams : []).slice(0, 2).map((t: { team?: unknown; good?: unknown; improve?: unknown }) => ({
+      team: typeof t?.team === "string" ? t.team.slice(0, 40) : "",
+      good: list(t?.good),
+      improve: list(t?.improve),
+    })),
+    players: list(raw.players),
+    createdAt: new Date().toISOString(),
+  };
 }

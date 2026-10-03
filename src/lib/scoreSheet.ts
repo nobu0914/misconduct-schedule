@@ -64,6 +64,13 @@ export interface ScoreSheet {
   issues?: string[];
   /** 呼び出し用のコンテニューコード（保存時に発行） */
   continueCode?: string;
+  /** AI 総評（初めて分析を開いたときに作って保存する） */
+  review?: {
+    summary: string;
+    teams: { team: string; good: string[]; improve: string[] }[];
+    players: string[];
+    createdAt: string;
+  };
 }
 
 export const DIVISIONS = ["Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over"];
@@ -203,6 +210,13 @@ export function goalOrder(a: SheetGoal, b: SheetGoal): number {
   return a.half - b.half || (parseClock(a.time) ?? 0) - (parseClock(b.time) ?? 0);
 }
 
+/** シュート数の合計。Total 欄が空ならハーフごとの数を足す（用紙の Total が書かれていないことがある） */
+export function shotsOf(t: SheetTeam): number | null {
+  if (t.sogTotal !== null) return t.sogTotal;
+  const halves = t.sog.filter((v): v is number => v !== null);
+  return halves.length > 0 ? halves.reduce((a, b) => a + b, 0) : null;
+}
+
 export function analyzeGame(s: ScoreSheet): Record<Side, GameAnalysis> {
   const first = [...s.goals].sort(goalOrder)[0];
   const make = (side: Side): GameAnalysis => {
@@ -213,7 +227,8 @@ export function analyzeGame(s: ScoreSheet): Record<Side, GameAnalysis> {
     const mine = situations.filter((_, i) => s.goals[i].side === side);
     const pp = mine.filter((x) => x === "PP").length;
     const sh = mine.filter((x) => x === "SH").length;
-    const shotsFaced = o.sogTotal;
+    const shots = shotsOf(t);
+    const shotsFaced = shotsOf(o);
     const saves = shotsFaced !== null ? Math.max(0, shotsFaced - o.total) : null;
     const firstHalfDiff = t.goals[0] - o.goals[0];
     const result = t.total > o.total ? "W" : t.total < o.total ? "L" : "T";
@@ -224,9 +239,9 @@ export function analyzeGame(s: ScoreSheet): Record<Side, GameAnalysis> {
       goalsFor: t.total,
       goalsAgainst: o.total,
       byHalf: { for: t.goals, against: o.goals },
-      shots: t.sogTotal,
-      shotsAgainst: o.sogTotal,
-      shootingPct: t.sogTotal ? t.total / t.sogTotal : null,
+      shots,
+      shotsAgainst: shotsFaced,
+      shootingPct: shots ? t.total / shots : null,
       goalie: {
         ...t.goalie,
         saves,

@@ -92,3 +92,14 @@ assert(continueCodeInput("saiko-257!") === "SAIKO257" && continueCodeInput("Ｋ�
 const sug = suggestContinueCode((n) => Math.floor(Math.random() * n));
 assert(sug.length === 8 && !/[01OIL]/.test(sug) && normalizeContinueCode(sug) === sug, `おまかせは8文字・読み間違えにくい文字だけ (${sug})`);
 assert(!/[01OIL]/.test(CONTINUE_ALPHABET) && /^[A-Z0-9]+$/.test(CONTINUE_ALPHABET), "おまかせに使う文字");
+
+// SOG の Total 欄が空でも、ハーフごとの数から出す（10/3 Brass #4 で Total が空だった）
+import { shotsOf } from "../src/lib/scoreSheet";
+const noTotal: ScoreSheet = structuredClone(sheet);
+noTotal.visitor.sogTotal = null;
+noTotal.home.sogTotal = null;
+assert(shotsOf(noTotal.visitor) === 15 && shotsOf(noTotal.home) === 23, "Total が空ならハーフの合計");
+const nt = analyzeGame(noTotal);
+assert(nt.home.goalie.shotsFaced === 15 && near(nt.home.goalie.savePct, 0.6) && near(nt.visitor.shootingPct, 6 / 15), "セーブ率・決定率も出る");
+noTotal.visitor.sog = [null, null, null];
+assert(shotsOf(noTotal.visitor) === null && analyzeGame(noTotal).home.goalie.savePct === null, "どちらも空なら出さない");

@@ -33,7 +33,7 @@ export function VersusBars({ a }: { a: Record<Side, GameAnalysis> }) {
     <section>
       <Title>チーム比較</Title>
       <div className="space-y-1.5">
-        {rows.map((row) => {
+        {rows.filter((row) => row.l !== null || row.r !== null).map((row) => {
           const max = Math.max(row.l ?? 0, row.r ?? 0, 1);
           const lw = ((row.l ?? 0) / max) * 100;
           const rw = ((row.r ?? 0) / max) * 100;
@@ -55,6 +55,9 @@ export function VersusBars({ a }: { a: Record<Side, GameAnalysis> }) {
           );
         })}
       </div>
+      {v.shots === null && h.shots === null && (
+        <p className="text-[11px] text-amber-200/80 mt-2">この試合はシュート数（SOG）が記録されていないため、シュート・決定率・セーブ率は出せません。</p>
+      )}
     </section>
   );
 }

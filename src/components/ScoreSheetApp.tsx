@@ -163,6 +163,15 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
     forget(code);
   }
 
+  /** 一覧の並びは変えずに中身だけ差し替える（AI 総評が付いたときなど） */
+  function replaceLocal(sheet: ScoreSheet) {
+    setSheets((cur) => {
+      const next = cur.map((x) => (x.continueCode === sheet.continueCode ? sheet : x));
+      saveLocal(next);
+      return next;
+    });
+  }
+
   function forget(code: string | undefined) {
     setSheets((cur) => {
       const next = cur.filter((s) => s.continueCode !== code);
@@ -353,7 +362,14 @@ export default function ScoreSheetApp({ embedded = false }: { embedded?: boolean
                 }}
                 renderDetail={(s) => (
                   <div className="space-y-2 pb-2">
-                    <GameDetail sheet={s} />
+                    <GameDetail
+                      sheet={s}
+                      compact
+                      onUpdate={(updated) => {
+                        replaceLocal(updated);
+                        setOpened(updated);
+                      }}
+                    />
                     <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
                       <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">
                         閉じる

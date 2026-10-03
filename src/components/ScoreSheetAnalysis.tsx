@@ -17,8 +17,19 @@ const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` :
 const pctOf = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const halfLabel = (h: number) => (h === 1 ? "前半" : h === 2 ? "後半" : "OT");
 
-/** 1試合の分析（スコア表1枚から） */
-export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
+/**
+ * 1試合の分析（スコア表1枚から）。compact は一覧のカードの中に開くとき
+ * （日付・チーム名・スコアはカードに出ているので繰り返さない）
+ */
+export function GameDetail({
+  sheet,
+  compact = false,
+  onUpdate,
+}: {
+  sheet: ScoreSheet;
+  compact?: boolean;
+  onUpdate?: (s: ScoreSheet) => void;
+}) {
   const [showBasis, setShowBasis] = useState(false);
   const a = analyzeGame(sheet);
   const situations = goalSituations(sheet);
@@ -27,15 +38,17 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-800">
-        {sheet.continueCode && (
+        {!compact && sheet.continueCode && (
           <p className="text-[11px] text-gray-500 mb-1">
             コンテニューコード <span className="text-gray-200 font-semibold tracking-wider select-all">{sheet.continueCode}</span>
           </p>
         )}
-        <p className="text-xs text-gray-500">
-          {sheet.date} {sheet.division} {sheet.gameNo && `#${sheet.gameNo}`}
-          {sheet.issues?.length ? <span className="ml-2 text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-        </p>
+        {!compact && (
+          <p className="text-xs text-gray-500">
+            {sheet.date} {sheet.division} {sheet.gameNo && `#${sheet.gameNo}`}
+            {sheet.issues?.length ? <span className="ml-2 text-[10px] px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
+          </p>
+        )}
         {sheet.issues?.length ? (
           <ul className="mt-1 text-[11px] text-amber-200/80 list-disc pl-4">
             {sheet.issues.map((x) => (
@@ -43,13 +56,15 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
             ))}
           </ul>
         ) : null}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-1">
-          <span className="text-sm font-bold text-blue-400 truncate">{sheet.visitor.name}</span>
-          <span className="text-xl font-bold text-white">
-            {sheet.visitor.total} − {sheet.home.total}
-          </span>
-          <span className="text-sm font-bold text-orange-400 truncate text-right">{sheet.home.name}</span>
-        </div>
+        {!compact && (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-1">
+            <span className="text-sm font-bold text-blue-400 truncate">{sheet.visitor.name}</span>
+            <span className="text-xl font-bold text-white">
+              {sheet.visitor.total} − {sheet.home.total}
+            </span>
+            <span className="text-sm font-bold text-orange-400 truncate text-right">{sheet.home.name}</span>
+          </div>
+        )}
         <p className="text-[11px] text-gray-500 mt-1">
           {[
             a.visitor.scoredFirst ? `${a.visitor.team}が先制` : a.home.scoredFirst ? `${a.home.team}が先制` : "",
@@ -60,6 +75,7 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
         </p>
       </div>
       <div className="px-4 py-3 space-y-5 border-b border-gray-800">
+        <AiReviewCard sheet={sheet} onUpdate={onUpdate} />
         <VersusBars a={a} />
         <GoalieDonuts a={a} />
         <ScoreFlow sheet={sheet} />
@@ -98,6 +114,92 @@ export function GameDetail({ sheet }: { sheet: ScoreSheet }) {
       </div>
       {showBasis && <BasisSheet onClose={() => setShowBasis(false)} />}
     </div>
+  );
+}
+
+/** AI 総評（初めて開いたときに作って保存。2回目からは保存分） */
+function AiReviewCard({ sheet, onUpdate }: { sheet: ScoreSheet; onUpdate?: (s: ScoreSheet) => void }) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState("");
+  const review = sheet.review;
+
+  async function generate() {
+    if (!sheet.continueCode) return;
+    setState("loading");
+    setError("");
+    try {
+      const res = await fetch(`/api/scoresheets/review?code=${encodeURIComponent(sheet.continueCode)}`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.review) {
+        onUpdate?.({ ...sheet, review: d.review });
+        setState("idle");
+      } else {
+        setError(d.message ?? "総評を作れませんでした。");
+        setState("error");
+      }
+    } catch {
+      setError("通信できませんでした。");
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    if (!review && sheet.continueCode && sheet.goals.length > 0) generate();
+    // 試合を開いたときに1回だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet.continueCode]);
+
+  if (!sheet.continueCode || sheet.goals.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-violet-700/50 bg-violet-950/30 p-3 space-y-2">
+      <p className="text-xs font-semibold text-violet-200">✨ AI総評</p>
+      {review ? (
+        <>
+          <p className="text-sm text-gray-100 leading-relaxed">{review.summary}</p>
+          {review.teams.map((t) => {
+            const color = t.team === sheet.home.name ? "text-orange-300" : "text-blue-300";
+            return (
+              <div key={t.team} className="space-y-1">
+                <p className={`text-xs font-bold ${color}`}>{t.team}</p>
+                {t.good.map((x) => (
+                  <p key={x} className="text-xs text-gray-200 pl-2">
+                    <span className="text-green-400">◎</span> {x}
+                  </p>
+                ))}
+                {t.improve.map((x) => (
+                  <p key={x} className="text-xs text-gray-300 pl-2">
+                    <span className="text-amber-300">△</span> {x}
+                  </p>
+                ))}
+              </div>
+            );
+          })}
+          {review.players.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-gray-300">注目選手</p>
+              {review.players.map((x) => (
+                <p key={x} className="text-xs text-gray-200 pl-2">
+                  ★ {x}
+                </p>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-500">AIがこの試合のスコア表の数字だけから書いたコメントです。</p>
+        </>
+      ) : state === "error" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400">{error}</p>
+          <button onClick={generate} className="text-xs text-violet-300 underline">
+            もう一度作る
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-xs text-gray-300">
+          <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-violet-400" />
+          AIが総評を書いています…（10秒ほど）
+        </div>
+      )}
+    </section>
   );
 }
 
