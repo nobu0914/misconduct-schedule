@@ -167,6 +167,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
           <div className="flex items-center gap-1">
             <button
               onClick={handleShare}
+              data-feature="水曜練習会 > 共有"
               title="この練習会の共有リンクをコピー"
               className={`p-2 rounded-lg transition-colors ${copied ? "bg-green-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}
             >
@@ -328,6 +329,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
               {!hasVoted ? (
                 <button
                   onClick={handleSubmit}
+                  data-feature="水曜練習会 > 投票する"
                   disabled={!selectedAttend || submitting}
                   className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold transition-colors"
                 >
@@ -344,6 +346,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                   {hasManga && (
                     <button
                       onClick={() => setMangaOpen(true)}
+                      data-feature="水曜練習会 > 漫画を開く"
                       className="w-full py-2.5 rounded-xl bg-green-900/40 border border-green-700 text-green-300 text-sm hover:bg-green-900/60 transition-colors"
                     >
                       🎁 おまけ漫画を見る
@@ -351,6 +354,7 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                   )}
                   <button
                     onClick={() => setEditMode(true)}
+                    data-feature="水曜練習会 > 投票を変更"
                     className="w-full py-2.5 rounded-xl border border-gray-600 text-gray-400 text-sm hover:border-gray-400 hover:text-white transition-colors"
                   >
                     回答を変更する

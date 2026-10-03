@@ -43,3 +43,9 @@ assert(jstHour(new Date(Date.UTC(2026, 9, 2, 3, 0))) === 12, "UTC 3:00 は JST 1
 // 既存: ページのパス検証
 assert(normalizeTrackedPath("/rental?practice=1") === "/rental", "クエリを外す");
 assert(normalizeTrackedPath("/../../etc") === null, "不正なパスは捨てる");
+
+// 機能の利用ログ（feature）: 値は「ページ > 機能 > 詳細」。ページ名はパスから
+import { pageLabelOf } from "../src/lib/analyticsConstants";
+assert(isEventType("feature"), "イベントに feature を追加");
+assert(pageLabelOf("/") === "ゲーム情報" && pageLabelOf("/player-ranking") === "データ" && pageLabelOf("/rental") === "リンク予定", "ページ名");
+assert(pageLabelOf("/events") === "イベント" && pageLabelOf("/foo") === "/foo", "知らないページはパスのまま");

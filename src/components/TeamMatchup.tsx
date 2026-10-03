@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { parseSeasonNumber, seasonOrdinal } from "@/lib/season";
 import { teamKey } from "@/lib/teamName";
 import { playoffResult } from "@/lib/seasonAwards";
+import { trackFeature } from "@/lib/trackEvent";
 import {
   buildDivisionStats,
   countAdvantages,
@@ -196,6 +197,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
             <button
               key={n}
               onClick={() => setSelectedSeason(n)}
+              data-feature={`相性 > シーズン > ${seasonOrdinal(n)}`}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 season === n ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
               }`}
@@ -213,6 +215,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
           <button
             key={div}
             onClick={() => onDivisionChange(div)}
+            data-feature={`相性 > ディビジョン > ${div}`}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               division === div ? `${divisionColor(div)} text-white` : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -245,6 +248,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
               }}
               className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 text-gray-300 hover:text-white"
               aria-label="左右を入れ替える"
+              data-feature="相性 > 左右入れ替え"
             >
               ⇄
             </button>
@@ -268,6 +272,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
             </p>
             <button
               onClick={handleShare}
+              data-feature="相性 > 共有"
               data-track="チーム相性を共有"
               className={`mt-3 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
                 copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-300 border border-gray-700 hover:text-white"
@@ -329,6 +334,7 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
             ※各項目はそのシーズン・ディビジョン内での相対評価（最高=100）。順位はレギュラーシーズン。直接対決は保存済みの全シーズン通算。
             <button
               onClick={() => setShowBasis(true)}
+              data-feature="相性 > 数値の根拠"
               data-track="チーム相性 数値の根拠"
               className="ml-1 text-blue-400 underline underline-offset-2"
             >
@@ -457,7 +463,10 @@ function TeamSelect({
   return (
     <select
       value={value}
-      onChange={(e) => onChange(stats.find((t) => t.key === e.target.value)?.team ?? "")}
+      onChange={(e) => {
+        onChange(stats.find((t) => t.key === e.target.value)?.team ?? "");
+        trackFeature("相性 > チーム選択");
+      }}
       className={`w-full min-w-0 bg-gray-900 border-2 ${color.border} rounded-lg px-2 py-2 text-sm text-white`}
     >
       {stats

@@ -10,7 +10,18 @@ export const TRACKED_PAGES = [
 ] as const;
 
 // click: ボタン・リンクのタップ（値は「ページ｜要素の文言」）
-export const EVENT_TYPES = ["search", "card", "rank-search", "click"] as const;
+// feature: どの機能を使ったか（値は「ページ > 機能 > 詳細」。管理画面で階層にして集計する）
+export const EVENT_TYPES = ["search", "card", "rank-search", "click", "feature"] as const;
+
+/** 機能ログのページ名（パスから） */
+export function pageLabelOf(path: string): string {
+  if (path === "/") return "ゲーム情報";
+  if (path.startsWith("/player-ranking")) return "データ";
+  if (path.startsWith("/rental")) return "リンク予定";
+  if (path.startsWith("/events")) return "イベント";
+  if (path.startsWith("/contact")) return "お問い合わせ";
+  return path;
+}
 
 /** 端末の種類。判定はブラウザ側（iPad は Mac と同じ UA なのでタッチ対応で見分ける） */
 export const DEVICES = ["iPhone", "iPad", "Android", "Androidタブレット", "Windows", "Mac", "その他"] as const;

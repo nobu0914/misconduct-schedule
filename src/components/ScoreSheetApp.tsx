@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ScoreSheetEditor from "@/components/ScoreSheetEditor";
 import { GameDetail, SheetList } from "@/components/ScoreSheetAnalysis";
 import { getVisitorId } from "@/lib/analyticsClient";
+import { trackFeature } from "@/lib/trackEvent";
 import {
   checkSheet,
   CONTINUE_MIN,
@@ -191,6 +192,7 @@ export default function ScoreSheetApp({
       const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } }).catch(() => null);
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && d.sheet) {
+        trackFeature("分析 > 共有リンクから開いた");
         remember(d.sheet);
         rememberCode(code);
         setOpened(d.sheet);
@@ -234,6 +236,7 @@ export default function ScoreSheetApp({
       }
       forgetCode(code);
     }
+    trackFeature("分析 > 削除した");
     forget(code);
     setDeleting(null);
     return null;
@@ -310,11 +313,13 @@ export default function ScoreSheetApp({
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
+        trackFeature("分析 > アップロード > 読み取り成功");
         setDraft(d.sheet);
         setPhotoOpen(false);
         setMessage("読み取りました。写真と見比べて（上の「開く ▼」で写真を表示）、違うところを直してから一番下で保存してください。");
         setTimeout(() => document.getElementById("sheet-message")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       } else {
+        trackFeature(`分析 > アップロード > 読み取り失敗 > ${d.error ?? res.status}`);
         setDraft((cur) => cur ?? emptySheet());
         setMessage(d.message ?? "読み取れませんでした。手入力で登録できます。");
       }
@@ -345,6 +350,7 @@ export default function ScoreSheetApp({
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
+        trackFeature(`分析 > 保存 > ${issues ? "要確認あり" : "要確認なし"}`);
         remember(d.sheet);
         rememberCode(d.continueCode);
         setOpened(d.sheet);
@@ -402,6 +408,7 @@ export default function ScoreSheetApp({
             <button
               key={k}
               onClick={() => setTab(k)}
+              data-feature={`分析 > ${label}`}
               className={`flex-1 py-2.5 text-sm font-medium border-b-2 -mb-px ${
                 tab === k ? "border-blue-500 text-white" : "border-transparent text-gray-500"
               }`}
@@ -466,6 +473,7 @@ export default function ScoreSheetApp({
                           }
                         }}
                         data-track="スコア表 共有"
+                        data-feature="分析 > 共有"
                         className={`w-full py-2.5 rounded-lg text-sm font-medium ${
                           shareNote === s.continueCode ? "bg-green-600 text-white" : "bg-blue-600 text-white"
                         }`}
@@ -477,7 +485,7 @@ export default function ScoreSheetApp({
                       <button onClick={() => setOpened(null)} className="text-xs text-gray-400 underline">
                         閉じる
                       </button>
-                      <button onClick={() => deleteSheet(s)} className="text-xs text-red-400 underline">
+                      <button onClick={() => deleteSheet(s)} data-feature="分析 > 削除（確認画面）" className="text-xs text-red-400 underline">
                         このデータを削除
                       </button>
                       <button
@@ -515,12 +523,13 @@ export default function ScoreSheetApp({
               <section className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 text-center">
                 <button
                   onClick={() => fileRef.current?.click()}
+                  data-feature="分析 > アップロード > 写真を選ぶ"
                   className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-base"
                 >
                   📷 スコア表の写真を選ぶ
                 </button>
                 <p className="text-[11px] text-gray-500">画像のみ・10MBまで（写真は保存しません）</p>
-                <button onClick={() => setDraft(emptySheet())} className="text-xs text-gray-400 underline">
+                <button onClick={() => setDraft(emptySheet())} data-feature="分析 > アップロード > 手入力" className="text-xs text-gray-400 underline">
                   写真を使わず手入力する
                 </button>
               </section>
@@ -535,12 +544,13 @@ export default function ScoreSheetApp({
                   onClick={readPhoto}
                   disabled={reading || quota?.remaining === 0}
                   data-track="スコア表 読み取り"
+                  data-feature="分析 > アップロード > 読み取り開始"
                   className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-base disabled:opacity-40"
                 >
                   {reading ? "読み取り中…" : quota?.remaining === 0 ? "今日の上限に達しました" : "この写真を読み取る（約30秒）"}
                 </button>
                 <div className="flex items-center justify-between text-xs">
-                  <button onClick={() => fileRef.current?.click()} className="text-gray-400 underline">
+                  <button onClick={() => fileRef.current?.click()} data-feature="分析 > アップロード > 別の写真にする" className="text-gray-400 underline">
                     別の写真にする
                   </button>
                   <button
@@ -564,6 +574,7 @@ export default function ScoreSheetApp({
                   <button
                     onClick={() => {
                       if (!confirm("入力中の内容を消して、別の写真を選び直しますか？")) return;
+                      trackFeature("分析 > アップロード > 別の写真で読み直す");
                       setDraft(null);
                       setMessage("");
                       fileRef.current?.click();
@@ -575,6 +586,7 @@ export default function ScoreSheetApp({
                   <button
                     onClick={() => {
                       if (!confirm("入力中の内容を消して、同じ写真をもう一度読み取りますか？（アップロード1件として数えます）")) return;
+                      trackFeature("分析 > アップロード > 同じ写真を読み直す");
                       readPhoto();
                     }}
                     disabled={!photo || reading || quota?.remaining === 0}
@@ -590,7 +602,11 @@ export default function ScoreSheetApp({
             )}
             {draft && photo && (
               <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
-                <button onClick={() => setPhotoOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-gray-300">
+                <button
+                  onClick={() => setPhotoOpen((v) => !v)}
+                  data-feature="分析 > アップロード > 写真を見比べる"
+                  className="w-full flex items-center justify-between text-sm text-gray-300"
+                >
                   <span>📷 スコア表の写真（見比べ用）</span>
                   <span className="text-xs text-blue-400">{photoOpen ? "閉じる ▲" : "開く ▼"}</span>
                 </button>
@@ -639,6 +655,7 @@ export default function ScoreSheetApp({
                         setNewCode(suggestContinueCode(browserRandom));
                         setCodeError("");
                       }}
+                      data-feature="分析 > 保存 > おまかせコード"
                       className="px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300"
                     >
                       おまかせ
@@ -726,6 +743,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
       const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
+        trackFeature("分析 > コードで呼び出し");
         onLoaded(d.sheet);
         rememberCode(c);
         setRecent(rememberedCodes());
@@ -766,6 +784,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
                 setCode(c);
                 load(c);
               }}
+              data-feature="分析 > 前に使ったコード"
               className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 tracking-wider"
             >
               {c}
@@ -813,6 +832,7 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
           </button>
           <button
             onClick={() => shareGame(code)}
+            data-feature="分析 > 保存直後に共有"
             className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm font-medium text-gray-200"
           >
             🔗 共有

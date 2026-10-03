@@ -134,7 +134,7 @@ export default function ScoringRatePanel({ name, division, seasons }: Props) {
       <p className="text-[10px] text-gray-500">
         {cols.some((c) => !c.profile) && "「—」はそのシーズンこのディビジョンに出場なし。"}
         緑＝ディビジョン平均より上。
-        <button onClick={() => setShowBasis(true)} data-track="個人 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
+        <button onClick={() => setShowBasis(true)} data-track="個人 数値の根拠" data-feature="個人 > 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
           数値の根拠
         </button>
       </p>

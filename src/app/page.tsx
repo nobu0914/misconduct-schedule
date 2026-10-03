@@ -11,6 +11,7 @@ import type { RentalEntry } from "./api/rental/route";
 type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
+import { trackFeature } from "@/lib/trackEvent";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { findTeam } from "@/lib/teamName";
@@ -584,6 +585,7 @@ function ScheduleContent() {
                     b: selectedMatch.homeTeam,
                   })}`}
                   data-track="試合モーダル チーム相性"
+                  data-feature="試合の詳細 > 相性をチェック"
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium"
                 >
                   ⚔️ この2チームの相性をチェック
@@ -621,7 +623,10 @@ function ScheduleContent() {
           {/* Month filter */}
           <select
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            onChange={(e) => {
+              setSelectedMonth(e.target.value);
+              trackFeature(`絞り込み > 月 > ${e.target.value === "ALL" ? "全月" : e.target.value}`);
+            }}
             className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">全月</option>
@@ -661,6 +666,7 @@ function ScheduleContent() {
                   return (
                     <button
                       key={d}
+                      data-feature={`絞り込み > ディビジョン > ${d}`}
                       onClick={() =>
                         setSelectedDivisions((prev) =>
                           checked ? prev.filter((x) => x !== d) : [...prev, d]
@@ -682,6 +688,7 @@ function ScheduleContent() {
           {/* Upcoming toggle */}
           <button
             onClick={() => setShowUpcomingOnly(!showUpcomingOnly)}
+            data-feature={`絞り込み > 今後のみ > ${showUpcomingOnly ? "オフ" : "オン"}`}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -692,6 +699,7 @@ function ScheduleContent() {
           {/* Rentals toggle */}
           <button
             onClick={() => setShowRentals(!showRentals)}
+            data-feature={`絞り込み > リンク予定の表示 > ${showRentals ? "オフ" : "オン"}`}
             title="リンク予定を時系列に重ねて表示"
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               showRentals ? "bg-emerald-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
@@ -703,6 +711,7 @@ function ScheduleContent() {
           {/* Save favorite */}
           <button
             onClick={saveFavorite}
+            data-feature="お気に入り > 登録"
             title="現在の条件をお気に入り登録"
             className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:text-yellow-400 hover:border-yellow-600 transition-colors"
           >
@@ -712,6 +721,7 @@ function ScheduleContent() {
           {/* Share button */}
           <button
             onClick={handleShare}
+            data-feature="共有"
             title="この検索条件のURLをコピー"
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
@@ -752,6 +762,7 @@ function ScheduleContent() {
               <div key={f.id} className="flex items-center gap-0.5 bg-gray-800 border border-gray-700 rounded-full text-xs">
                 <button
                   onClick={() => applyFavorite(f)}
+                  data-feature="お気に入り > 呼び出し"
                   className="px-3 py-1 text-yellow-400 hover:text-yellow-300 transition-colors"
                 >
                   ★ {f.label}
@@ -857,6 +868,7 @@ function ScheduleContent() {
                           : "border-gray-800 hover:border-gray-600"
                       }`}
                       onClick={() => setSelectedMatch(match)}
+                      data-feature={`試合の詳細を開く > ${match.division || "その他"}`}
                     >
                       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                         <div className="flex items-center gap-3">

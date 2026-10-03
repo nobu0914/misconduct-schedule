@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getVisitorId } from "@/lib/analyticsClient";
+import { trackFeature } from "@/lib/trackEvent";
 import { GoalieDonuts, PlayerBars, ScoreFlow, TimeBandChart, VersusBars } from "@/components/ScoreSheetCharts";
 import {
   aggregate,
@@ -108,7 +109,7 @@ export function GameDetail({
         <PenaltyList sheet={sheet} />
         <p className="text-[11px] text-gray-600">
           ※ このスコア表1枚から出した数字です。
-          <button onClick={() => setShowBasis(true)} className="ml-1 text-blue-400 underline underline-offset-2">
+          <button onClick={() => setShowBasis(true)} data-feature="分析 > 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
             数値の根拠
           </button>
         </p>
@@ -135,6 +136,7 @@ function AiReviewCard({ sheet, onUpdate }: { sheet: ScoreSheet; onUpdate?: (s: S
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.review) {
+        trackFeature("分析 > AI総評を作成");
         onUpdate?.({ ...sheet, review: d.review });
         setState("idle");
       } else {
@@ -278,7 +280,11 @@ export function SheetList({
     <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
       <div className="flex items-center">
         <h3 className="text-sm font-semibold text-gray-300">保存・呼び出した試合（{sheets.length}）</h3>
-        <button onClick={() => setEditing((v) => !v)} className={`ml-auto text-xs ${editing ? "text-gray-300" : "text-red-400"}`}>
+        <button
+          onClick={() => setEditing((v) => !v)}
+          data-feature={editing ? "分析 > 削除モード終了" : "分析 > 削除モード"}
+          className={`ml-auto text-xs ${editing ? "text-gray-300" : "text-red-400"}`}
+        >
           {editing ? "完了" : "削除する"}
         </button>
       </div>
@@ -303,7 +309,12 @@ export function SheetList({
               } bg-gray-800/40`}
             >
               <div className="flex items-stretch">
-                <button onClick={() => onToggle(s)} aria-expanded={open} className="flex-1 min-w-0 text-left">
+                <button
+                  onClick={() => onToggle(s)}
+                  aria-expanded={open}
+                  data-feature={open ? "分析 > 試合を閉じる" : "分析 > 試合の分析を開く"}
+                  className="flex-1 min-w-0 text-left"
+                >
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700/70 text-[11px] text-gray-400">
                     <span className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-200 font-medium">{s.division || "—"}</span>
                     <span>{s.date || "日付なし"}</span>

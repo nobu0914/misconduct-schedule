@@ -12,7 +12,7 @@ import {
   sessionExpired,
   startsNewSession,
 } from "@/lib/analyticsClient";
-import { MAX_DWELL_SECONDS } from "@/lib/analyticsConstants";
+import { MAX_DWELL_SECONDS, pageLabelOf } from "@/lib/analyticsConstants";
 
 // 管理画面は数えない（滞在時間・クリックも）
 const isAdmin = (path: string) => path.startsWith("/admin");
@@ -90,6 +90,9 @@ export default function PageTracker() {
         .trim()
         .slice(0, 40);
       if (label) sendAnalytics({ event: "click", value: `${path}｜${label}` });
+      // 機能ログ: data-feature を持つ要素（またはその親）を押したら「ページ > 機能 > 詳細」で記録
+      const feature = (e.target as Element | null)?.closest?.("[data-feature]")?.getAttribute("data-feature");
+      if (feature) sendAnalytics({ event: "feature", value: `${pageLabelOf(path)} > ${feature}`.slice(0, 100) });
     };
     document.addEventListener("click", onClick, { capture: true });
     return () => document.removeEventListener("click", onClick, { capture: true });

@@ -226,6 +226,7 @@ function RentalContent() {
 
           <button
             onClick={() => setShowUpcomingOnly(!showUpcomingOnly)}
+            data-feature={`絞り込み > 今後のみ > ${showUpcomingOnly ? "オフ" : "オン"}`}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               showUpcomingOnly ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -235,6 +236,7 @@ function RentalContent() {
 
           <button
             onClick={() => { setWednesdayOnly(!wednesdayOnly); setOfficialOnly(false); }}
+            data-feature={`絞り込み > 水曜練習会のみ > ${wednesdayOnly ? "オフ" : "オン"}`}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               wednesdayOnly ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -244,6 +246,7 @@ function RentalContent() {
 
           <button
             onClick={() => { setOfficialOnly(!officialOnly); setWednesdayOnly(false); }}
+            data-feature={`絞り込み > 公式のみ > ${officialOnly ? "オフ" : "オン"}`}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               officialOnly ? "bg-orange-500 text-white" : "bg-gray-800 text-gray-400 border border-gray-700"
             }`}
@@ -254,6 +257,7 @@ function RentalContent() {
           {/* Share button */}
           <button
             onClick={handleShare}
+            data-feature="共有"
             title="この検索条件のURLをコピー"
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-500"
@@ -368,6 +372,7 @@ function RentalContent() {
                   <div
                     key={`${date}-${i}`}
                     onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : matchedProgram ? () => setSelectedProgram(matchedProgram) : undefined}
+                    data-feature={isWed ? "水曜練習会を開く" : matchedProgram ? "プログラムの詳細を開く" : undefined}
                     className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : isClickable ? "cursor-pointer hover:border-blue-700 hover:bg-blue-950/20" : "hover:border-gray-600"}`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">

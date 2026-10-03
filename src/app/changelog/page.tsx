@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261003-2251",
+    date: "2026-10-03",
+    changes: [
+      "管理画面: アクセス解析に「機能の利用」を追加（どのページのどの機能が何回使われたかを、ページ → 機能 → 詳細で表示）",
+    ],
+  },
+  {
     version: "Ver.1-261003-2056",
     date: "2026-10-03",
     changes: [

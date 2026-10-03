@@ -38,6 +38,8 @@ function getDivisionColor(division: string): string {
 }
 
 type Mode = "search" | "ranking" | "score" | "matchup" | "analysis";
+/** 機能ログで使う名前（画面のタブ名） */
+const MODE_NAMES: Record<Mode, string> = { ranking: "チーム", score: "スコア", search: "個人", matchup: "相性", analysis: "分析" };
 
 function PlayerRankingContent() {
   const router = useRouter();
@@ -377,6 +379,7 @@ function PlayerRankingContent() {
       <div className="mt-3 space-y-2">
         <button
           onClick={() => setSeason("current")}
+          data-feature={`${MODE_NAMES[mode]} > シーズン > 今シーズン`}
           className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
             showingCurrent
               ? "bg-blue-600 text-white"
@@ -393,6 +396,7 @@ function PlayerRankingContent() {
                 <button
                   key={n}
                   onClick={() => setSeason(n)}
+                  data-feature={`${MODE_NAMES[mode]} > シーズン > ${seasonOrdinal(n)}`}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     selectedPastSeason === n
                       ? "bg-blue-600 text-white"
@@ -428,6 +432,7 @@ function PlayerRankingContent() {
             <button
               key={t.key}
               onClick={() => setMode(t.key)}
+              data-feature={`タブ > ${t.short}`}
               className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                 mode === t.key ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
@@ -708,6 +713,7 @@ function PlayerRankingContent() {
                 <button
                   key={div}
                   onClick={() => setSelectedDivision(div)}
+                  data-feature={`${MODE_NAMES[mode]} > ディビジョン > ${div}`}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
                     selectedDivision === div
                       ? `${getDivisionColor(div)} text-white border-transparent`

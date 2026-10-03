@@ -133,6 +133,70 @@ const EVENT_LABELS: Record<string, string> = {
   click: "タップされたボタン・リンク（ページ｜文言）",
 };
 
+/** 機能の利用（「ページ > 機能 > 詳細」）をページ → 機能 → 詳細 の階層にして見せる */
+function FeatureUsage({ items }: { items: Record<string, number> }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  type Node = { total: number; details: Record<string, number> };
+  const pages: Record<string, { total: number; features: Record<string, Node> }> = {};
+  for (const [value, count] of Object.entries(items)) {
+    const [page, feature = "（その他）", ...rest] = value.split(" > ");
+    const p = (pages[page] ??= { total: 0, features: {} });
+    p.total += count;
+    const f = (p.features[feature] ??= { total: 0, details: {} });
+    f.total += count;
+    if (rest.length) f.details[rest.join(" > ")] = (f.details[rest.join(" > ")] ?? 0) + count;
+  }
+  const order = Object.entries(pages).sort(([, a], [, b]) => b.total - a.total);
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold text-gray-300">機能の利用（過去7日）</h2>
+      {order.map(([page, p]) => {
+        const features = Object.entries(p.features).sort(([, a], [, b]) => b.total - a.total);
+        const max = Math.max(...features.map(([, f]) => f.total));
+        return (
+          <div key={page} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">{page}</h3>
+              <span className="text-xs text-gray-400">{p.total.toLocaleString()} 回</span>
+            </div>
+            {features.map(([name, f]) => {
+              const key = `${page}>${name}`;
+              const details = Object.entries(f.details).sort(([, a], [, b]) => b - a);
+              return (
+                <div key={name}>
+                  <button
+                    onClick={() => details.length && setOpenKey((k) => (k === key ? null : key))}
+                    className="w-full grid grid-cols-[8rem_1fr_2.5rem] items-center gap-2 text-xs text-left"
+                  >
+                    <span className="text-gray-200 truncate">
+                      {details.length > 0 && <span className="text-gray-500">{openKey === key ? "▼" : "▶"} </span>}
+                      {name}
+                    </span>
+                    <span className="h-2 rounded bg-gray-800 overflow-hidden">
+                      <span className="block h-full bg-blue-500" style={{ width: `${(f.total / max) * 100}%` }} />
+                    </span>
+                    <span className="text-white font-semibold text-right">{f.total}</span>
+                  </button>
+                  {openKey === key && (
+                    <div className="mt-1 ml-4 space-y-0.5">
+                      {details.map(([d, c]) => (
+                        <div key={d} className="flex justify-between text-[11px]">
+                          <span className="text-gray-400 truncate mr-2">{d}</span>
+                          <span className="text-gray-200">{c}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 interface VisitorStats {
   since: string | null;
   uv7: number;
@@ -725,11 +789,15 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
           </div>
         </section>
 
+        {events.feature && Object.keys(events.feature).length > 0 && <FeatureUsage items={events.feature} />}
+
         {/* イベント履歴（過去7日） */}
         {Object.keys(events).length > 0 && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-gray-300">ユーザー行動（過去7日）</h2>
-            {Object.entries(events).map(([ev, items]) => {
+            {Object.entries(events)
+              .filter(([ev]) => ev !== "feature")
+              .map(([ev, items]) => {
               const sorted = Object.entries(items).sort(([, a], [, b]) => b - a).slice(0, 20);
               return (
                 <div key={ev} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
