@@ -18,6 +18,8 @@ const PROMPT = `これは日本のアイスホッケーリーグ「Misconduct Ho
   - 中央: Half / Time / G / A / A の表が「そのチームの得点」の記録（Time はハーフの経過時間、G は得点者の背番号、A はアシストの背番号）
   - 右: Harf / # / Time / P.Time / Penalty の表が「そのチームの反則」の記録
 
+必ず record_score_sheet ツールを1回だけ呼んで返してください（文章での回答は不要です）。
+
 読み取りのルール:
 - 二重線・塗りつぶしで消された値は無視し、訂正後の値を使う。消された行は丸ごと除く
 - 読めない値は推測せず空にする。数字の欄で空なら 0（SOG が空なら null）
@@ -166,7 +168,8 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
       model: MODEL,
       max_tokens: 4096,
       tools: [TOOL],
-      tool_choice: { type: "tool", name: TOOL.name },
+      // このモデルはツールの強制（type "tool" / "any"）に対応しないので、プロンプトで呼ぶよう指示する
+      tool_choice: { type: "auto" },
       messages: [
         {
           role: "user",
@@ -191,8 +194,21 @@ export async function readScoreSheetImage(base64: string, mediaType: string): Pr
     }
     throw new AiReadError(`api_${res.status}`, detail);
   }
-  const body = (await res.json()) as { content?: { type: string; input?: Record<string, unknown> }[] };
-  const input = body.content?.find((c) => c.type === "tool_use")?.input;
+  const body = (await res.json()) as { content?: { type: string; input?: Record<string, unknown>; text?: string }[] };
+  const input = body.content?.find((c) => c.type === "tool_use")?.input ?? jsonFromText(body.content);
   if (!input) throw new AiReadError("no_result");
   return normalizeAiSheet(input);
+}
+
+/** ツールを使わず文章で返ってきたとき、その中の JSON を拾う */
+function jsonFromText(content: { type: string; text?: string }[] | undefined): Record<string, unknown> | undefined {
+  const text = (content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return undefined;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
 }
