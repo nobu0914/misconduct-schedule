@@ -7,6 +7,7 @@ export const TRACKED_PAGES = [
   "/contact",
   "/disclaimer",
   "/changelog",
+  "/scoresheet",
 ] as const;
 
 // click: ボタン・リンクのタップ（値は「ページ｜要素の文言」）

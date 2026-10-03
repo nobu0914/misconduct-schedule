@@ -1,0 +1,64 @@
+{
+  "date": "2026/9/6",
+  "time": "11:30",
+  "gameNo": "257",
+  "division": "Bronze",
+  "visitor": {
+    "name": "WSJ",
+    "goals": [5, 1, 0],
+    "total": 6,
+    "sog": [8, 7, null],
+    "sogTotal": 15,
+    "goalie": { "no": "33", "name": "フルカワ" },
+    "players": [
+      { "no": "10", "name": "コレサワ" },
+      { "no": "12", "name": "オクツ", "goals": 1, "assists": 2 },
+      { "no": "14", "name": "マツオカ", "role": "C", "goals": 1, "assists": 2 },
+      { "no": "6", "name": "コイケ", "assists": 1, "pim": 0 },
+      { "no": "13", "name": "サエキ" },
+      { "no": "9", "name": "テシガワラ", "role": "A", "goals": 2 }
+    ]
+  },
+  "home": {
+    "name": "サイコペッカーズ",
+    "goals": [2, 8, 0],
+    "total": 10,
+    "sog": [6, 17, null],
+    "sogTotal": 23,
+    "goalie": { "no": "61", "name": "クワヤマ" },
+    "players": [
+      { "no": "16", "name": "シラタニ", "role": "C" },
+      { "no": "68", "name": "ウエダ" },
+      { "no": "80", "name": "ハットウ", "goals": 2 },
+      { "no": "9", "name": "ニイオカ" },
+      { "no": "55", "name": "ニシキド" },
+      { "no": "13", "name": "シマダ", "assists": 1 },
+      { "no": "20", "name": "ヒューゴガルシア", "goals": 4, "assists": 1 },
+      { "no": "91", "name": "ササキ", "goals": 4, "assists": 1, "pim": 2 },
+      { "no": "6", "name": "クリヤマ", "pim": 2 }
+    ]
+  },
+  "goals": [
+    { "side": "visitor", "half": 1, "time": "1:29", "scorer": "9", "assist1": "14" },
+    { "side": "visitor", "half": 1, "time": "7:29", "scorer": "12" },
+    { "side": "visitor", "half": 1, "time": "10:06", "scorer": "13", "assist1": "12" },
+    { "side": "visitor", "half": 1, "time": "13:20", "scorer": "13", "assist1": "12" },
+    { "side": "visitor", "half": 1, "time": "19:58", "scorer": "9", "assist1": "14" },
+    { "side": "visitor", "half": 2, "time": "9:09", "scorer": "14", "assist1": "6" },
+    { "side": "home", "half": 1, "time": "5:43", "scorer": "91" },
+    { "side": "home", "half": 1, "time": "16:55", "scorer": "20" },
+    { "side": "home", "half": 2, "time": "1:24", "scorer": "91", "assist1": "13" },
+    { "side": "home", "half": 2, "time": "2:34", "scorer": "80" },
+    { "side": "home", "half": 2, "time": "4:30", "scorer": "20" },
+    { "side": "home", "half": 2, "time": "8:20", "scorer": "91" },
+    { "side": "home", "half": 2, "time": "11:04", "scorer": "91", "assist1": "20" },
+    { "side": "home", "half": 2, "time": "12:52", "scorer": "80" },
+    { "side": "home", "half": 2, "time": "14:03", "scorer": "20" },
+    { "side": "home", "half": 2, "time": "19:04", "scorer": "20", "assist1": "91" }
+  ],
+  "penalties": [
+    { "side": "visitor", "half": 2, "no": "6", "time": "17:40", "minutes": 2, "reason": "メンバーオーバー" },
+    { "side": "home", "half": 1, "no": "91", "time": "14:55", "minutes": 2, "reason": "ホールディング" },
+    { "side": "home", "half": 2, "no": "6", "time": "7:35", "minutes": 2, "reason": "スラッシング" }
+  ]
+}

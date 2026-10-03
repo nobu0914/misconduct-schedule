@@ -38,7 +38,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261003-1213`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261003-1338`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -211,6 +211,7 @@ npx tsx tests/matchup.mts       # チーム相性の集計（得失点・直接�
 npx tsx tests/season-awards.mts # シーズン最終結果（優勝・準優勝・個人賞）の解析と照合（13項目）
 npx tsx tests/analytics.mts     # アクセス解析の入力検証・来訪日数の区分・時間帯（17項目）
 npx tsx tests/scoring-rate.mts  # 個人ランクの詳細スタッツ（率・順位・平均・関与率・掛け持ち合計、19項目）
+npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・セーブ率・AI出力の整形（24項目）
 ```
 
 どちらも外部ネットワークに接続しない（`fetch` とKVをメモリ実装に差し替える）ので、
@@ -246,6 +247,18 @@ npx tsx tests/scoring-rate.mts  # 個人ランクの詳細スタッツ（率・�
   `fetch-season-results.mts 52 --html <file>` で `<title>` のシーズンを確認してから書き出した。
   52nd・53rd の優勝・準優勝20チームは全てその季の順位表のチーム名と一致（`teamKey`）。レギュラー1位が優勝したのは
   53rd 4/9、52nd 5/9 ディビジョンだけ。チーム相性のカードは結果があれば「プレイオフ 🏆優勝」を大きく、順位は添え書き。
+
+### 2026-10-03（スコア表分析）
+- `/scoresheet`（メニュー「スコア表分析」）。**誰でも**スコア表を登録・分析を閲覧できる（ユーザー指示）。
+  - 写真 → `POST /api/scoresheets/read` → Anthropic Messages API（`claude-sonnet-5-5`、tool_use で JSON）→ `normalizeAiSheet()` →
+    画面で人が確認・修正 → `POST /api/scoresheets`（`sanitizeSheet()` + `checkSheet()` でエラーなら 400）。**写真は保存しない**
+    （クライアントで長辺2000pxの JPEG に縮めて送るだけ）。
+  - AI キーは **Rinnavi 専用の `ANTHROPIC_API_KEY`**（JUNROS 等と共有しない方針。ユーザー確認済み）。未設定なら 503 で手入力のみ。
+    料金の上限: IPごと10回/日・全体60回/日（KV、使えないときは読み取りを止める）。
+  - KV: `scoresheet:{date_gameNo}`（`nx` で先着のみ。いたずら上書き防止）、一覧 `scoresheet:index`。削除は管理者パスコードのみ（`DELETE`）。
+  - 集計 `src/lib/scoreSheet.ts`: セーブ率（相手SOG − 失点）、決定率、前後半、PP/SH（2分以下の反則は相手得点で明ける）、
+    先制時勝率、逆転勝ち（前半負け→勝ち）、アシスト→ゴールの組み合わせ。テスト `tests/scoresheet.mts` は
+    実物の 2026/9/6 Bronze #257 WSJ 6-10 サイコペッカーズ（`tests/fixtures/scoresheet-257.json`）で検証。
 
 ### 2026-10-03（個人ランクの得点率）
 - 個人ランクのカードに「得点率（1試合あたり）」（`src/components/ScoringRatePanel.tsx`、計算は `src/lib/scoringRate.ts`）。

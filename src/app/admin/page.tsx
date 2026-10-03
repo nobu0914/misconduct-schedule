@@ -12,6 +12,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/contact": "お問い合わせ",
   "/disclaimer": "免責事項",
   "/changelog": "バージョン履歴",
+  "/scoresheet": "スコア表分析",
 };
 
 interface DayData {
