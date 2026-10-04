@@ -13,10 +13,14 @@ export interface SheetLogEntry {
   code?: string;
   game?: string;
   note?: string;
+  /** 呼び出しの経路: 共有リンクを開いた / コードを入力した（2026-10-04 以前の記録には無い） */
+  via?: SheetLookupVia;
   ip: string;
   userAgent: string;
   visitorId: string | null;
 }
+
+export type SheetLookupVia = "link" | "input";
 
 export const SHEET_LOG_KEY = "scoresheet:log";
 const MAX = 2000;
@@ -25,7 +29,10 @@ export function gameLabel(s: { date?: string; division?: string; gameNo?: string
   return `${s.date ?? ""} ${s.division ?? ""} #${s.gameNo ?? ""} ${s.visitor?.name ?? "?"} ${s.visitor?.total ?? ""}-${s.home?.total ?? ""} ${s.home?.name ?? "?"}`.trim();
 }
 
-export async function logSheetEvent(req: Request, e: { action: SheetLogAction; code?: string; game?: string; note?: string }) {
+export async function logSheetEvent(
+  req: Request,
+  e: { action: SheetLogAction; code?: string; game?: string; note?: string; via?: SheetLookupVia }
+) {
   const vid = req.headers.get("x-visitor-id") ?? "";
   const entry: SheetLogEntry = {
     at: new Date().toISOString(),

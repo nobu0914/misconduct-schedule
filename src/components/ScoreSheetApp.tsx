@@ -189,7 +189,7 @@ export default function ScoreSheetApp({
     const code = initialCode ? normalizeContinueCode(initialCode) : null;
     if (!code) return;
     (async () => {
-      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } }).catch(() => null);
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}&via=link`, { headers: { "x-visitor-id": getVisitorId() ?? "" } }).catch(() => null);
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && d.sheet) {
         trackFeature("分析 > 共有リンクから開いた");
@@ -740,7 +740,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}&via=input`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         trackFeature("分析 > コードで呼び出し");

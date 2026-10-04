@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261004-2229",
+    date: "2026-10-04",
+    changes: [
+      "管理画面: スコア表の操作ログで、呼び出しが「共有リンクから」か「コード入力」かを表示し、それぞれで絞り込めるようにした。LINE 内ブラウザなど、開いたアプリも表示",
+    ],
+  },
+  {
     version: "Ver.1-261003-2303",
     date: "2026-10-03",
     changes: [

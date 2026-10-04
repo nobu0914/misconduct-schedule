@@ -450,9 +450,25 @@ interface SheetLog {
   code?: string;
   game?: string;
   note?: string;
+  via?: "link" | "input";
   ip: string;
   userAgent: string;
   visitorId: string | null;
+}
+
+const VIA_LABEL: Record<string, { label: string; cls: string }> = {
+  link: { label: "共有リンクから", cls: "bg-sky-800/60 text-sky-100" },
+  input: { label: "コード入力", cls: "bg-gray-800 text-gray-300 border border-gray-700" },
+};
+
+/** どのアプリから開いたか（LINE などのアプリ内ブラウザはリンクを踏んだ目安になる） */
+function appOf(ua: string): string | null {
+  if (/\bLine\//i.test(ua)) return "LINE内ブラウザ";
+  if (/Instagram/i.test(ua)) return "Instagram内ブラウザ";
+  if (/FBAN|FBAV/i.test(ua)) return "Facebook内ブラウザ";
+  if (/CriOS|Chrome\//.test(ua)) return "Chrome";
+  if (/Safari\//.test(ua)) return "Safari";
+  return null;
 }
 
 const LOG_LABEL: Record<string, { label: string; cls: string }> = {
@@ -469,7 +485,12 @@ const LOG_LABEL: Record<string, { label: string; cls: string }> = {
 function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
-  const shown = (log ?? []).filter((l) => !filter || l.action === filter);
+  // "lookup:link" / "lookup:input" は呼び出しを経路で絞る
+  const shown = (log ?? []).filter((l) => {
+    if (!filter) return true;
+    const [action, via] = filter.split(":");
+    return l.action === action && (!via || l.via === via);
+  });
   const fmt = (iso: string) =>
     new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return (
@@ -481,7 +502,14 @@ function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
       {open && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
           <div className="flex flex-wrap gap-1.5">
-            {[["", "すべて"], ...Object.entries(LOG_LABEL).map(([k, v]) => [k, v.label])].map(([k, label]) => (
+            {[
+              ["", "すべて"],
+              ...Object.entries(LOG_LABEL).flatMap(([k, v]) =>
+                k === "lookup"
+                  ? [[k, v.label], ["lookup:link", "└ 共有リンクから"], ["lookup:input", "└ コード入力"]]
+                  : [[k, v.label]]
+              ),
+            ].map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setFilter(k)}
@@ -500,6 +528,9 @@ function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-500 tabular-nums">{fmt(l.at)}</span>
                     <span className={`px-1.5 rounded text-[10px] ${tag.cls}`}>{tag.label}</span>
+                    {l.via && VIA_LABEL[l.via] && (
+                      <span className={`px-1.5 rounded text-[10px] ${VIA_LABEL[l.via].cls}`}>{VIA_LABEL[l.via].label}</span>
+                    )}
                     {l.code && <span className="tracking-wider text-gray-200">{l.code}</span>}
                   </div>
                   {(l.game || l.note) && (
@@ -509,6 +540,7 @@ function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
                     </p>
                   )}
                   <p className="text-[10px] text-gray-500 break-all">
+                    {appOf(l.userAgent) && <span className="text-gray-400">{appOf(l.userAgent)} ／ </span>}
                     IP {l.ip} ／ 端末ID {l.visitorId ?? "—"} ／ {l.userAgent}
                   </p>
                 </div>

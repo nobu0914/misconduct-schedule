@@ -45,7 +45,14 @@ export async function GET(req: NextRequest) {
   try {
     const sheet = await kv.get<ScoreSheet>(key(code));
     if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
-    await logSheetEvent(req, { action: "lookup", code, game: gameLabel(sheet) });
+    // 画面が経路を付けて呼ぶ（共有リンクを開いた / コードを入力した）
+    const via = req.nextUrl.searchParams.get("via");
+    await logSheetEvent(req, {
+      action: "lookup",
+      code,
+      game: gameLabel(sheet),
+      via: via === "link" || via === "input" ? via : undefined,
+    });
     return NextResponse.json({ sheet: { ...sheet, continueCode: code } });
   } catch (e) {
     console.error("scoresheet lookup failed", e);
