@@ -372,7 +372,7 @@ function RentalContent() {
                   <div
                     key={`${date}-${i}`}
                     onClick={isWed ? () => setVoteModal({ date: entry.date, dateLabel: formatDate(entry.date) }) : matchedProgram ? () => setSelectedProgram(matchedProgram) : undefined}
-                    data-feature={isWed ? "水曜練習会を開く" : matchedProgram ? "プログラムの詳細を開く" : undefined}
+                    data-feature={isWed ? `水曜練習会を開く > ${entry.date}` : matchedProgram ? `プログラムの詳細を開く > ${matchedProgram.name}` : undefined}
                     className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-colors ${isWed ? "cursor-pointer hover:border-green-700 hover:bg-green-950/20" : isClickable ? "cursor-pointer hover:border-blue-700 hover:bg-blue-950/20" : "hover:border-gray-600"}`}
                   >
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import ActivityLog from "@/components/ActivityLog";
 import { isTrackingExcluded, setTrackingExcluded } from "@/lib/analyticsClient";
 import { VISIT_BUCKETS } from "@/lib/analyticsConstants";
 
@@ -179,7 +180,7 @@ function FeatureUsage({ items }: { items: Record<string, number> }) {
                   </button>
                   {openKey === key && (
                     <div className="mt-1 ml-4 space-y-0.5">
-                      {details.map(([d, c]) => (
+                      {details.slice(0, 50).map(([d, c]) => (
                         <div key={d} className="flex justify-between text-[11px]">
                           <span className="text-gray-400 truncate mr-2">{d}</span>
                           <span className="text-gray-200">{c}</span>
@@ -822,6 +823,8 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
         </section>
 
         {events.feature && Object.keys(events.feature).length > 0 && <FeatureUsage items={events.feature} />}
+
+        <ActivityLog passcode={passcode} />
 
         {/* イベント履歴（過去7日） */}
         {Object.keys(events).length > 0 && (

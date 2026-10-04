@@ -1,7 +1,12 @@
 import { kv } from "@vercel/kv";
 import { NextResponse } from "next/server";
 import {
+  ACTIVITY_LOG_KEY,
+  ACTIVITY_LOG_MAX,
+  FEATURE_MAX,
   MAX_DWELL_SECONDS,
+  normalizeQuery,
+  type ActivityEntry,
   isBrowser,
   isDevice,
   isEventType,
@@ -25,7 +30,21 @@ export const dynamic = "force-dynamic";
 //   vd:{訪問者ID}      来訪日数（累計）
 //   vhist              来訪日数の分布（区分 → 人数）
 //   analytics:since    訪問者の計測を始めた日
+//   actlog             行動ログ（端末ごとのページ表示・機能の利用を時系列で。新しい順に最大5000件）
 const VISITOR_TTL_SECONDS = 400 * 86400;
+
+/** 行動ログに足す（失敗しても集計は止めない） */
+async function logActivity(e: Omit<ActivityEntry, "at">): Promise<void> {
+  try {
+    await kv.lpush(ACTIVITY_LOG_KEY, { at: new Date().toISOString(), ...e });
+    await kv.ltrim(ACTIVITY_LOG_KEY, 0, ACTIVITY_LOG_MAX - 1);
+  } catch (err) {
+    console.error("activity log failed:", err);
+  }
+}
+
+const deviceOf = (raw: unknown) => (isDevice(raw) ? raw : undefined);
+const browserOf = (raw: unknown) => (isBrowser(raw) ? raw : undefined);
 
 /** その日の初回だけ訪問者として数える（同時に開いたタブで二重に数えない） */
 async function recordVisitor(today: string, vid: string, device: unknown, browser: unknown): Promise<void> {
@@ -84,6 +103,17 @@ export async function POST(req: Request) {
         if (ref) ops.push(kv.hincrby(`ref:${today}`, ref, 1));
       }
       if (isVisitorId(body.vid)) {
+        const ref = body.session === true ? normalizeReferrer(body.ref) : null;
+        ops.push(
+          logActivity({
+            vid: body.vid,
+            dev: deviceOf(body.device),
+            br: browserOf(body.browser),
+            t: "pv",
+            v: `${path}${normalizeQuery(body.query)}`,
+            ...(ref ? { ref } : {}),
+          })
+        );
         // 訪問者の集計で失敗しても PV の記録は止めない
         ops.push(
           recordVisitor(today, body.vid, body.device, body.browser).catch((e) =>
@@ -100,8 +130,13 @@ export async function POST(req: Request) {
       if (!isEventType(body.event)) {
         return NextResponse.json({ ok: false }, { status: 400 });
       }
-      const value = String(body.value).slice(0, 100); // 長すぎるキーを防止
-      await kv.hincrby(`ev:${today}:${body.event}`, value, 1);
+      const value = String(body.value).slice(0, body.event === "feature" ? FEATURE_MAX : 100); // 長すぎるキーを防止
+      await Promise.all([
+        kv.hincrby(`ev:${today}:${body.event}`, value, 1),
+        body.event === "feature" && isVisitorId(body.vid)
+          ? logActivity({ vid: body.vid, dev: deviceOf(body.device), br: browserOf(body.browser), t: "f", v: value })
+          : null,
+      ]);
       return NextResponse.json({ ok: true });
     }
 

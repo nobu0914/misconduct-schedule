@@ -17,6 +17,7 @@ import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 import { standingsGaps, type GapMatch } from "@/lib/standingsGap";
 import { GapDetail, GapLine, GapNote } from "@/components/StandingsGap";
+import { trackFeatureDebounced } from "@/lib/trackEvent";
 
 const DIVISION_COLORS: Record<string, string> = {
   Platinum: "bg-purple-600",
@@ -493,7 +494,10 @@ function PlayerRankingContent() {
               type="text"
               placeholder="選手名で検索..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (e.target.value.trim()) trackFeatureDebounced("player-search", `個人 > 検索 > ${e.target.value.trim()}`);
+              }}
               autoFocus
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-base"
             />
@@ -828,7 +832,7 @@ function PlayerRankingContent() {
                         <Fragment key={`${s.divisionLabel}-${s.team}`}>
                         <tr
                           onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
-                          data-feature={gap ? `チーム > 上との差 > ${s.divisionLabel}` : undefined}
+                          data-feature={gap && !open ? `チーム > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
                           className={`border-b border-gray-800 ${i === pastDivisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
                         >
                           <td className="py-2 px-2 text-center text-white font-semibold">{s.rank}</td>
@@ -896,7 +900,7 @@ function PlayerRankingContent() {
                         <Fragment key={`${s.divisionLabel}-${s.team}`}>
                         <tr
                           onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
-                          data-feature={gap ? `チーム > 上との差 > ${s.divisionLabel}` : undefined}
+                          data-feature={gap && !open ? `チーム > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
                           className={`border-b border-gray-800 ${i === divisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
                         >
                           <td className="py-2 px-2 text-center text-white font-semibold">

@@ -13,6 +13,31 @@ export const TRACKED_PAGES = [
 // feature: どの機能を使ったか（値は「ページ > 機能 > 詳細」。管理画面で階層にして集計する）
 export const EVENT_TYPES = ["search", "card", "rank-search", "click", "feature"] as const;
 
+/** 機能ログの値の長さの上限（試合名・チーム名まで入るように） */
+export const FEATURE_MAX = 160;
+
+// 行動ログ: 端末ごとの操作を時系列で残す（KV のリスト、新しい順）。IP は残さない
+export const ACTIVITY_LOG_KEY = "actlog";
+export const ACTIVITY_LOG_MAX = 5000;
+
+export interface ActivityEntry {
+  at: string;
+  vid: string;
+  dev?: string;
+  br?: string;
+  /** pv: ページを開いた（path + query）/ f: 機能を使った（「ページ > 機能 > 詳細」） */
+  t: "pv" | "f";
+  v: string;
+  /** 新しい訪問の最初のページなら流入元 */
+  ref?: string;
+}
+
+/** URL のクエリ（共有リンクの中身がわかるように残す）。長すぎるものは切る */
+export function normalizeQuery(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.startsWith("?") || raw.length < 2) return "";
+  return raw.slice(0, 200);
+}
+
 /** 機能ログのページ名（パスから） */
 export function pageLabelOf(path: string): string {
   if (path === "/") return "ゲーム情報";

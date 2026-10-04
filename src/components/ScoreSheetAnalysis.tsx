@@ -312,7 +312,7 @@ export function SheetList({
                 <button
                   onClick={() => onToggle(s)}
                   aria-expanded={open}
-                  data-feature={open ? "分析 > 試合を閉じる" : "分析 > 試合の分析を開く"}
+                  data-feature={open ? "分析 > 試合を閉じる" : `分析 > 試合の分析を開く > ${s.date ?? ""} ${s.division ?? ""} ${s.visitor?.name ?? "?"} vs ${s.home?.name ?? "?"}`}
                   className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700/70 text-[11px] text-gray-400">

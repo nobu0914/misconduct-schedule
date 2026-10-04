@@ -139,7 +139,7 @@ export default function EventsPage() {
               <div
                 key={`${item.url}-${i}`}
                 onClick={() => handleCardClick(item)}
-                data-feature="記事を開く"
+                data-feature={`記事を開く > ${item.title}`}
                 className="block bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors cursor-pointer"
               >
                 <div className="flex items-start gap-3">

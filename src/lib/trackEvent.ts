@@ -1,5 +1,5 @@
-import { sendAnalytics } from "./analyticsClient";
-import { pageLabelOf } from "./analyticsConstants";
+import { detectBrowser, detectDevice, getVisitorId, sendAnalytics } from "./analyticsClient";
+import { FEATURE_MAX, pageLabelOf } from "./analyticsConstants";
 
 const timers: Record<string, ReturnType<typeof setTimeout>> = {};
 
@@ -14,7 +14,24 @@ export function trackEvent(event: string, value: string) {
  */
 export function trackFeature(feature: string) {
   if (typeof window === "undefined") return;
-  sendAnalytics({ event: "feature", value: `${pageLabelOf(window.location.pathname)} > ${feature}`.slice(0, 100) });
+  sendFeature(`${pageLabelOf(window.location.pathname)} > ${feature}`);
+}
+
+/** 機能の利用を送る（行動ログ用に端末IDなども添える）。value は「ページ > 機能 > 詳細」 */
+export function sendFeature(value: string) {
+  sendAnalytics({
+    event: "feature",
+    value: value.replace(/\s+/g, " ").slice(0, FEATURE_MAX),
+    vid: getVisitorId() ?? undefined,
+    device: detectDevice(),
+    browser: detectBrowser(),
+  });
+}
+
+/** 検索ワードなど入力中の値（入力が止まって1.5秒後に1回だけ送る） */
+export function trackFeatureDebounced(key: string, feature: string, delay = 1500) {
+  clearTimeout(timers[key]);
+  timers[key] = setTimeout(() => trackFeature(feature), delay);
 }
 
 /** デバウンス付き（検索ワード用。入力が止まって1秒後に送信） */

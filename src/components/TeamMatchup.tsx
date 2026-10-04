@@ -138,6 +138,16 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
   const axes = useMemo(() => (a && b && h2h ? radarAxes(stats, a, b, h2h) : []), [stats, a, b, h2h]);
   const adv = countAdvantages(axes);
 
+  // どの2チームを比べたか（共有リンクで開いた場合も）。選び直しの途中を数えないよう少し待つ
+  useEffect(() => {
+    if (!a || !b) return;
+    const t = setTimeout(
+      () => trackFeature(`相性 > 比較 > ${division} > ${season !== undefined ? seasonOrdinal(season) : ""} > ${a.team} vs ${b.team}`),
+      1500
+    );
+    return () => clearTimeout(t);
+  }, [division, season, a?.team, b?.team]);
+
   useEffect(() => {
     onChange({ season: selectedSeason, a: a?.team, b: b?.team });
     // onChange は親の setState（安定）なので依存に入れない

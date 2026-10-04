@@ -13,6 +13,7 @@ import {
   startsNewSession,
 } from "@/lib/analyticsClient";
 import { MAX_DWELL_SECONDS, pageLabelOf } from "@/lib/analyticsConstants";
+import { sendFeature } from "@/lib/trackEvent";
 
 // 管理画面は数えない（滞在時間・クリックも）
 const isAdmin = (path: string) => path.startsWith("/admin");
@@ -41,6 +42,8 @@ export default function PageTracker() {
     const newSession = startsNewSession();
     sendAnalytics({
       path,
+      // 共有リンクの中身（どの試合・チームか）も行動ログに残す
+      query: location.search,
       vid: getVisitorId() ?? undefined,
       device: detectDevice(),
       browser: detectBrowser(),
@@ -82,17 +85,18 @@ export default function PageTracker() {
   // ボタン・リンクのタップ（どのページで何が押されたか）
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      const el = (e.target as Element | null)?.closest?.("a, button, [data-track]");
       const path = lastPath.current || location.pathname;
-      if (!el || isAdmin(path)) return;
-      const label = (el.getAttribute("data-track") || el.getAttribute("aria-label") || el.textContent || "")
+      if (isAdmin(path)) return;
+      const el = (e.target as Element | null)?.closest?.("a, button, [data-track]");
+      const label = (el?.getAttribute("data-track") || el?.getAttribute("aria-label") || el?.textContent || "")
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 40);
       if (label) sendAnalytics({ event: "click", value: `${path}｜${label}` });
-      // 機能ログ: data-feature を持つ要素（またはその親）を押したら「ページ > 機能 > 詳細」で記録
+      // 機能ログ: data-feature を持つ要素（またはその親）を押したら「ページ > 機能 > 詳細」で記録。
+      // 試合カードのように button でない要素もあるので、上のクリック判定とは別に見る
       const feature = (e.target as Element | null)?.closest?.("[data-feature]")?.getAttribute("data-feature");
-      if (feature) sendAnalytics({ event: "feature", value: `${pageLabelOf(path)} > ${feature}`.slice(0, 100) });
+      if (feature) sendFeature(`${pageLabelOf(path)} > ${feature}`);
     };
     document.addEventListener("click", onClick, { capture: true });
     return () => document.removeEventListener("click", onClick, { capture: true });

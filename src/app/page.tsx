@@ -11,7 +11,7 @@ import type { RentalEntry } from "./api/rental/route";
 type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
-import { trackFeature } from "@/lib/trackEvent";
+import { trackFeature, trackFeatureDebounced } from "@/lib/trackEvent";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { findTeam } from "@/lib/teamName";
@@ -69,6 +69,9 @@ function isUpcoming(dateStr: string): boolean {
   const d = new Date(year, month - 1, day);
   return d >= today;
 }
+
+/** 機能ログ用: 日程表のベンチ表記 "(A)" を外したチーム名 */
+const benchless = (team: string) => team.replace(/\s*[(（][A-Z][)）]\s*$/, "");
 
 const DIVISION_ORDER = [
   "Platinum", "Gold", "Silver", "Bronze", "Brass", "Copper", "Iron", "Women Gold", "Women Bronze", "35&Over",
@@ -585,7 +588,7 @@ function ScheduleContent() {
                     b: selectedMatch.homeTeam,
                   })}`}
                   data-track="試合モーダル チーム相性"
-                  data-feature="試合の詳細 > 相性をチェック"
+                  data-feature={`試合の詳細 > 相性をチェック > ${selectedMatch.division} > ${benchless(selectedMatch.awayTeam)} vs ${benchless(selectedMatch.homeTeam)}`}
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium"
                 >
                   ⚔️ この2チームの相性をチェック
@@ -614,7 +617,10 @@ function ScheduleContent() {
           type="text"
           placeholder="チーム名・ディビジョンで検索..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            if (e.target.value.trim()) trackFeatureDebounced("home-search", `検索 > ${e.target.value.trim()}`);
+          }}
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
         />
 
@@ -868,7 +874,7 @@ function ScheduleContent() {
                           : "border-gray-800 hover:border-gray-600"
                       }`}
                       onClick={() => setSelectedMatch(match)}
-                      data-feature={`試合の詳細を開く > ${match.division || "その他"}`}
+                      data-feature={`試合の詳細を開く > ${match.division || "その他"} > ${match.date} ${benchless(match.awayTeam)} vs ${benchless(match.homeTeam)}`}
                     >
                       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                         <div className="flex items-center gap-3">

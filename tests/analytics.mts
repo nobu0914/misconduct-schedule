@@ -49,3 +49,22 @@ import { pageLabelOf } from "../src/lib/analyticsConstants";
 assert(isEventType("feature"), "イベントに feature を追加");
 assert(pageLabelOf("/") === "ゲーム情報" && pageLabelOf("/player-ranking") === "データ" && pageLabelOf("/rental") === "リンク予定", "ページ名");
 assert(pageLabelOf("/events") === "イベント" && pageLabelOf("/foo") === "/foo", "知らないページはパスのまま");
+
+// 行動ログ: クエリは共有リンクの中身として残す（長さは制限）
+import { normalizeQuery } from "../src/lib/analyticsConstants";
+import { groupVisits } from "../src/components/ActivityLog";
+assert(normalizeQuery("?mode=matchup&a=X") === "?mode=matchup&a=X", "クエリはそのまま残す");
+assert(normalizeQuery("") === "" && normalizeQuery("?") === "" && normalizeQuery("mode=x") === "" && normalizeQuery(1) === "", "空・? 無し・文字列以外は捨てる");
+assert(normalizeQuery("?" + "a".repeat(500)).length === 200, "200文字で切る");
+
+// 新しい順のログを端末・訪問ごとにまとめる（30分以上空いたら別の訪問）
+const e = (at: string, vid: string, v: string) => ({ at: `2026-10-04T${at}:00.000Z`, vid, t: "f" as const, v });
+const visits = groupVisits([
+  e("12:00", "visitorB1", "b2"),
+  e("11:10", "visitorA1", "a3"),
+  e("10:20", "visitorA1", "a2"),
+  e("10:00", "visitorA1", "a1"),
+]);
+assert(visits.length === 3, `訪問は3回（A は 10:20→11:10 で50分空いたので2回）(=${visits.length})`);
+assert(visits[0].vid === "visitorB1" && visits[1].items.map((x) => x.v).join() === "a3", "新しい訪問から並ぶ");
+assert(visits[2].items.map((x) => x.v).join() === "a1,a2", "訪問の中は古い順");
