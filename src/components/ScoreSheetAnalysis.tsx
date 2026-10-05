@@ -287,16 +287,7 @@ export function SheetList({
   if (sheets.length === 0) return null;
   return (
     <section className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
-      <div className="flex items-center">
-        <h3 className="text-sm font-semibold text-gray-300">保存・呼び出した試合（{sheets.length}）</h3>
-        <button
-          onClick={() => setEditing((v) => !v)}
-          data-feature={editing ? "分析 > 削除モード終了" : "分析 > 削除モード"}
-          className={`ml-auto text-xs ${editing ? "text-gray-300" : "text-red-400"}`}
-        >
-          {editing ? "完了" : "削除する"}
-        </button>
-      </div>
+      <h3 className="text-sm font-semibold text-gray-300">保存・呼び出した試合（{sheets.length}）</h3>
       <div className="space-y-3">
         {sheets.map((s) => {
           const open = !!s.continueCode && s.continueCode === openCode;
@@ -362,6 +353,16 @@ export function SheetList({
       {editing && (
         <p className="text-[11px] text-gray-500">削除するにはコンテニューコードの入力が必要です。削除した人の情報（日時・IPアドレス・ブラウザ・端末ID）は記録されます。</p>
       )}
+      {/* 削除は目立たせない（枠の右下・灰色） */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setEditing((v) => !v)}
+          data-feature={editing ? "分析 > 削除モード終了" : "分析 > 削除モード"}
+          className={`text-xs ${editing ? "text-gray-200 font-medium" : "text-gray-500"}`}
+        >
+          {editing ? "完了" : "削除する"}
+        </button>
+      </div>
     </section>
   );
 }

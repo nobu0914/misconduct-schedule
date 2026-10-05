@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261006-0046",
+    date: "2026-10-06",
+    changes: ["スコア表分析の試合一覧の「削除する」を、枠の右下・灰色の文字に変更"],
+  },
+  {
     version: "Ver.1-261006-0042",
     date: "2026-10-06",
     changes: [
