@@ -1,0 +1,61 @@
+// チーム総評の AI コメント（サーバー専用）。材料は teamProfile の事実だけ。前向きな書き方にする。
+
+export interface TeamReview {
+  summary: string;
+  strengths: string[];
+  watch: string[];
+  createdAt: string;
+}
+
+const MODEL = "claude-sonnet-5-5";
+
+const PROMPT = `あなたは日本のアマチュアアイスホッケーリーグ「MHL」をよく知る解説者です。
+下のデータ（事実）だけを使って、このチームのシーズンの総評を書いてください。
+
+ルール:
+- データに無いことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名・選手名はデータのとおり。
+- 前向きな書き方にする。弱点の指摘や批判、負けの強調はしない。伸びしろは「これから注目したいところ」として前向きに書く。
+- ディビジョン内の順位（平均得点◯位など）を根拠に、チームの持ち味を具体的に書く。
+- summary は2〜3文（120文字程度）。strengths は持ち味を2〜3個、watch はこれからの注目ポイントを1〜2個。各40文字以内。です・ます調。
+
+出力は次の JSON だけ（前後に文章を付けない）:
+{"summary":"...","strengths":["..."],"watch":["..."]}`;
+
+function jsonFromText(content: { type: string; text?: string }[] | undefined): Record<string, unknown> | undefined {
+  const text = (content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return undefined;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+export function normalizeTeamReview(raw: unknown): TeamReview | undefined {
+  const r = raw as Record<string, unknown> | undefined;
+  if (typeof r?.summary !== "string" || !r.summary.trim()) return undefined;
+  const list = (v: unknown, n: number) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.trim().slice(0, 80)).slice(0, n) : [];
+  return { summary: r.summary.trim().slice(0, 300), strengths: list(r.strengths, 3), watch: list(r.watch, 2), createdAt: new Date().toISOString() };
+}
+
+export async function writeTeamReview(input: string): Promise<TeamReview> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("no_key");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 2000, messages: [{ role: "user", content: `${PROMPT}\n\n---\n${input}` }] }),
+    signal: AbortSignal.timeout(55_000),
+  });
+  if (!res.ok) {
+    console.error("team review failed", res.status, (await res.text()).slice(0, 500));
+    throw new Error(`api_${res.status}`);
+  }
+  const body = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const review = normalizeTeamReview(jsonFromText(body.content));
+  if (!review) throw new Error("no_result");
+  return review;
+}

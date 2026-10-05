@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { parseSeasonNumber, seasonOrdinal } from "@/lib/season";
+import { seasonOrdinal } from "@/lib/season";
+import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData";
 import { teamKey } from "@/lib/teamName";
 import { playoffResult } from "@/lib/seasonAwards";
 import { trackFeature } from "@/lib/trackEvent";
@@ -16,12 +17,6 @@ import {
   type StandingRow,
   type TeamSeasonStats,
 } from "@/lib/matchup";
-
-interface SeasonData {
-  standings: StandingRow[];
-  scores: ScoreRow[];
-  players: PlayerRow[];
-}
 
 export interface MatchupSelection {
   season?: number;
@@ -43,18 +38,6 @@ interface Props {
 const A_COLOR = { text: "text-blue-400", bg: "bg-blue-500", border: "border-blue-500" };
 const B_COLOR = { text: "text-orange-400", bg: "bg-orange-500", border: "border-orange-500" };
 
-function hasPlayedGame(d: SeasonData): boolean {
-  return d.scores.some((g) => g.awayScore !== null && g.homeScore !== null);
-}
-
-async function getJson<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url);
-    return res.ok ? ((await res.json()) as T) : null;
-  } catch {
-    return null;
-  }
-}
 
 export default function TeamMatchup({ divisions, division, onDivisionChange, divisionColor, initial, onChange }: Props) {
   const [data, setData] = useState<Record<number, SeasonData>>({});
@@ -69,40 +52,12 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
   // 今シーズン（公式ページ）と保存済みの過去シーズンをまとめて読む
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [cur, curScores, curPlayers, pastIndex] = await Promise.all([
-        getJson<{ standings?: StandingRow[]; season?: string }>("/api/standings"),
-        getJson<{ games?: ScoreRow[] }>("/api/scores"),
-        getJson<{ players?: PlayerRow[] }>("/api/player-stats"),
-        getJson<{ season?: number; data?: StandingRow[]; available?: number[] }>("/api/past-standings"),
-      ]);
-      const next: Record<number, SeasonData> = {};
-      const cn = parseSeasonNumber(cur?.season);
-      if (cn !== undefined) {
-        next[cn] = {
-          standings: cur?.standings ?? [],
-          scores: (curScores?.games ?? []).filter((g) => g.season === cur?.season),
-          players: curPlayers?.players ?? [],
-        };
-      }
-      const past = await Promise.all(
-        (pastIndex?.available ?? []).map(async (n) => {
-          const [st, sc, pl] = await Promise.all([
-            n === pastIndex?.season
-              ? Promise.resolve(pastIndex)
-              : getJson<{ data?: StandingRow[] }>(`/api/past-standings?season=${n}`),
-            getJson<{ games?: ScoreRow[] }>(`/api/past-scores?season=${n}`),
-            getJson<{ players?: PlayerRow[] }>(`/api/prev-season-players?season=${n}`),
-          ]);
-          return [n, { standings: st?.data ?? [], scores: sc?.games ?? [], players: pl?.players ?? [] }] as const;
-        })
-      );
-      for (const [n, d] of past) next[n] = d;
+    void loadAllSeasons().then(({ data: next, current }) => {
       if (cancelled) return;
       setData(next);
-      setCurrentSeason(cn);
+      setCurrentSeason(current);
       setLoading(false);
-    })();
+    });
     return () => {
       cancelled = true;
     };

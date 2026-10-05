@@ -14,6 +14,7 @@ import ScoreSheetApp from "@/components/ScoreSheetApp";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import TeamMatchup, { type MatchupSelection } from "@/components/TeamMatchup";
+import TeamOverview, { type TeamSelection } from "@/components/TeamOverview";
 import { divisionAwards, playoffResult } from "@/lib/seasonAwards";
 import { standingsGaps, type GapMatch } from "@/lib/standingsGap";
 import { GapDetail, GapLine, GapNote } from "@/components/StandingsGap";
@@ -40,9 +41,9 @@ function getDivisionColor(division: string): string {
   return "bg-gray-500";
 }
 
-type Mode = "search" | "ranking" | "score" | "matchup" | "analysis";
+type Mode = "search" | "ranking" | "team" | "score" | "matchup" | "analysis";
 /** 機能ログで使う名前（画面のタブ名） */
-const MODE_NAMES: Record<Mode, string> = { ranking: "チーム", score: "スコア", search: "個人", matchup: "相性", analysis: "分析" };
+const MODE_NAMES: Record<Mode, string> = { ranking: "ランク", team: "チーム", score: "スコア", search: "個人", matchup: "相性", analysis: "分析" };
 
 function PlayerRankingContent() {
   const router = useRouter();
@@ -80,7 +81,7 @@ function PlayerRankingContent() {
 
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
-    if (m === "search" || m === "ranking" || m === "score" || m === "matchup" || m === "analysis") return m;
+    if (m === "search" || m === "ranking" || m === "team" || m === "score" || m === "matchup" || m === "analysis") return m;
     // 後方互換: 旧URL（?q=...）はそのまま個人ランク検索を開く
     if (searchParams.get("q")) return "search";
     return "ranking";
@@ -101,6 +102,11 @@ function PlayerRankingContent() {
   // チーム相性の選択（URLの season / a / b）。シーズンは相性タブ内で選ぶ
   // スコア表分析の共有リンク（?mode=analysis&code=）で開いたときのコード
   const [sharedCode] = useState(() => searchParams.get("code"));
+  // チーム総評の選択（URLの season / t）
+  const [teamSel, setTeamSel] = useState<TeamSelection>(() => {
+    const n = Number(searchParams.get("season"));
+    return { season: Number.isInteger(n) && n > 0 ? n : undefined, team: searchParams.get("t") ?? undefined };
+  });
   const [matchup, setMatchup] = useState<MatchupSelection>(() => {
     const n = Number(searchParams.get("season"));
     return {
@@ -303,13 +309,16 @@ function PlayerRankingContent() {
       if (matchup.season !== undefined) params.set("season", String(matchup.season));
       if (matchup.a) params.set("a", matchup.a);
       if (matchup.b) params.set("b", matchup.b);
+    } else if (mode === "team") {
+      if (teamSel.season !== undefined) params.set("season", String(teamSel.season));
+      if (teamSel.team) params.set("t", teamSel.team);
     } else if (selectedPastSeason !== undefined && mode !== "analysis") {
       // シーズンの選択は個人ランク・チームランキング・スコアで共通
       params.set("season", String(selectedPastSeason));
     }
     const qs = params.toString();
     router.replace(`/player-ranking${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [mode, query, selectedPastSeason, selectedDivision, matchup, router]);
+  }, [mode, query, selectedPastSeason, selectedDivision, matchup, teamSel, router]);
 
   const currentResults = useMemo(() => {
     if (!query.trim()) return [];
@@ -447,32 +456,46 @@ function PlayerRankingContent() {
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} threshold={threshold} />
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* モード切替トグル */}
-        <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-lg p-1 mb-4">
+        {/* 6つ並ぶので、スマホでは短い表記を均等幅で（320px 幅でも1行に収まる大きさ） */}
+        <div className="grid grid-cols-6 gap-0.5 bg-gray-800 border border-gray-700 rounded-lg p-1 mb-4">
           {(
             [
-              // 4つ並ぶとスマホでは入りきらないので短い表記も持つ
-              { key: "ranking", label: "チームランキング", short: "チーム" },
-              { key: "score", label: "スコア", short: "スコア" },
-              { key: "search", label: "個人ランク", short: "個人" },
+              // チームの話（全体 → 1チーム → 2チーム）→ 個人 → 試合 → 自分のスコア表、の順
+              { key: "ranking", label: "チームランキング", short: "ランク" },
+              { key: "team", label: "チーム総評", short: "チーム" },
               { key: "matchup", label: "チーム相性", short: "相性" },
+              { key: "search", label: "個人ランク", short: "個人" },
+              { key: "score", label: "スコア", short: "スコア" },
               { key: "analysis", label: "スコア表分析", short: "分析" },
             ] as { key: Mode; label: string; short: string }[]
           ).map((t) => (
             <button
               key={t.key}
               onClick={() => setMode(t.key)}
+              aria-label={t.label}
               data-feature={`タブ > ${t.short}`}
-              className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`min-w-0 px-0.5 py-2 rounded-md text-[13px] sm:text-sm font-medium tracking-tight transition-colors whitespace-nowrap ${
                 mode === t.key ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              <span className="sm:hidden">{t.short}</span>
-              <span className="hidden sm:inline">{t.label}</span>
+              {t.short}
             </button>
           ))}
         </div>
 
         {mode === "analysis" && <ScoreSheetApp embedded initialCode={sharedCode} />}
+
+        {mode === "team" && (
+          <TeamOverview
+            key={`team-${reloadKey}`}
+            divisions={DIVISIONS}
+            division={selectedDivision}
+            onDivisionChange={setSelectedDivision}
+            divisionColor={getDivisionColor}
+            initial={teamSel}
+            onChange={setTeamSel}
+          />
+        )}
 
         {mode === "matchup" && (
           <TeamMatchup
@@ -832,7 +855,7 @@ function PlayerRankingContent() {
                         <Fragment key={`${s.divisionLabel}-${s.team}`}>
                         <tr
                           onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
-                          data-feature={gap && !open ? `チーム > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
+                          data-feature={gap && !open ? `ランク > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
                           className={`border-b border-gray-800 ${i === pastDivisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
                         >
                           <td className="py-2 px-2 text-center text-white font-semibold">{s.rank}</td>
@@ -900,7 +923,7 @@ function PlayerRankingContent() {
                         <Fragment key={`${s.divisionLabel}-${s.team}`}>
                         <tr
                           onClick={gap ? () => setOpenGap(open ? null : key) : undefined}
-                          data-feature={gap && !open ? `チーム > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
+                          data-feature={gap && !open ? `ランク > 上との差 > ${s.divisionLabel} > ${s.team}` : undefined}
                           className={`border-b border-gray-800 ${i === divisionStandings.length - 1 && !open ? "border-b-0" : ""} ${gap ? "cursor-pointer active:bg-gray-800/60" : ""} ${open ? "bg-gray-800/40" : ""}`}
                         >
                           <td className="py-2 px-2 text-center text-white font-semibold">
