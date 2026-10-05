@@ -1,9 +1,9 @@
 "use client";
 
 // データ → チーム: 1チームの総評（ディビジョンの中での位置・直近の試合・得点源・これからの試合・これまでのシーズン・AI総評）
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { seasonOrdinal } from "@/lib/season";
-import { teamKey } from "@/lib/teamName";
+import { closestTeam, teamKey } from "@/lib/teamName";
 import { buildDivisionStats, playerLabel } from "@/lib/matchup";
 import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData";
 import { teamProfile, type ProfileUpcoming } from "@/lib/teamProfile";
@@ -211,7 +211,20 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
     }
     return [...seen.values()].sort((a, b) => a.team.localeCompare(b.team, "ja"));
   }, [teams, season, matches, division]);
-  const team = teamOptions.find((t) => t.key === teamKey(selectedTeam))?.team ?? teamOptions[0]?.team;
+  // ディビジョンを切り替えたら、前のディビジョンのチームの指定は外す（「見つからない」を出さない）
+  const firstDivision = useRef(true);
+  useEffect(() => {
+    if (firstDivision.current) {
+      firstDivision.current = false;
+      return;
+    }
+    setSelectedTeam("");
+  }, [division]);
+
+  // リンクで指定されたチームが見つからなければ、近い名前（読み間違い1〜2文字）を探す。それも無ければ先頭のチームを出して知らせる
+  const matched = selectedTeam ? closestTeam(teamOptions, selectedTeam) : undefined;
+  const team = matched?.team ?? teamOptions[0]?.team;
+  const missingTeam = selectedTeam && !matched && teamOptions.length > 0 ? selectedTeam : null;
   const profile = useMemo(
     () => (season !== undefined && team ? teamProfile(data, season, division, team) : undefined),
     [data, season, division, team]
@@ -331,6 +344,12 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
         </p>
       ) : (
         <>
+          {missingTeam && (
+            <p className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-3 py-2">
+              「{missingTeam}」は {season !== undefined ? seasonOrdinal(season) : ""} の {division} に見つからないため、ほかのチームを表示しています。
+              シーズン・ディビジョンを切り替えるか、チームを選び直してください。
+            </p>
+          )}
           <select
             value={teamKey(team ?? "")}
             onChange={(e) => {

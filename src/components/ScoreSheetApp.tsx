@@ -204,8 +204,30 @@ export default function ScoreSheetApp({
   }, [opened, tokens]);
 
   useEffect(() => {
-    setSheets(loadLocal());
+    const local = loadLocal();
+    setSheets(local);
     setLoading(false);
+    // 端末の一覧はサーバーのコピーなので、修正（管理者の修正を含む）されていたら最新に置き換える。開くたびに1回（最大20件）
+    let cancelled = false;
+    (async () => {
+      for (const s of local.slice(0, 20)) {
+        const code = s.continueCode;
+        if (!code || normalizeContinueCode(code) !== code) continue;
+        const d = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}&via=refresh`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        if (cancelled || !d?.sheet) continue;
+        const stamp = (x: ScoreSheet) => `${x.editedAt ?? ""}|${x.savedAt ?? ""}|${x.review ? 1 : 0}`;
+        if (stamp(d.sheet) !== stamp(s)) {
+          replaceLocal(d.sheet);
+          setOpened((o) => (o?.continueCode === code ? d.sheet : o));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 共有リンクで開いたとき: そのコードを呼び出して表示する。

@@ -31,8 +31,10 @@ const newCode = () => suggestContinueCode(randomInt);
 
 /** コンテニューコードで呼び出す */
 export async function GET(req: NextRequest) {
+  // 端末の一覧を最新にするための読み直し（via=refresh）は、操作ログに残さず回数も別に数える
+  const refresh = req.nextUrl.searchParams.get("via") === "refresh";
   // 総当たりを防ぐため、呼び出しの回数を IP ごとに制限する
-  if (await isRateLimited(`scoresheet:lookup:${clientIp(req)}`, 30, 3600)) {
+  if (await isRateLimited(`scoresheet:${refresh ? "refresh" : "lookup"}:${clientIp(req)}`, refresh ? 120 : 30, 3600)) {
     return NextResponse.json({ error: "limit", message: "しばらく時間をおいてからお試しください。" }, { status: 429 });
   }
   const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (!sheet) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません。" }, { status: 404 });
     // 画面が経路を付けて呼ぶ（共有リンクを開いた / コードを入力した）
     const via = req.nextUrl.searchParams.get("via");
-    await logSheetEvent(req, {
+    if (!refresh) await logSheetEvent(req, {
       action: "lookup",
       code,
       game: gameLabel(sheet),

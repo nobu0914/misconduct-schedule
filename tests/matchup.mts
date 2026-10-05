@@ -84,3 +84,11 @@ assert(d.winRate.source.includes("公式順位表"), "勝敗の元データは�
 const dNo = Object.fromEntries(radarAxes(noRecord, noRecord[0], noRecord[1], headToHead([], "a", "b")).map((x) => [x.key, x.detail]));
 assert(dNo.winRate.source.includes("スコア表から数えた"), "順位表に勝敗が無ければスコア表と明記");
 assert(vsNasdaq.find((x) => x.key === "depth")!.detail.calcB === "個人成績のデータがありません", "データなしは理由を出す");
+
+// 近い名前のチーム（リンクを開くときだけ使う）
+import { closestTeam } from "../src/lib/teamName";
+const opts = [{ team: "名無しBoyzⅡ" }, { team: "名無しBoyz Starz" }, { team: "サイコペッカーズ" }, { team: "日体大DREAMS WB" }, { team: "日体大DREAMS WG" }];
+assert(closestTeam(opts, "名無レBoyz II")?.team === "名無しBoyzⅡ", "読み間違い1文字（名無レ→名無し）は近い名前で開く");
+assert(closestTeam(opts, "名無しBoyz Ⅱ")?.team === "名無しBoyzⅡ", "表記ゆれは完全一致");
+assert(closestTeam(opts, "サイコ") === undefined, "大きく違う名前は選ばない");
+assert(closestTeam(opts, "日体大DREAMS WG")?.team === "日体大DREAMS WG", "完全一致を優先（1文字違いの別チームと取り違えない）");

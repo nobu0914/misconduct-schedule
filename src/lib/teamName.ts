@@ -64,3 +64,37 @@ export function findTeam<T extends { team: string; divisionLabel: string }>(
   }
   return undefined;
 }
+
+/** 2つの文字列の編集距離 */
+function editDistance(a: string, b: string): number {
+  const dp = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+
+/**
+ * 一覧から近い名前のチームを1つ選ぶ（スコア表の読み間違い「名無レBoyz II」→「名無しBoyzⅡ」などのリンクを開くため）。
+ * 表記ゆれを吸収したうえで1〜2文字だけ違うものに限る。集計の照合には使わない（別チームを混ぜないため）。
+ */
+export function closestTeam<T extends { team: string }>(list: T[], name: string): T | undefined {
+  const key = teamKey(name);
+  if (!key) return undefined;
+  const exact = list.find((t) => teamKey(t.team) === key);
+  if (exact) return exact;
+  let best: { t: T; d: number } | undefined;
+  for (const t of list) {
+    const k = teamKey(t.team);
+    const d = editDistance(k, key);
+    const limit = Math.min(2, Math.floor(Math.max(k.length, key.length) / 4));
+    if (d <= limit && (!best || d < best.d)) best = { t, d };
+  }
+  return best?.t;
+}
