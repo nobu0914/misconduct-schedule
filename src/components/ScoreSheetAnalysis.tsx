@@ -28,10 +28,13 @@ export function GameDetail({
   sheet,
   compact = false,
   onUpdate,
+  onOpenTeam,
 }: {
   sheet: ScoreSheet;
   compact?: boolean;
   onUpdate?: (s: ScoreSheet) => void;
+  /** 分析 → チーム別 でこのチームのスコア表の通算を開く（アップロードした端末だけ見られる） */
+  onOpenTeam?: (division: string, team: string) => void;
 }) {
   const [showBasis, setShowBasis] = useState(false);
   const a = analyzeGame(sheet);
@@ -114,20 +117,33 @@ export function GameDetail({
         <h3 className="text-sm font-semibold text-gray-200">選手</h3>
         <PlayerBars sheet={sheet} />
         <Combos sheet={sheet} />
-        {/* 両チームのチーム総評へ（アップロード・共有で見た人は、スコア表の通算の集計も見られる） */}
+        {/* 両チームへ: スコア表の通算（分析 → チーム別）と、公式データのチーム総評 */}
         {sheet.division && seasonOfDate(sheet.date) !== undefined && (
           <div className="grid grid-cols-2 gap-2">
             {(["visitor", "home"] as const).map((side) =>
               sheet[side].name ? (
-                <a
+                <div
                   key={side}
-                  href={`/player-ranking?${new URLSearchParams({ mode: "team", div: sheet.division, season: String(seasonOfDate(sheet.date)), t: sheet[side].name })}`}
-                  data-feature={`分析 > チーム総評へ > ${sheet.division} > ${sheet[side].name}`}
-                  className={`block rounded-lg border px-2.5 py-2 text-xs ${side === "visitor" ? "border-blue-800/70 text-blue-300" : "border-orange-800/70 text-orange-300"}`}
+                  className={`rounded-lg border px-2.5 py-2 text-xs space-y-1 ${side === "visitor" ? "border-blue-800/70" : "border-orange-800/70"}`}
                 >
-                  <span className="block truncate font-medium">{sheet[side].name}</span>
-                  <span className="text-[10px] text-gray-400">チーム総評・スコア表の通算 →</span>
-                </a>
+                  <span className={`block truncate font-medium ${side === "visitor" ? "text-blue-300" : "text-orange-300"}`}>{sheet[side].name}</span>
+                  {onOpenTeam && (
+                    <button
+                      onClick={() => onOpenTeam(sheet.division, sheet[side].name)}
+                      data-feature={`分析 > スコア表の通算へ > ${sheet.division} > ${sheet[side].name}`}
+                      className="block text-[11px] text-sky-300"
+                    >
+                      スコア表の通算 →
+                    </button>
+                  )}
+                  <a
+                    href={`/player-ranking?${new URLSearchParams({ mode: "team", div: sheet.division, season: String(seasonOfDate(sheet.date)), t: sheet[side].name })}`}
+                    data-feature={`分析 > チーム総評へ > ${sheet.division} > ${sheet[side].name}`}
+                    className="block text-[11px] text-gray-400"
+                  >
+                    チーム総評（公式） →
+                  </a>
+                </div>
               ) : null
             )}
           </div>

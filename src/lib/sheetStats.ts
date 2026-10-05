@@ -192,3 +192,21 @@ export function rowsByTeam(rows: SheetGameRow[], division: string, season?: numb
   for (const list of out.values()) list.sort((a, b) => b.date.localeCompare(a.date, "ja", { numeric: true }));
   return out;
 }
+
+/** AI の材料にする1チームのスコア表の通算（アップロードされた試合だけなので、試合数を必ず添える） */
+export function sheetSummaryText(sum: SheetTeamSummary | undefined): string {
+  if (!sum) return "";
+  const p = (v: number | null) => (v === null ? "不明" : `${Math.round(v * 100)}%`);
+  return [
+    `スコア表（アップロードされた ${sum.games} 試合だけ。公式の全試合ではない）: ${sum.wins}勝${sum.losses}敗${sum.ties}分 得点 ${sum.goalsFor} 失点 ${sum.goalsAgainst}`,
+    `前半 得点${sum.forByHalf[0]} 失点${sum.againstByHalf[0]} / 後半 得点${sum.forByHalf[1]} 失点${sum.againstByHalf[1]} / 後半失点率 ${p(sum.secondHalfAgainstShare)} / 後半得点率 ${p(sum.secondHalfForShare)}`,
+    `先制した試合 ${sum.scoredFirst.wins}勝/${sum.scoredFirst.games}試合 / 先に取られた試合 ${sum.concededFirst.wins}勝/${sum.concededFirst.games}試合 / 逆転勝ち ${sum.comebacks}`,
+    `決定率 ${p(sum.shootingPct)} / セーブ率 ${p(sum.savePct)} / PP得点 ${sum.ppGoals} / SH得点 ${sum.shGoals} / 相手のPPで失点 ${sum.ppAgainst} / 反則 1試合 ${sum.pimPerGame.toFixed(1)}分`,
+    `5分ごとの失点（前半0-5,5-10,10-15,15-20,後半0-5,5-10,10-15,15-20）: ${sum.bandsAgainst.join(",")} / 得点: ${sum.bandsFor.join(",")}`,
+  ].join("\n");
+}
+
+/** サーバー: あるシーズン・ディビジョン・チームのスコア表の通算（AI の材料） */
+export function teamSheetSummary(rows: SheetGameRow[], season: number, division: string, team: string): SheetTeamSummary | undefined {
+  return summarize(rowsByTeam(rows, division, season).get(teamKey(team)) ?? []);
+}

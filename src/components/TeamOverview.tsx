@@ -8,7 +8,6 @@ import { buildDivisionStats, playerLabel } from "@/lib/matchup";
 import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData";
 import { teamProfile, type ProfileUpcoming } from "@/lib/teamProfile";
 import { trackFeature } from "@/lib/trackEvent";
-import SheetTeamStats from "@/components/SheetTeamStats";
 import type { TeamReview } from "@/lib/teamReviewAi";
 import { HistoryRanks, PlayerPoints, RecordBar, SeasonFlow, TeamRadar } from "@/components/TeamCharts";
 
@@ -408,7 +407,6 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                   </button>
                 )}
               </div>
-              {team && season !== undefined && <SheetTeamStats division={division} team={team} season={season} />}
               {upcoming.length > 0 && (
                 <Section title="これからの試合">
                   <div className="space-y-1">
@@ -542,9 +540,6 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                   </div>
                 </Section>
               )}
-
-              {/* アップロードされたスコア表から（後半失点率など） */}
-              <SheetTeamStats division={profile.division} team={s.team} season={profile.season} />
 
               {/* ── 後半: 細かいデータ ── */}
               {profile.games.length > 0 && (

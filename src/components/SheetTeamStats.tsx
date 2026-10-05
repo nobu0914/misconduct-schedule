@@ -1,11 +1,10 @@
 "use client";
 
-// チーム総評の「スコア表から分かること」。アップロードされたスコア表を、このチームについて試合ごと・通算で集計する
-import { useEffect, useMemo, useState } from "react";
+// 分析 → チーム別の「スコア表から分かること」。アップロードされたスコア表を、1チームについて試合ごと・通算で集計する
+import { useMemo, useState } from "react";
 import { seasonOrdinal } from "@/lib/season";
 import { rowsByTeam, summarize, type SheetGameRow } from "@/lib/sheetStats";
 import { teamKey } from "@/lib/teamName";
-import { deviceContinueCodes } from "@/lib/editTokens";
 
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const md = (date: string) => date.replace(/^\d{4}\//, "");
@@ -71,28 +70,14 @@ function Bands({ f, a }: { f: number[]; a: number[] }) {
   );
 }
 
-export default function SheetTeamStats({ division, team, season }: { division: string; team: string; season: number }) {
-  const [rows, setRows] = useState<SheetGameRow[] | null>(null);
+/** 1チームのスコア表の集計（rows はディビジョンの全チームの行。表示だけで、データの取得は SheetTeams） */
+export default function SheetTeamStats({ rows, division, team, season }: { rows: SheetGameRow[]; division: string; team: string; season: number }) {
   const [scope, setScope] = useState<"season" | "all">("season");
-  useEffect(() => {
-    let cancelled = false;
-    setRows(null);
-    // コンテニューコード・共有リンクでスコア表を表示したことがある端末だけが見られる
-    const codes = deviceContinueCodes();
-    if (!codes.length) return;
-    fetch(`/api/sheet-stats?div=${encodeURIComponent(division)}`, { headers: { "x-continue-codes": codes.join(",") } })
-      .then((r) => (r.ok ? r.json() : { rows: [] }))
-      .then((d) => !cancelled && setRows(d.rows ?? []))
-      .catch(() => !cancelled && setRows([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [division]);
 
   const key = teamKey(team);
-  const seasonHas = useMemo(() => (rows ?? []).some((r) => r.season === season && teamKey(r.team) === key), [rows, season, key]);
+  const seasonHas = useMemo(() => rows.some((r) => r.season === season && teamKey(r.team) === key), [rows, season, key]);
   const s = scope === "season" && seasonHas ? season : undefined;
-  const byTeam = useMemo(() => rowsByTeam(rows ?? [], division, s), [rows, division, s]);
+  const byTeam = useMemo(() => rowsByTeam(rows, division, s), [rows, division, s]);
   const mine = byTeam.get(key) ?? [];
   const sum = summarize(mine);
 
@@ -105,8 +90,6 @@ export default function SheetTeamStats({ division, team, season }: { division: s
   }, [byTeam]);
   const myRank = compare.findIndex((x) => x.k === key);
 
-  if (rows === null) return null;
-  // スコア表を表示したことがない人、またはこのチームのスコア表が無いときは何も出さない
   if (!sum) return null;
 
   return (
@@ -213,7 +196,7 @@ export default function SheetTeamStats({ division, team, season }: { division: s
       </div>
       <p className="text-[10px] text-gray-500">
         利用者がアップロードしたスコア表から集計しています（同じ試合は最新の1枚だけ）。アップロードされた試合だけなので、公式の成績とは試合数が違います。
-        この欄は、コンテニューコードや共有リンクでスコア表を表示したことがある端末だけに出ます。
+        チーム別の集計は、スコア表をアップロードした人・コンテニューコードで見に来た人だけが見られます。
       </p>
     </section>
   );

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cachedAiResponse } from "@/lib/aiCache";
 import { loadAllSeasons } from "@/lib/seasonData";
+import { loadIndexedSheets } from "@/lib/scoreSheetIndex";
+import { rowsOfSheets, sheetSummaryText, teamSheetSummary } from "@/lib/sheetStats";
 import { profileInput, teamProfile } from "@/lib/teamProfile";
 import { teamKey } from "@/lib/teamName";
 import { REVIEW_FORMAT, writeTeamReview } from "@/lib/teamReviewAi";
@@ -27,10 +29,12 @@ export async function POST(req: NextRequest) {
     dailyLimit: 60,
     ipLimit: 20,
     input: async () => {
-      const { data } = await loadAllSeasons(new URL(req.url).origin);
+      const [{ data }, sheets] = await Promise.all([loadAllSeasons(new URL(req.url).origin), loadIndexedSheets()]);
       const profile = teamProfile(data, season, division, team);
       if (!profile || profile.stats.gp === 0) return { error: "no_data", message: "このシーズンの成績がまだ無いので、総評は作れません。" };
-      return { input: profileInput(profile) };
+      // アップロードされたスコア表があれば材料に足す（AI には使う。画面にはスコア表の数字は出さない）
+      const sheet = sheetSummaryText(teamSheetSummary(rowsOfSheets(sheets), season, division, profile.stats.team));
+      return { input: [profileInput(profile), sheet].filter(Boolean).join("\n") };
     },
     write: writeTeamReview,
   });

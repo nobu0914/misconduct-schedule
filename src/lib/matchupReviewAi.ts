@@ -8,7 +8,7 @@ import { profileInput, teamProfile } from "./teamProfile";
 import { teamKey } from "./teamName";
 
 /** 書き方を変えたら上げる（古いものを1回だけ作り直す） */
-export const MATCHUP_FORMAT = 1;
+export const MATCHUP_FORMAT = 2;
 
 export interface MatchupReview {
   summary: string;
@@ -83,6 +83,7 @@ const PROMPT = `あなたは日本のアマチュアアイスホッケーリー�
 - points はこの対戦の見どころを2〜3個（各40文字以内）。
 - aToB は「1チーム目（データの最初の ■）が2チーム目に勝つためのポイント」、bToA はその逆。各2〜3個・各60文字以内。
   直接対決のスコア、相手が勝てなかった試合、得点王への依存度、失点の多さ、反則、接戦の成績などを根拠に具体的に。根拠が薄ければ1個でよい。
+- 「スコア表」の行はアップロードされた一部の試合だけの数字（後半失点率・時間帯ごとの失点など）。使うときは「スコア表のある◯試合では」と試合数を添える。
 - です・ます調。
 
 出力は次の JSON だけ（前後に文章を付けない）:

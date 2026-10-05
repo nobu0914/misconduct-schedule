@@ -58,3 +58,9 @@ export function deviceContinueCodes(): string[] {
   }
   return [...codes].filter((c) => /^[A-Z0-9]{4,8}$/.test(c)).slice(0, 5);
 }
+
+/** スコア表をアップロード（保存）した証明（どれか1つのコードと修正用の鍵）。無ければ null */
+export function uploaderProof(): string | null {
+  const [entry] = Object.entries(loadEditTokens());
+  return entry ? `${entry[0]}:${entry[1]}` : null;
+}
