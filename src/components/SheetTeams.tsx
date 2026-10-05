@@ -99,13 +99,16 @@ export function GameTeamTotals({ sheet }: { sheet: ScoreSheet }) {
       <div className="grid grid-cols-2 gap-2">
         {(["visitor", "home"] as const).map((k) =>
           sheet[k].name ? (
-            <div key={k} className={`rounded-lg border px-2.5 py-2 text-xs space-y-1 ${k === "visitor" ? "border-blue-800/70" : "border-orange-800/70"}`}>
+            <div key={k} className={`rounded-lg border px-2.5 py-2 text-xs ${k === "visitor" ? "border-blue-800/70" : "border-orange-800/70"}`}>
               <span className={`block truncate font-medium ${k === "visitor" ? "text-blue-300" : "text-orange-300"}`}>{sheet[k].name}</span>
+              {/* 2つのリンクは押し間違えないよう、ボタンの形にして離す */}
               {code && (
                 <button
                   onClick={() => setSide(side === k ? null : k)}
                   data-feature={`分析 > チームの通算 > ${sheet.division} > ${sheet[k].name}`}
-                  className={`block text-[11px] ${side === k ? "text-white font-semibold" : "text-sky-300"}`}
+                  className={`mt-2 w-full py-2 rounded-md text-[11px] font-medium whitespace-nowrap ${
+                    side === k ? "bg-sky-700 text-white" : "bg-sky-900/40 text-sky-200 border border-sky-800/70"
+                  }`}
                 >
                   スコア表の通算 {side === k ? "▲" : "▼"}
                 </button>
@@ -113,9 +116,9 @@ export function GameTeamTotals({ sheet }: { sheet: ScoreSheet }) {
               <a
                 href={`/player-ranking?${new URLSearchParams({ mode: "team", div: sheet.division, season: String(season), t: sheet[k].name })}`}
                 data-feature={`分析 > チーム総評へ > ${sheet.division} > ${sheet[k].name}`}
-                className="block text-[11px] text-gray-400"
+                className="mt-3 block w-full py-2 rounded-md text-center text-[11px] whitespace-nowrap text-gray-300 bg-gray-800/70 border border-gray-700"
               >
-                チーム総評（公式） →
+                公式のチーム総評 →
               </a>
             </div>
           ) : null
