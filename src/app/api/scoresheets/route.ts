@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
 import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
 import { operator, saveBackup } from "@/lib/scoreSheetBackup";
+import { indexSheet, unindexSheet } from "@/lib/scoreSheetIndex";
 import { newEditToken, publicSheet, saverVisitorId, tokenMatches } from "@/lib/scoreSheetOwner";
 import {
   checkSheet,
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
     if (chosen) {
       sheet.continueCode = chosen;
       if (await kv.set(key(chosen), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        await indexSheet(chosen);
         await logSheetEvent(req, { action: "save", code: chosen, game: gameLabel(sheet), note: sheet.issues?.length ? `要確認${sheet.issues.length}件` : undefined });
         return NextResponse.json({ ok: true, continueCode: chosen, sheet: publicSheet(sheet), editToken: owner.token });
       }
@@ -99,6 +101,7 @@ export async function POST(req: NextRequest) {
       const code = newCode();
       sheet.continueCode = code;
       if (await kv.set(key(code), sheet, { nx: true, ex: KEEP_SECONDS })) {
+        await indexSheet(code);
         await logSheetEvent(req, { action: "save", code, game: gameLabel(sheet), note: "おまかせコード" });
         return NextResponse.json({ ok: true, continueCode: code, sheet: publicSheet(sheet), editToken: owner.token });
       }
@@ -128,6 +131,7 @@ export async function DELETE(req: NextRequest) {
     if (!sheet) return NextResponse.json({ ok: true, missing: true });
     const id = await backup(req, code, sheet, "delete");
     await kv.del(key(code));
+    await unindexSheet(code);
     await logSheetEvent(req, { action: "delete", code, game: gameLabel(sheet), note: `バックアップ ${id}` });
     return NextResponse.json({ ok: true });
   } catch (e) {

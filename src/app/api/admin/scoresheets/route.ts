@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPasscode } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/rateLimit";
 import type { ScoreSheet } from "@/lib/scoreSheet";
+import { indexSheet } from "@/lib/scoreSheetIndex";
 import { BACKUP_INDEX, backupKey, operator, saveBackup, type BackupEntry } from "@/lib/scoreSheetBackup";
 import { SHEET_LOG_KEY, gameLabel, logSheetEvent, type SheetLogEntry } from "@/lib/scoreSheetLog";
 
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
     if (!restored) {
       return NextResponse.json({ error: "taken", message: `コード ${entry.code} はすでに別のデータで使われています。` }, { status: 409 });
     }
+    await indexSheet(entry.code);
     await kv.del(backupKey(id));
     await Promise.all([kv.lrem(BACKUP_INDEX.delete, 0, id), kv.lrem(BACKUP_INDEX.edit, 0, id)]);
     await logSheetEvent(req, { action: "restore", code: entry.code, game: gameLabel(entry.sheet), note: edit ? "管理者が修正前に戻した" : "管理者が復元" });

@@ -40,7 +40,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261005-2336`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261005-2343`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -265,6 +265,10 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
 - **アクセス解析の週次レポート**（管理画面の一番上、`src/lib/analyticsReport.ts`）: 直近7日（昨日まで・UTC日付キー）と前週の数字・機能の利用・
   スコア表の操作・行動ログから AI が総評（よかった点・気になる点・改善のアイデア）。毎週月曜 7:00 JST に `/api/cron/analytics-report`
   （vercel.json `0 22 * * 0`、CRON_SECRET 無しなら月曜だけ）、管理画面から「今すぐ作り直す」。`analytics:report:latest` / `:history`（52号）。
+- **スコア表のチーム別集計**（ユーザー指示 10/6「アップロードしたらディビジョン・チームごとの分析を。後半失点率など、ゲーム単位・履歴単位で」）:
+  `src/lib/sheetStats.ts`（試合ごとの行 `rowsOfSheet`、同じ試合は最新の1枚 `rowsOfSheets`、まとめ `summarize`）、`/api/sheet-stats?div=`（コードは出さない）、
+  チーム総評の `SheetTeamStats`。保存中のコード一覧は KV の set `scoresheet:index`（保存・復元で追加、削除で外す、期限切れは読むときに外す。`src/lib/scoreSheetIndex.ts`）。
+  チーム名は AI の読み取りのままなので、読み間違い（例「名無レBoyz II」）は修正で直さないと別チーム扱い。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。
   チーム総評は `REVIEW_FORMAT`（いま2）より古い書き方なら1回だけ作り直す。ゴーリー（The Wall Award）は個人成績に無いので背番号なし。
 

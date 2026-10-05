@@ -8,6 +8,7 @@ import { buildDivisionStats, playerLabel } from "@/lib/matchup";
 import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData";
 import { teamProfile, type ProfileUpcoming } from "@/lib/teamProfile";
 import { trackFeature } from "@/lib/trackEvent";
+import SheetTeamStats from "@/components/SheetTeamStats";
 import type { TeamReview } from "@/lib/teamReviewAi";
 import { HistoryRanks, PlayerPoints, RecordBar, SeasonFlow, TeamRadar } from "@/components/TeamCharts";
 
@@ -187,16 +188,30 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
     () =>
       Object.keys(data)
         .map(Number)
-        .filter((n) => data[n].standings.length > 0 || hasPlayedGame(data[n]))
+        // 今シーズンは公式の成績が出る前（開幕直後）でも選べる（アップロードされたスコア表・これからの試合を見るため）
+        .filter((n) => n === currentSeason || data[n].standings.length > 0 || hasPlayedGame(data[n]))
         .sort((x, y) => y - x),
-    [data]
+    [data, currentSeason]
   );
-  const season = selectedSeason !== undefined && seasons.includes(selectedSeason) ? selectedSeason : seasons[0];
+  // 最初に開いたときは公式の成績があるいちばん新しいシーズン（開幕直後の今シーズンは選べば見られる）
+  const withRecords = seasons.find((n) => data[n].standings.length > 0 || hasPlayedGame(data[n])) ?? seasons[0];
+  const season = selectedSeason !== undefined && seasons.includes(selectedSeason) ? selectedSeason : withRecords;
   const teams = useMemo(
     () => (season !== undefined ? buildDivisionStats(division, data[season].standings, data[season].scores, data[season].players) : []),
     [data, season, division]
   );
-  const team = teams.find((t) => t.key === teamKey(selectedTeam))?.team ?? teams[0]?.team;
+  // 選べるチーム。公式の成績がまだ無いシーズンは、日程表に出てくるチーム
+  const teamOptions = useMemo(() => {
+    if (teams.length > 0 || season === undefined) return teams.map((t) => ({ key: t.key, team: t.team, rank: t.rank }));
+    const label = seasonOrdinal(season);
+    const seen = new Map<string, { key: string; team: string; rank?: number }>();
+    for (const m of matches) {
+      if (m.season !== label || m.division !== division) continue;
+      for (const name of [m.awayTeam, m.homeTeam].map(benchless)) if (!seen.has(teamKey(name))) seen.set(teamKey(name), { key: teamKey(name), team: name });
+    }
+    return [...seen.values()].sort((a, b) => a.team.localeCompare(b.team, "ja"));
+  }, [teams, season, matches, division]);
+  const team = teamOptions.find((t) => t.key === teamKey(selectedTeam))?.team ?? teamOptions[0]?.team;
   const profile = useMemo(
     () => (season !== undefined && team ? teamProfile(data, season, division, team) : undefined),
     [data, season, division, team]
@@ -310,21 +325,21 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
         ))}
       </div>
 
-      {teams.length === 0 || !profile || !s ? (
+      {teamOptions.length === 0 ? (
         <p className="text-sm text-gray-500 py-8 text-center">
           {season !== undefined ? seasonOrdinal(season) : ""} の {division} にはチームの成績がありません。
         </p>
       ) : (
         <>
           <select
-            value={s.key}
+            value={teamKey(team ?? "")}
             onChange={(e) => {
-              setSelectedTeam(teams.find((t) => t.key === e.target.value)?.team ?? "");
-              trackFeature(`チーム > チーム選択 > ${division} > ${teams.find((t) => t.key === e.target.value)?.team ?? ""}`);
+              setSelectedTeam(teamOptions.find((t) => t.key === e.target.value)?.team ?? "");
+              trackFeature(`チーム > チーム選択 > ${division} > ${teamOptions.find((t) => t.key === e.target.value)?.team ?? ""}`);
             }}
             className="w-full bg-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2.5 text-sm text-white"
           >
-            {teams.map((t) => (
+            {teamOptions.map((t) => (
               <option key={t.key} value={t.key}>
                 {t.rank ? `${t.rank}位 ` : ""}
                 {t.team}
@@ -332,6 +347,33 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
             ))}
           </select>
 
+          {!profile || !s ? (
+            /* 公式の成績がまだ無い（開幕直後）: スコア表とこれからの試合だけ */
+            <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 space-y-4">
+              <div>
+                <p className="text-[11px] text-gray-500">
+                  {season !== undefined ? seasonOrdinal(season) : ""} {division}
+                </p>
+                <h3 className="text-xl font-bold text-white">{team}</h3>
+                <p className="text-xs text-gray-500 mt-1">公式の成績はまだありません。公式サイトに載ると、順位・AI総評などが出ます。</p>
+              </div>
+              {team && season !== undefined && <SheetTeamStats division={division} team={team} season={season} />}
+              {upcoming.length > 0 && (
+                <Section title="これからの試合">
+                  <div className="space-y-1">
+                    {upcoming.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-500 w-20">
+                          {md(m.date)} {m.timeStart}
+                        </span>
+                        <span className="text-gray-200 flex-1 truncate">vs {m.opponent}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+            </div>
+          ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             {/* 見出し */}
             <div className="px-4 py-3 border-b border-gray-800 space-y-1">
@@ -449,6 +491,9 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                   </div>
                 </Section>
               )}
+
+              {/* アップロードされたスコア表から（後半失点率など） */}
+              <SheetTeamStats division={profile.division} team={s.team} season={profile.season} />
 
               {/* ── 後半: 細かいデータ ── */}
               {profile.games.length > 0 && (
@@ -579,6 +624,7 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
               )}
             </div>
           </div>
+          )}
         </>
       )}
     </div>
