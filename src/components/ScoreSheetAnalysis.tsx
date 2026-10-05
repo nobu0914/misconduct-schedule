@@ -76,44 +76,50 @@ export function GameDetail({
             .join("・")}
         </p>
       </div>
+      {/* 並び: まとめ（AI総評・チーム比較・ゴーリー）→ 試合の流れ（時間の話）→ 選手（人の話） */}
       <div className="px-4 py-3 space-y-5 border-b border-gray-800">
         <AiReviewCard sheet={sheet} onUpdate={onUpdate} />
         <VersusBars a={a} />
         <GoalieDonuts a={a} />
-        <ScoreFlow sheet={sheet} />
-      </div>
-      <div className="px-4 py-3 space-y-1">
-        <p className="text-xs text-gray-400 mb-1">得点経過</p>
-        {timeline.map(({ g, tag }, i) => {
-          const team = sheet[g.side];
-          const who = (no?: string) => (no ? `#${no}${playerName(team, no) ? ` ${playerName(team, no)}` : ""}` : "");
-          return (
-            <div key={i} className="flex items-baseline gap-2 text-xs">
-              <span className="text-gray-500 w-16 flex-shrink-0">
-                {halfLabel(g.half)} {g.time}
-              </span>
-              <span className={`flex-1 ${g.side === "visitor" ? "text-blue-300" : "text-orange-300"}`}>
-                {who(g.scorer)}
-                {g.assist1 && <span className="text-gray-500">（A {[who(g.assist1), who(g.assist2)].filter(Boolean).join("・")}）</span>}
-              </span>
-              {tag && <span className="text-[10px] px-1.5 rounded bg-gray-700 text-gray-200 flex-shrink-0">{tag}</span>}
-            </div>
-          );
-        })}
       </div>
 
-      <div className="px-4 pb-3 space-y-4">
-        <PlayerBars sheet={sheet} />
+      <section className="px-4 py-3 space-y-4 border-b border-gray-800">
+        <h3 className="text-sm font-semibold text-gray-200">試合の流れ</h3>
+        <ScoreFlow sheet={sheet} />
         <TimeBandChart sheet={sheet} />
-        <Combos sheet={sheet} />
+        <div className="space-y-1">
+          <p className="text-xs text-gray-400 mb-1">得点経過</p>
+          {timeline.map(({ g, tag }, i) => {
+            const team = sheet[g.side];
+            const who = (no?: string) => (no ? `#${no}${playerName(team, no) ? ` ${playerName(team, no)}` : ""}` : "");
+            return (
+              <div key={i} className="flex items-baseline gap-2 text-xs">
+                <span className="text-gray-500 w-16 flex-shrink-0">
+                  {halfLabel(g.half)} {g.time}
+                </span>
+                <span className={`flex-1 ${g.side === "visitor" ? "text-blue-300" : "text-orange-300"}`}>
+                  {who(g.scorer)}
+                  {g.assist1 && <span className="text-gray-500">（A {[who(g.assist1), who(g.assist2)].filter(Boolean).join("・")}）</span>}
+                </span>
+                {tag && <span className="text-[10px] px-1.5 rounded bg-gray-700 text-gray-200 flex-shrink-0">{tag}</span>}
+              </div>
+            );
+          })}
+        </div>
         <PenaltyList sheet={sheet} />
+      </section>
+
+      <section className="px-4 py-3 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-200">選手</h3>
+        <PlayerBars sheet={sheet} />
+        <Combos sheet={sheet} />
         <p className="text-[11px] text-gray-600">
           ※ このスコア表1枚から出した数字です。
           <button onClick={() => setShowBasis(true)} data-feature="分析 > 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
             数値の根拠
           </button>
         </p>
-      </div>
+      </section>
       {showBasis && <BasisSheet onClose={() => setShowBasis(false)} />}
     </div>
   );

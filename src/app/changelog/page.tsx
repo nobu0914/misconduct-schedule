@@ -6,6 +6,13 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261005-1108",
+    date: "2026-10-05",
+    changes: [
+      "スコア表分析: 分析の並びを「まとめ → 試合の流れ（得点の推移・時間帯・得点経過・反則）→ 選手（個人のポイント・アシスト）」に整理し、見出しを付けた",
+    ],
+  },
+  {
     version: "Ver.1-261005-1057",
     date: "2026-10-05",
     changes: [
