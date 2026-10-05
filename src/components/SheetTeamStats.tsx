@@ -1,6 +1,6 @@
 "use client";
 
-// 分析 → チーム別の「スコア表から分かること」。アップロードされたスコア表を、1チームについて試合ごと・通算で集計する
+// 分析を見る の「チームの通算」の中身。アップロードされたスコア表を、1チームについて試合ごと・通算で集計する
 import { useMemo, useState } from "react";
 import { seasonOrdinal } from "@/lib/season";
 import { rowsByTeam, summarize, type SheetGameRow } from "@/lib/sheetStats";
@@ -196,7 +196,7 @@ export default function SheetTeamStats({ rows, division, team, season }: { rows:
       </div>
       <p className="text-[10px] text-gray-500">
         利用者がアップロードしたスコア表から集計しています（同じ試合は最新の1枚だけ）。アップロードされた試合だけなので、公式の成績とは試合数が違います。
-        チーム別の集計は、スコア表をアップロードした人・コンテニューコードで見に来た人だけが見られます。
+        チームの通算は、スコア表をアップロードした人・コンテニューコードで見に来た人だけが見られます。
       </p>
     </section>
   );

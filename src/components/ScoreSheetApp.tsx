@@ -6,7 +6,7 @@ import { GameDetail, SheetList } from "@/components/ScoreSheetAnalysis";
 import { getVisitorId } from "@/lib/analyticsClient";
 import { trackFeature } from "@/lib/trackEvent";
 import { loadEditTokens, rememberViewedCode, saveEditToken } from "@/lib/editTokens";
-import SheetTeams from "@/components/SheetTeams";
+import { SheetGrowth } from "@/components/SheetTeams";
 import {
   checkSheet,
   CONTINUE_MIN,
@@ -85,7 +85,7 @@ function upsert(list: ScoreSheet[], sheet: ScoreSheet): ScoreSheet[] {
   return [sheet, ...list.filter((s) => s.continueCode !== sheet.continueCode)];
 }
 
-type Tab = "analysis" | "add" | "teams";
+type Tab = "analysis" | "add";
 
 /** 写真を長辺 2000px の JPEG に縮める（送信サイズを抑える。写真そのものは保存しない） */
 async function shrinkImage(file: File): Promise<{ base64: string; mediaType: string }> {
@@ -182,13 +182,6 @@ export default function ScoreSheetApp({
   const [newCode, setNewCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [justLoaded, setJustLoaded] = useState<string | null>(null);
-  // 分析 → チーム別 で開くチーム（試合の分析の「スコア表の通算 →」から）
-  const [teamView, setTeamView] = useState<{ division: string; team: string } | null>(null);
-  function openTeam(division: string, team: string) {
-    setTeamView({ division, team });
-    setTab("teams");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
 
   // 保存した試合の修正中の内容（読み間違いを直す）
   const [fixing, setFixing] = useState<ScoreSheet | null>(null);
@@ -485,7 +478,7 @@ export default function ScoreSheetApp({
               <li>📈 得点の流れ・時間帯・誰のアシストで誰が決めたか、シュート数・決定率・セーブ率、PP/SH の得点</li>
               <li>✨ AI のコーチが、良かった点と次への改善点を両チームに書きます</li>
               <li>🔗 コンテニューコードで保存して、チームメイトにリンクで共有。活躍がリーグニュースに載ることも</li>
-              <li>📋 アップロードやコンテニューコードで見た人は、「チーム別」で各チームのスコア表の通算（後半失点率・時間帯ごとの得失点など）も見られます</li>
+              <li>📋 アップロードやコンテニューコードで見た人は、各試合の中で両チームのスコア表の通算（後半失点率・時間帯ごとの得失点など）も見られます</li>
             </ul>
           </div>
         </div>
@@ -496,7 +489,6 @@ export default function ScoreSheetApp({
             [
               ["analysis", "分析を見る"],
               ["add", "アップロード"],
-              ["teams", "チーム別"],
             ] as [Tab, string][]
           ).map(([k, label]) => (
             <button
@@ -538,7 +530,6 @@ export default function ScoreSheetApp({
             {shared && (
               <SharedGame
                 sheet={shared}
-                onOpenTeam={openTeam}
                 onUpdate={(updated) =>
                   setShared((cur) => (cur && (cur.editedAt ?? "") === (updated.editedAt ?? "") ? { ...cur, review: updated.review } : cur))
                 }
@@ -583,7 +574,7 @@ export default function ScoreSheetApp({
                     />
                   ) : (
                   <div className="space-y-2 pb-2">
-                    <GameDetail sheet={s} compact onUpdate={applyReview} onOpenTeam={openTeam} />
+                    <GameDetail sheet={s} compact onUpdate={applyReview} />
                     {s.continueCode && tokens[s.continueCode] && (
                       <button
                         onClick={() => {
@@ -642,12 +633,11 @@ export default function ScoreSheetApp({
                 「アップロード」から始めるか、コンテニューコードで呼び出してください。
               </p>
             )}
+            {!loading && <SheetGrowth />}
           </>
         )}
 
         {reading && <ReadingOverlay elapsed={elapsed} />}
-
-        {tab === "teams" && <SheetTeams initial={teamView} />}
 
         {tab === "add" && (
           <div className="space-y-4">
@@ -1081,13 +1071,11 @@ function FixSheet({
 function SharedGame({
   sheet,
   onUpdate,
-  onOpenTeam,
   onKeep,
   onClose,
 }: {
   sheet: ScoreSheet;
   onUpdate: (s: ScoreSheet) => void;
-  onOpenTeam: (division: string, team: string) => void;
   onKeep: () => void;
   onClose: () => void;
 }) {
@@ -1105,7 +1093,7 @@ function SharedGame({
           ×
         </button>
       </div>
-      <GameDetail sheet={sheet} compact onUpdate={onUpdate} onOpenTeam={onOpenTeam} />
+      <GameDetail sheet={sheet} compact onUpdate={onUpdate} />
       <button
         onClick={onKeep}
         className="w-full py-2.5 rounded-lg text-sm font-medium bg-gray-800 border border-gray-600 text-gray-100"

@@ -5,9 +5,9 @@ import { normalizeContinueCode } from "@/lib/scoreSheet";
 import { loadIndexedSheets } from "@/lib/scoreSheetIndex";
 import { rowsOfSheets } from "@/lib/sheetStats";
 
-// アップロードされたスコア表の、ディビジョンの全チームの試合ごとの行（コンテニューコードは出さない）。分析 → チーム別で使う。
+// アップロードされたスコア表の、ディビジョンの全チームの試合ごとの行（コンテニューコードは出さない）。分析を見る の「チームの通算」で使う。
 // 見られるのは、スコア表をアップロードした人・コンテニューコード（共有リンク含む）で見に来た人だけ（ユーザー指示 10/6）:
-// ヘッダー x-continue-codes に端末で使っているコード（最大5つ）を付け、どれかが保存されているときだけ返す。
+// ヘッダー x-continue-codes に開いている試合のコードを付け、それが保存されているときだけ返す（端末ではなくコンテニューコードが軸）。
 // 誰でも見る「データ → チーム」には出さない（アップロードしないチームが得をしないように）。AI の総評・ニュースの材料には使う。
 
 export const dynamic = "force-dynamic";
