@@ -3,6 +3,7 @@
 // 対象は「直近の7日（昨日まで、UTC の日付キー）」と、その前の7日（比較用）。集計は /api/track が記録した KV をそのまま読む。
 //   news と同じく、保存は analytics:report:latest（いまの号）と analytics:report:history（新しい順・52号）。
 
+import { LEAGUE_RULES } from "./aiRules";
 import { kv } from "@vercel/kv";
 import { TRACKED_PAGES, pageLabelOf, type ActivityEntry, ACTIVITY_LOG_KEY } from "./analyticsConstants";
 import { SHEET_LOG_KEY, type SheetLogEntry } from "./scoreSheetLog";
@@ -167,6 +168,8 @@ export async function buildReportDigest(now = new Date()): Promise<{ text: strin
 const MODEL = "claude-sonnet-5-5";
 
 const PROMPT = `あなたは小さなファン向けウェブサイト（アイスホッケーリーグ MHL の非公式ツール「Rinnavi」）のアクセス解析の担当者です。
+
+${LEAGUE_RULES}
 下の1週間の数字だけを使って、サイト運営者向けの週次レポートを書いてください。
 
 サイトの構成: ゲーム情報（試合日程・リーグニュース）、データ（ランク・チーム総評・相性・個人・スコア・スコア表分析）、リンク予定（リンクの貸し出し予定・水曜練習会）、イベント、お問い合わせ。

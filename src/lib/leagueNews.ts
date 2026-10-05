@@ -4,6 +4,7 @@
 // ネガティブな話題（連敗・大敗・反則・ケガ・批判）は書かない。データに無いことは書かない。
 // スコア表の記事にはリンクを付けない（コンテニューコードが分かると誰でも削除・修正できるため）。
 
+import { LEAGUE_RULES } from "./aiRules";
 import { analyzeGame, playerName, type ScoreSheet, type Side } from "./scoreSheet";
 import { divisionAwards } from "./seasonAwards";
 import { parseSeasonNumber, seasonOrdinal } from "./season";
@@ -350,6 +351,8 @@ function sheetFacts(s: ScoreSheet): string {
 const MODEL = "claude-sonnet-5-5";
 
 const PROMPT = `あなたは日本のアマチュアアイスホッケーリーグ「MHL（Metro Hockey League）」の、ファン向けニュースサイトの記者です。
+
+${LEAGUE_RULES}
 下のデータ（事実）だけを使って、今週のリーグニュースを3〜5本書いてください。Yahoo!ニュースのトップのような、短く読みやすい記事にします。
 
 ルール:

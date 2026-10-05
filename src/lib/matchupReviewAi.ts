@@ -1,6 +1,7 @@
 // 対戦カード（チーム相性）の AI総評と「相手に勝つには」。材料は2チームのチーム総評の事実＋直接対決＋8項目の比較。
 // 保存・更新のきまりはチーム総評と同じ（src/lib/aiCache.ts、今シーズン分は月1回）。
 
+import { LEAGUE_RULES } from "./aiRules";
 import { buildDivisionStats, headToHead, radarAxes } from "./matchup";
 import { seasonOrdinal } from "./season";
 import type { SeasonData } from "./seasonData";
@@ -8,7 +9,7 @@ import { profileInput, teamProfile } from "./teamProfile";
 import { teamKey } from "./teamName";
 
 /** 書き方を変えたら上げる（古いものを1回だけ作り直す） */
-export const MATCHUP_FORMAT = 2;
+export const MATCHUP_FORMAT = 3;
 
 export interface MatchupReview {
   summary: string;
@@ -73,6 +74,8 @@ export function matchupInput(data: Record<number, SeasonData>, season: number, d
 const MODEL = "claude-sonnet-5-5";
 
 const PROMPT = `あなたは日本のアマチュアアイスホッケーリーグ「MHL」をよく知る解説者です。
+
+${LEAGUE_RULES}
 下のデータ（事実）だけを使って、2チームの対戦カードの総評を書いてください。
 
 ルール:

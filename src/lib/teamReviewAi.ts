@@ -1,7 +1,9 @@
 // チーム総評の AI コメント（サーバー専用）。材料は teamProfile の事実だけ。前向きな書き方にする。
 
-/** 書き方を変えたら上げる（古い書き方の総評を1回だけ作り直すため）。2: 選手は「#背番号 苗字」 3: スコア表の数字も材料に */
-export const REVIEW_FORMAT = 3;
+import { LEAGUE_RULES } from "./aiRules";
+
+/** 書き方を変えたら上げる（古い書き方の総評を1回だけ作り直すため）。2: 選手は「#背番号 苗字」 3: スコア表の数字も材料に 4: MHL のきまり（4on4）を指示 */
+export const REVIEW_FORMAT = 4;
 
 export interface TeamReview {
   summary: string;
@@ -16,6 +18,8 @@ export interface TeamReview {
 const MODEL = "claude-sonnet-5-5";
 
 const PROMPT = `あなたは日本のアマチュアアイスホッケーリーグ「MHL」をよく知る解説者です。
+
+${LEAGUE_RULES}
 下のデータ（事実）だけを使って、このチームのシーズンの総評を書いてください。
 
 ルール:

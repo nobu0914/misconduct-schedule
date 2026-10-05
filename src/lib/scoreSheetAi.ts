@@ -3,6 +3,7 @@
 // キーは Rinnavi 専用の ANTHROPIC_API_KEY（他サービスと共有しない方針）。未設定なら読み取りは使えず、
 // 画面は手入力で動く。読み取り結果は必ず人が確認してから保存する（手書きの読み違いがあるため）。
 
+import { LEAGUE_RULES } from "./aiRules";
 import { analyzeGame, emptySheet, goalOrder, goalSituations, playerName, type Half, type ScoreSheet, type SheetTeam, type Side } from "./scoreSheet";
 
 const MODEL = "claude-sonnet-5-5";
@@ -260,6 +261,8 @@ function reviewInput(s: ScoreSheet): string {
 }
 
 const REVIEW_PROMPT = `あなたはアマチュアのアイスホッケーリーグ（MHL）の試合を見るコーチです。
+
+${LEAGUE_RULES}
 次の1試合のスコア表の集計だけをもとに、両チームの選手向けに「AI総評」を日本語で書いてください。
 
 ルール:

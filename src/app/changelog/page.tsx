@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261006-0029",
+    date: "2026-10-06",
+    changes: ["AI の文章（チーム総評・対戦カード・ニュース・スコア表の総評・管理画面のレポート）に MHL のきまり（フィールド3人＋GKの4on4、反則で4on3、前半・後半）を指示。「5on5」などと書いていた総評は作り直す"],
+  },
+  {
     version: "Ver.1-261006-0022",
     date: "2026-10-06",
     changes: [
