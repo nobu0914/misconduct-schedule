@@ -5,6 +5,11 @@
 
 import { teamKey } from "./teamName";
 
+/** 選手の表示「#背番号 名前」（背番号が分からなければ名前だけ） */
+export function playerLabel(p: { name: string; jersey?: number | string | null }): string {
+  return p.jersey !== undefined && p.jersey !== null && p.jersey !== "" ? `#${p.jersey} ${p.name}` : p.name;
+}
+
 export interface StandingRow {
   team: string;
   divisionLabel: string;
@@ -29,6 +34,8 @@ export interface ScoreRow {
 
 export interface PlayerRow {
   name: string;
+  /** 背番号（公式の個人成績にある） */
+  jersey?: number;
   team: string;
   divisionLabel: string;
   goals: number;
@@ -54,7 +61,7 @@ export interface TeamSeasonStats {
   scorers: number;
   /** 個人成績に載っている選手の数 */
   players: number;
-  ace?: { name: string; goals: number; points: number };
+  ace?: { name: string; jersey?: number; goals: number; points: number };
   pim: number;
   /** 勝敗を順位表ではなくスコア表から数えた（順位表に勝敗が無いシーズン） */
   recordFromScores: boolean;
@@ -130,7 +137,7 @@ export function buildDivisionStats(
     t.players += 1;
     if (p.goals > 0) t.scorers += 1;
     t.pim += p.pim;
-    if (!t.ace || p.points > t.ace.points) t.ace = { name: p.name, goals: p.goals, points: p.points };
+    if (!t.ace || p.points > t.ace.points) t.ace = { name: p.name, jersey: p.jersey, goals: p.goals, points: p.points };
   }
 
   return [...byKey.values()].sort(
@@ -291,7 +298,7 @@ export const METRICS: Metric[] = [
     format: (v) => `${v}pt`,
     calc: (t) =>
       t.ace
-        ? `${t.ace.name}：${t.ace.goals}ゴール ＋ ${t.ace.points - t.ace.goals}アシスト ＝ ${t.ace.points}pt`
+        ? `${playerLabel(t.ace)}：${t.ace.goals}ゴール ＋ ${t.ace.points - t.ace.goals}アシスト ＝ ${t.ace.points}pt`
         : NO_PLAYERS,
   },
   {

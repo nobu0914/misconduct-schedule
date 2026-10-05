@@ -1,5 +1,8 @@
 // チーム総評の AI コメント（サーバー専用）。材料は teamProfile の事実だけ。前向きな書き方にする。
 
+/** 書き方を変えたら上げる（古い書き方の総評を1回だけ作り直すため）。2: 選手は「#背番号 苗字」 */
+export const REVIEW_FORMAT = 2;
+
 export interface TeamReview {
   summary: string;
   strengths: string[];
@@ -7,6 +10,7 @@ export interface TeamReview {
   /** このチームに勝つためのポイント（対戦するチーム向け） */
   howToBeat: string[];
   createdAt: string;
+  format?: number;
 }
 
 const MODEL = "claude-sonnet-5-5";
@@ -15,7 +19,8 @@ const PROMPT = `あなたは日本のアマチュアアイスホッケーリー�
 下のデータ（事実）だけを使って、このチームのシーズンの総評を書いてください。
 
 ルール:
-- データに無いことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名・選手名はデータのとおり。
+- データに無いことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名はデータのとおり。
+- 選手は「#背番号 苗字」で書く（例: データが「#10 久保田一誠」なら「#10 久保田」）。苗字と名前の区切りが判断できない名前（カタカナの外国名など）はデータのとおりに書く。背番号が無い選手は苗字だけ。
 - 前向きな書き方にする。弱点の指摘や批判、負けの強調はしない。伸びしろは「これから注目したいところ」として前向きに書く。
 - ディビジョン内の順位（平均得点◯位など）を根拠に、チームの持ち味を具体的に書く。
 - summary は2〜3文（120文字程度）。strengths は持ち味を2〜3個、watch はこれからの注目ポイントを1〜2個。各40文字以内。です・ます調。
@@ -50,6 +55,7 @@ export function normalizeTeamReview(raw: unknown): TeamReview | undefined {
     watch: list(r.watch, 2),
     howToBeat: list(r.howToBeat, 3),
     createdAt: new Date().toISOString(),
+    format: REVIEW_FORMAT,
   };
 }
 

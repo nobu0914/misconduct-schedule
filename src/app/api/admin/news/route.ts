@@ -5,7 +5,7 @@ import { generateNews, loadNews } from "@/lib/newsStore";
 // 管理者用: リーグニュースの確認と、今すぐ作り直す（金曜の自動作成を待たずに）
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 async function auth(req: NextRequest) {
   return verifyAdminPasscode(req, req.headers.get("x-admin-passcode"));

@@ -105,7 +105,9 @@ export default function NewsPage() {
                 const d = await fetch(`/api/news?offset=${history.length}`)
                   .then((r) => r.json())
                   .catch(() => null);
-                if (d?.history) setHistory((cur) => [...cur, ...d.history]);
+                // 読んでいる間に新しい号が出ると境目がずれるので、同じ号は除く
+                if (d?.history)
+                  setHistory((cur) => [...cur, ...d.history.filter((x: NewsEdition) => !cur.some((c) => c.generatedAt === x.generatedAt))]);
                 setLoadingMore(false);
               }}
               data-feature="過去のニュースをもっと見る"

@@ -95,7 +95,12 @@ export default function PageTracker() {
       if (label) sendAnalytics({ event: "click", value: `${path}｜${label}` });
       // 機能ログ: data-feature を持つ要素（またはその親）を押したら「ページ > 機能 > 詳細」で記録。
       // 試合カードのように button でない要素もあるので、上のクリック判定とは別に見る
-      const feature = (e.target as Element | null)?.closest?.("[data-feature]")?.getAttribute("data-feature");
+      const target = e.target as Element | null;
+      const featureEl = target?.closest?.("[data-feature]");
+      // カードの中の別のリンク・ボタン（「ソースページを開く」など）を押したときは、カードの機能として数えない
+      const inner = target?.closest?.("a, button");
+      const nested = !!(inner && featureEl && inner !== featureEl && featureEl.contains(inner) && !inner.hasAttribute("data-feature"));
+      const feature = nested ? null : featureEl?.getAttribute("data-feature");
       if (feature) sendFeature(`${pageLabelOf(path)} > ${feature}`);
     };
     document.addEventListener("click", onClick, { capture: true });

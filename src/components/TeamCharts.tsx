@@ -2,6 +2,7 @@
 
 // チーム総評のグラフ（ライブラリなし・SVG と CSS だけ）
 import type { ProfileAxis, ProfileGame, Record3 } from "@/lib/teamProfile";
+import { playerLabel } from "@/lib/matchup";
 
 /** 7指標のレーダー。青がこのチーム、点線がディビジョン平均（外側ほど良い） */
 export function TeamRadar({ axes }: { axes: ProfileAxis[] }) {
@@ -113,13 +114,13 @@ export function RecordBar({ label, rec, note }: { label: string; rec: Record3; n
 }
 
 /** 選手のポイント（濃い=ゴール、薄い=アシスト） */
-export function PlayerPoints({ players }: { players: { name: string; goals: number; assists: number; points: number }[] }) {
+export function PlayerPoints({ players }: { players: { name: string; jersey?: number; goals: number; assists: number; points: number }[] }) {
   const max = Math.max(1, ...players.map((p) => p.points));
   return (
     <div className="space-y-1">
       {players.map((p) => (
         <div key={p.name} className="grid grid-cols-[6.5rem_1fr_3.5rem] items-center gap-2 text-xs">
-          <span className="text-gray-200 truncate">{p.name}</span>
+          <span className="text-gray-200 truncate">{playerLabel(p)}</span>
           <div className="flex h-2.5 rounded overflow-hidden bg-gray-800">
             <div className="bg-blue-500" style={{ width: `${(p.goals / max) * 100}%` }} />
             <div className="bg-blue-500/40" style={{ width: `${(p.assists / max) * 100}%` }} />

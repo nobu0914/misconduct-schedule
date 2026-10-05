@@ -454,7 +454,7 @@ interface SheetLog {
   code?: string;
   game?: string;
   note?: string;
-  via?: "link" | "input";
+  via?: "link" | "input" | "recent";
   ip: string;
   userAgent: string;
   visitorId: string | null;
@@ -463,6 +463,7 @@ interface SheetLog {
 const VIA_LABEL: Record<string, { label: string; cls: string }> = {
   link: { label: "共有リンクから", cls: "bg-sky-800/60 text-sky-100" },
   input: { label: "コード入力", cls: "bg-gray-800 text-gray-300 border border-gray-700" },
+  recent: { label: "前に使ったコード", cls: "bg-gray-800 text-gray-300 border border-gray-700" },
 };
 
 /** どのアプリから開いたか（LINE などのアプリ内ブラウザはリンクを踏んだ目安になる） */
@@ -511,7 +512,7 @@ function ScoreSheetLog({ log }: { log: SheetLog[] | null }) {
               ["", "すべて"],
               ...Object.entries(LOG_LABEL).flatMap(([k, v]) =>
                 k === "lookup"
-                  ? [[k, v.label], ["lookup:link", "└ 共有リンクから"], ["lookup:input", "└ コード入力"]]
+                  ? [[k, v.label], ["lookup:link", "└ 共有リンクから"], ["lookup:input", "└ コード入力"], ["lookup:recent", "└ 前に使ったコード"]]
                   : [[k, v.label]]
               ),
             ].map(([k, label]) => (
@@ -604,7 +605,7 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
           <p className="text-[11px] text-gray-500">利用者が削除したデータと、修正する前の内容は180日間ここに残ります。戻すと元のコンテニューコードで呼び出せます（修正前の版は今の内容に上書き）。</p>
           {msg && <p className="text-xs text-green-300">{msg}</p>}
-          {entries && entries.length === 0 && <p className="text-xs text-gray-500">削除されたデータはありません。</p>}
+          {entries && entries.length === 0 && <p className="text-xs text-gray-500">削除・修正前のデータはありません。</p>}
           {entries?.map((e) => (
             <div key={e.id} className="border border-gray-800 rounded-lg p-2 space-y-1">
               <div className="flex items-center gap-2 text-xs">

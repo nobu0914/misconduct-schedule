@@ -8,6 +8,7 @@ import { analyzeGame, playerName, type ScoreSheet, type Side } from "./scoreShee
 import { divisionAwards } from "./seasonAwards";
 import { parseSeasonNumber, seasonOrdinal } from "./season";
 import { teamKey } from "./teamName";
+import { playerLabel } from "./matchup";
 
 export interface NewsScore {
   date: string;
@@ -32,6 +33,7 @@ export interface NewsStanding {
 }
 export interface NewsPlayer {
   name: string;
+  jersey?: number;
   team: string;
   divisionLabel: string;
   goals: number;
@@ -192,7 +194,7 @@ export function buildNewsDigest(input: NewsInput): { text: string; links: Record
     const divs = [...new Set(input.players.map((p) => p.divisionLabel))];
     for (const d of divs) {
       const top = input.players.filter((p) => p.divisionLabel === d).sort((a, b) => b.points - a.points || b.goals - a.goals).slice(0, 3);
-      if (top[0]?.points) lines.push(`${d}: ${top.map((p) => `${p.name}（${p.team}）${p.goals}G ${p.assists}A`).join(" / ")}`);
+      if (top[0]?.points) lines.push(`${d}: ${top.map((p) => `${playerLabel(p)}（${p.team}）${p.goals}G ${p.assists}A`).join(" / ")}`);
     }
     link("個人ランク", "/player-ranking?mode=search");
   }
@@ -351,7 +353,9 @@ const PROMPT = `あなたは日本のアマチュアアイスホッケーリー�
 下のデータ（事実）だけを使って、今週のリーグニュースを3〜5本書いてください。Yahoo!ニュースのトップのような、短く読みやすい記事にします。
 
 ルール:
-- データに書かれていないことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名・選手名はデータのとおりに書く。
+- データに書かれていないことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名はデータのとおりに書く。
+- 選手は「#背番号 苗字」で書く（例: データが「#10 久保田一誠」なら「#10 久保田選手」）。苗字と名前の区切りが判断できない名前
+  （カタカナの外国名など）はデータのとおり。背番号が無い選手は苗字だけ。
 - ネガティブな話題は書かない（連敗、大敗した側、反則、ケガ、ミス、批判、不調など）。勝った側・活躍した選手・楽しみな試合・イベントなど、前向きな話題だけ。
 - 負けたチームの名前を出すときも、責めたり見下したりしない（「〜を下した」程度にとどめる）。
 - 目立った出来事（ハットトリック、連勝、逆転勝ち、完封、首位、前シーズン王者、イベント）を優先して選ぶ。同じ試合・同じ話題を2本書かない。

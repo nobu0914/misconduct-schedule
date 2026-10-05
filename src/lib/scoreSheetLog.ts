@@ -13,14 +13,14 @@ export interface SheetLogEntry {
   code?: string;
   game?: string;
   note?: string;
-  /** 呼び出しの経路: 共有リンクを開いた / コードを入力した（2026-10-04 以前の記録には無い） */
+  /** 呼び出しの経路: 共有リンクを開いた / コードを入力した / 前に使ったコードを押した（2026-10-04 以前の記録には無い） */
   via?: SheetLookupVia;
   ip: string;
   userAgent: string;
   visitorId: string | null;
 }
 
-export type SheetLookupVia = "link" | "input";
+export type SheetLookupVia = "link" | "input" | "recent";
 
 export const SHEET_LOG_KEY = "scoresheet:log";
 const MAX = 2000;

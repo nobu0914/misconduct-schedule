@@ -8,7 +8,8 @@ import type { PrevSeasonEntry } from "../api/prev-season/route";
 import type { TeamStanding } from "../api/standings/route";
 import type { GameScore } from "../api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
-import { normalizeName } from "@/lib/teamName";
+import { normalizeName, teamKey } from "@/lib/teamName";
+import { playerLabel } from "@/lib/matchup";
 import ScoringRatePanel, { MultiDivisionCard } from "@/components/ScoringRatePanel";
 import ScoreSheetApp from "@/components/ScoreSheetApp";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -101,7 +102,8 @@ function PlayerRankingContent() {
   });
   // チーム相性の選択（URLの season / a / b）。シーズンは相性タブ内で選ぶ
   // スコア表分析の共有リンク（?mode=analysis&code=）で開いたときのコード
-  const [sharedCode] = useState(() => searchParams.get("code"));
+  // 一度呼び出したら消す（タブを切り替えて戻るたびに呼び出し直して、ログや回数制限を余分に使わないように）
+  const [sharedCode, setSharedCode] = useState(() => searchParams.get("code"));
   // チーム総評の選択（URLの season / t）
   const [teamSel, setTeamSel] = useState<TeamSelection>(() => {
     const n = Number(searchParams.get("season"));
@@ -120,7 +122,14 @@ function PlayerRankingContent() {
   // 前年比に使うのは必ず「今シーズン − 1」（2シーズン離れたデータと比べない）
   const prevSeasonNum = currentSeasonNum !== undefined ? currentSeasonNum - 1 : undefined;
   const prevPlayers = prevSeasonNum !== undefined ? pastPlayers[prevSeasonNum] ?? [] : [];
-  const selectedPastSeason = season === "prev" ? prevSeasonNum : season === "current" ? undefined : season;
+  // URL の season はチーム・相性タブと共通なので、今シーズン（以降）の番号が来たら「今シーズン」として扱う
+  // （過去シーズン扱いにすると past-* API が 400 を返し、取得し直しが止まらなかった）
+  const selectedPastSeason =
+    season === "prev"
+      ? prevSeasonNum
+      : season === "current" || (currentSeasonNum !== undefined && season >= currentSeasonNum)
+        ? undefined
+        : season;
 
   async function loadPastSeason(n: number) {
     const d = await fetch(`/api/prev-season-players?season=${n}`)
@@ -156,6 +165,8 @@ function PlayerRankingContent() {
       .then((r) => r.json())
       .catch(() => ({ data: [] }));
     if (typeof d.season === "number") setPastTeams((cur) => ({ ...cur, [d.season]: d.data ?? [] }));
+    // 取れなかったシーズンも「取得済み（空）」にして、読み直しを繰り返さない
+    else if (n !== undefined) setPastTeams((cur) => ({ ...cur, [n]: cur[n] ?? [] }));
     if (Array.isArray(d.available)) setPastTeamSeasonList(d.available);
   }
 
@@ -269,6 +280,7 @@ function PlayerRankingContent() {
       .then((r) => r.json())
       .catch(() => ({ games: [] }));
     if (typeof d.season === "number") setPastScores((cur) => ({ ...cur, [d.season]: d.games ?? [] }));
+    else if (n !== undefined) setPastScores((cur) => ({ ...cur, [n]: cur[n] ?? [] }));
     if (Array.isArray(d.available)) setPastScoreSeasonList(d.available);
   }
 
@@ -280,6 +292,14 @@ function PlayerRankingContent() {
     loadPastScores(selectedPastSeason).finally(() => setPastScoresLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selectedPastSeason, pastScores, pastScoresLoading]);
+
+  // 過去シーズンの順位では個人賞の背番号を出すので、そのシーズンの個人成績も読む
+  useEffect(() => {
+    if (mode !== "ranking" || selectedPastSeason === undefined || pastPlayers[selectedPastSeason]) return;
+    if (!pastSeasonList.includes(selectedPastSeason)) return;
+    void loadPastSeason(selectedPastSeason);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedPastSeason, pastSeasonList]);
 
   // 過去シーズンの順位を選んだら、まだ読んでいなければ取得する
   useEffect(() => {
@@ -483,7 +503,7 @@ function PlayerRankingContent() {
           ))}
         </div>
 
-        {mode === "analysis" && <ScoreSheetApp embedded initialCode={sharedCode} />}
+        {mode === "analysis" && <ScoreSheetApp embedded initialCode={sharedCode} onInitialCodeUsed={() => setSharedCode(null)} />}
 
         {mode === "team" && (
           <TeamOverview
@@ -519,7 +539,7 @@ function PlayerRankingContent() {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
-                if (e.target.value.trim()) trackFeatureDebounced("player-search", `個人 > 検索 > ${e.target.value.trim()}`);
+                trackFeatureDebounced("player-search", e.target.value.trim() ? `個人 > 検索 > ${e.target.value.trim()}` : null);
               }}
               autoFocus
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-base"
@@ -586,8 +606,8 @@ function PlayerRankingContent() {
                       <span className={`${getDivisionColor(p.divisionLabel)} text-white text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0`}>
                         {p.divisionLabel}
                       </span>
+                      <span className="text-gray-300 font-semibold">#{p.jersey}</span>
                       <span className="text-white font-semibold">{p.name}</span>
-                      <span className="text-gray-500 text-sm">#{p.jersey}</span>
                       <span className="text-gray-500 text-sm truncate">{p.team}</span>
                     </div>
 
@@ -707,8 +727,8 @@ function PlayerRankingContent() {
                     <span className={`${getDivisionColor(p.divisionLabel)} text-white text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0`}>
                       {p.divisionLabel}
                     </span>
+                    <span className="text-gray-300 font-semibold">#{p.jersey}</span>
                     <span className="text-white font-semibold">{p.name}</span>
-                    <span className="text-gray-500 text-sm">#{p.jersey}</span>
                     <span className="text-gray-500 text-sm truncate">{p.team}</span>
                     {selectedPastSeason !== undefined && (
                       <span className="ml-auto text-gray-500 text-xs flex-shrink-0">{seasonOrdinal(selectedPastSeason)}</span>
@@ -818,7 +838,13 @@ function PlayerRankingContent() {
                   // 優勝はプレイオフで決まる。公式の最終結果があるシーズンだけ出す
                   const aw = divisionAwards(selectedPastSeason, selectedDivision);
                   if (!aw || (!aw.champion && !aw.runnerUp)) return null;
-                  const person = (p?: { name: string; team?: string }) => (p ? `${p.name}${p.team ? `（${p.team}）` : ""}` : "—");
+                  // 個人賞の選手は、そのシーズンの個人成績から背番号を引いて「#背番号 名前」
+                  const jerseyOf = (p: { name: string; team?: string }) =>
+                    (pastPlayers[selectedPastSeason!] ?? []).find(
+                      (x) => normalizeName(x.name) === normalizeName(p.name) && (!p.team || teamKey(x.team) === teamKey(p.team))
+                    )?.jersey;
+                  const person = (p?: { name: string; team?: string }) =>
+                    p ? `${playerLabel({ name: p.name, jersey: jerseyOf(p) })}${p.team ? `（${p.team}）` : ""}` : "—";
                   return (
                     <div className="px-3 py-2.5 border-b border-gray-800 text-xs space-y-1">
                       <div className="text-gray-500">プレイオフ・個人賞（公式の最終結果）</div>

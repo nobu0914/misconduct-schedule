@@ -29,8 +29,10 @@ export function sendFeature(value: string) {
 }
 
 /** 検索ワードなど入力中の値（入力が止まって1.5秒後に1回だけ送る） */
-export function trackFeatureDebounced(key: string, feature: string, delay = 1500) {
+export function trackFeatureDebounced(key: string, feature: string | null, delay = 1500) {
   clearTimeout(timers[key]);
+  // 入力を消したときは、待っている途中の文字を送らない
+  if (!feature) return;
   timers[key] = setTimeout(() => trackFeature(feature), delay);
 }
 

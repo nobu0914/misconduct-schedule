@@ -654,7 +654,7 @@ function ScheduleContent() {
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
-            if (e.target.value.trim()) trackFeatureDebounced("home-search", `検索 > ${e.target.value.trim()}`);
+            trackFeatureDebounced("home-search", e.target.value.trim() ? `検索 > ${e.target.value.trim()}` : null);
           }}
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
         />

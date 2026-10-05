@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
 import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
+import { operator, saveBackup } from "@/lib/scoreSheetBackup";
 import {
   checkSheet,
   isBlankSheet,
@@ -20,40 +21,9 @@ export const dynamic = "force-dynamic";
 
 const KEEP_SECONDS = 2 * 365 * 86400; // 2年
 const key = (code: string) => `scoresheet:cc:${code}`;
-const TRASH_SECONDS = 180 * 86400; // 削除したデータのバックアップは180日
-const TRASH_INDEX = "scoresheet:trash:index";
-const trashKey = (id: string) => `scoresheet:trash:${id}`;
-
-interface TrashEntry {
-  id: string;
-  code: string;
-  sheet: ScoreSheet;
-  deletedAt: string;
-  deletedBy: { ip: string; userAgent: string; visitorId: string | null };
-  /** edit: 修正したときの修正前の版（無ければ削除） */
-  kind?: "delete" | "edit";
-}
-
 /** 削除・修正の前の版をバックアップに残す（管理者が戻せるように、誰が操作したかも残す） */
-async function backup(req: NextRequest, code: string, sheet: ScoreSheet, kind: "delete" | "edit"): Promise<string> {
-  const vid = req.headers.get("x-visitor-id") ?? "";
-  const entry: TrashEntry = {
-    id: `${code}_${Date.now().toString(36)}`,
-    code,
-    sheet,
-    deletedAt: new Date().toISOString(),
-    deletedBy: {
-      ip: clientIp(req),
-      userAgent: (req.headers.get("user-agent") ?? "").slice(0, 300),
-      visitorId: /^[A-Za-z0-9-]{8,64}$/.test(vid) ? vid : null,
-    },
-    kind,
-  };
-  await kv.set(trashKey(entry.id), entry, { ex: TRASH_SECONDS });
-  await kv.lpush(TRASH_INDEX, entry.id);
-  await kv.ltrim(TRASH_INDEX, 0, 499);
-  return entry.id;
-}
+const backup = (req: NextRequest, code: string, sheet: ScoreSheet, kind: "delete" | "edit") =>
+  saveBackup(code, sheet, kind, operator(req, clientIp(req)));
 
 const newCode = () => suggestContinueCode(randomInt);
 
@@ -74,7 +44,7 @@ export async function GET(req: NextRequest) {
       action: "lookup",
       code,
       game: gameLabel(sheet),
-      via: via === "link" || via === "input" ? via : undefined,
+      via: via === "link" || via === "input" || via === "recent" ? via : undefined,
     });
     return NextResponse.json({ sheet: { ...sheet, continueCode: code } });
   } catch (e) {
@@ -171,7 +141,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "limit", message: "今日の修正回数の上限です。" }, { status: 429 });
   }
   const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
-  if (!code) return NextResponse.json({ error: "bad_code" }, { status: 400 });
+  if (!code) {
+    return NextResponse.json(
+      { error: "bad_code", message: "このコンテニューコード（古い形式）のデータは修正できません。新しく保存し直してください。" },
+      { status: 400 }
+    );
+  }
   let raw: unknown;
   try {
     raw = await req.json();
@@ -193,7 +168,12 @@ export async function PUT(req: NextRequest) {
       review: undefined,
     };
     const id = await backup(req, code, before, "edit");
-    await kv.set(key(code), next, { keepTtl: true });
+    // 読んでから書くまでの間に削除されていたら書かない（期限なしで復活させない）
+    if (!(await kv.set(key(code), next, { keepTtl: true, xx: true }))) {
+      return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません（削除された可能性があります）。" }, { status: 404 });
+    }
+    // 修正前の数字で作っている途中の AI総評は保存させない（review 側で editedAt を見て捨てる）
+    await kv.del(`scoresheet:review-lock:${code}`).catch(() => {});
     await logSheetEvent(req, {
       action: "edit",
       code,

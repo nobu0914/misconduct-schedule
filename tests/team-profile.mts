@@ -64,3 +64,14 @@ assert(vsEb.w === 2 && vsEb.gf === 7 && vsEb.ga === 2 && vsEb.rank === 2, "対�
 assert(p.players.length === 2 && Math.abs(p.topScorerShare! - 5 / 7) < 1e-9 && p.assistsPerGoal === 6 / 7, "選手のポイント・得点王の割合・アシスト率");
 assert(p.pim?.total === 2 && p.pim.rank === 2, "反則（少ない順）");
 assert(profileInput(p).includes("勝てなかった試合") === false && profileInput(eb).includes("勝てなかった試合: vs サイコ 2-3"), "AI の材料に勝てなかった試合");
+
+// 選手の表示は「#背番号 名前」
+import { playerLabel } from "../src/lib/matchup";
+assert(playerLabel({ name: "久保田一誠", jersey: 10 }) === "#10 久保田一誠" && playerLabel({ name: "山田" }) === "山田", "背番号があれば前に付ける");
+const withJersey = teamProfile(
+  { 54: { ...data[54], players: data[54].players.map((x, i) => ({ ...x, jersey: i + 7 })) } },
+  54,
+  "Brass",
+  "サイコ"
+)!;
+assert(withJersey.topPlayers[0].jersey === 7 && profileInput(withJersey).includes("得点源: #7 山田 5G 2A"), "AI の材料にも背番号");

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { seasonOrdinal } from "@/lib/season";
 import { teamKey } from "@/lib/teamName";
-import { buildDivisionStats } from "@/lib/matchup";
+import { buildDivisionStats, playerLabel } from "@/lib/matchup";
 import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData";
 import { teamProfile, type ProfileUpcoming } from "@/lib/teamProfile";
 import { trackFeature } from "@/lib/trackEvent";
@@ -417,7 +417,7 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                     {profile.topPlayers.map((p, i) => (
                       <div key={p.name} className="rounded-lg bg-gray-800/60 px-2 py-2 text-center">
                         <p className="text-[10px] text-gray-500">{["🥇", "🥈", "🥉"][i]}</p>
-                        <p className="text-xs text-gray-100 font-medium truncate">{p.name}</p>
+                        <p className="text-xs text-gray-100 font-medium truncate">{playerLabel(p)}</p>
                         <p className="text-lg font-bold text-white leading-tight">{p.points}<span className="text-[10px] text-gray-400 font-normal">pt</span></p>
                         <p className="text-[10px] text-gray-400">
                           {p.goals}G {p.assists}A

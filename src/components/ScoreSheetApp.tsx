@@ -151,10 +151,13 @@ function scrollToGame(code: string | undefined | null) {
 export default function ScoreSheetApp({
   embedded = false,
   initialCode,
+  onInitialCodeUsed,
 }: {
   embedded?: boolean;
   /** 共有リンク（?code=）で開いたときのコード。呼び出して開く */
   initialCode?: string | null;
+  /** initialCode を呼び出したら呼ぶ（親が消して、開き直しで再取得しないように） */
+  onInitialCodeUsed?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("analysis");
   const [sheets, setSheets] = useState<ScoreSheet[]>([]);
@@ -193,6 +196,7 @@ export default function ScoreSheetApp({
   useEffect(() => {
     const code = initialCode ? normalizeContinueCode(initialCode) : null;
     if (!code) return;
+    onInitialCodeUsed?.();
     (async () => {
       const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(code)}&via=link`, { headers: { "x-visitor-id": getVisitorId() ?? "" } }).catch(() => null);
       const d = res ? await res.json().catch(() => ({})) : {};
@@ -253,6 +257,20 @@ export default function ScoreSheetApp({
 
 
   /** 一覧の並びは変えずに中身だけ差し替える（AI 総評が付いたときなど） */
+  /**
+   * AI総評ができたら、その試合の総評だけを入れる。作っている間に修正された試合（editedAt が違う）には入れない
+   * （総評の応答に付いてくる試合データは作り始めた時点のものなので、丸ごと入れると修正が消える）
+   */
+  function applyReview(updated: ScoreSheet) {
+    const same = (x: ScoreSheet) => x.continueCode === updated.continueCode && (x.editedAt ?? "") === (updated.editedAt ?? "");
+    setSheets((cur) => {
+      const next = cur.map((x) => (same(x) ? { ...x, review: updated.review } : x));
+      saveLocal(next);
+      return next;
+    });
+    setOpened((o) => (o && same(o) ? { ...o, review: updated.review } : o));
+  }
+
   function replaceLocal(sheet: ScoreSheet) {
     setSheets((cur) => {
       const next = cur.map((x) => (x.continueCode === sheet.continueCode ? sheet : x));
@@ -453,7 +471,9 @@ export default function ScoreSheetApp({
             {shared && (
               <SharedGame
                 sheet={shared}
-                onUpdate={setShared}
+                onUpdate={(updated) =>
+                  setShared((cur) => (cur && (cur.editedAt ?? "") === (updated.editedAt ?? "") ? { ...cur, review: updated.review } : cur))
+                }
                 onKeep={() => {
                   trackFeature("分析 > 共有された試合を一覧に追加");
                   remember(shared);
@@ -494,15 +514,8 @@ export default function ScoreSheetApp({
                     />
                   ) : (
                   <div className="space-y-2 pb-2">
-                    <GameDetail
-                      sheet={s}
-                      compact
-                      onUpdate={(updated) => {
-                        replaceLocal(updated);
-                        setOpened(updated);
-                      }}
-                    />
-                    {s.continueCode && (
+                    <GameDetail sheet={s} compact onUpdate={applyReview} />
+                    {s.continueCode && normalizeContinueCode(s.continueCode) === s.continueCode && (
                       <button
                         onClick={() => {
                           setFixing(structuredClone(s));
@@ -789,13 +802,14 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
     setRecent(codes);
     if (codes[0]) setCode(codes[0]);
   }, []);
-  async function load(input = code) {
+  /** via: 入力して呼び出した（input）／「前に使ったコード」を押した（recent）。操作ログで見分ける */
+  async function load(input = code, via: "input" | "recent" = "input") {
     const c = normalizeContinueCode(input);
     if (!c) return setError("コンテニューコードは半角の大文字と数字の4〜8文字です（例 K7QM3XRA）。");
     setBusy(true);
     setError("");
     try {
-      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}&via=input`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(c)}&via=${via}`, { headers: { "x-visitor-id": getVisitorId() ?? "" } });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         trackFeature("分析 > コードで呼び出し");
@@ -837,7 +851,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
               key={c}
               onClick={() => {
                 setCode(c);
-                load(c);
+                load(c, "recent");
               }}
               data-feature="分析 > 前に使ったコード"
               className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 tracking-wider"
@@ -927,7 +941,6 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-/** 削除の確認。コンテニューコードを入力しないと削除できない。削除した人の情報が記録されることも伝える */
 /** 保存した試合の読み取り結果を直す（コンテニューコードはそのまま。修正前の版は管理者が戻せるよう残る） */
 function FixSheet({
   sheet,
@@ -1027,6 +1040,7 @@ function SharedGame({
   );
 }
 
+/** 削除の確認。コンテニューコードを入力しないと削除できない。削除した人の情報が記録されることも伝える */
 function DeleteDialog({
   sheet,
   onCancel,

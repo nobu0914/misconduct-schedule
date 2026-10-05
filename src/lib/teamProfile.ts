@@ -1,7 +1,7 @@
 // チーム総評（データ → チーム）。1チームの1シーズンを、ディビジョンの中での位置・直近の試合・主力選手・
 // これまでのシーズンでまとめる。クライアントとサーバー（AI 総評の材料）の両方から使う。
 
-import { buildDivisionStats, METRICS, relative, type ScoreRow, type TeamSeasonStats } from "./matchup";
+import { buildDivisionStats, METRICS, playerLabel, relative, type ScoreRow, type TeamSeasonStats } from "./matchup";
 import { playoffResult } from "./seasonAwards";
 import { seasonOrdinal } from "./season";
 import { teamKey } from "./teamName";
@@ -77,7 +77,7 @@ export interface TeamProfile {
   recent: ProfileGame[];
   /** 最後から続いている結果（例 3連勝） */
   streak?: { result: "W" | "L" | "T"; count: number };
-  topPlayers: { name: string; goals: number; assists: number; points: number }[];
+  topPlayers: { name: string; jersey?: number; goals: number; assists: number; points: number }[];
   playoff?: "champion" | "runnerUp";
   history: SeasonLine[];
   /** レーダー（7指標） */
@@ -96,7 +96,7 @@ export interface TeamProfile {
   mostGoals?: ProfileGame;
   opponents: OpponentLine[];
   /** 選手全員（ポイント順） */
-  players: { name: string; goals: number; assists: number; points: number; pim: number }[];
+  players: { name: string; jersey?: number; goals: number; assists: number; points: number; pim: number }[];
   /** チーム得点のうち得点王の割合（0〜1） */
   topScorerShare?: number;
   /** 1ゴールあたりのアシスト数（パスで崩しているか） */
@@ -180,7 +180,7 @@ export function teamProfile(
     .filter((p) => p.divisionLabel === division && teamKey(p.team) === key && p.points > 0)
     .sort((a, b) => b.points - a.points || b.goals - a.goals)
     .slice(0, 3)
-    .map((p) => ({ name: p.name, goals: p.goals, assists: p.assists ?? p.points - p.goals, points: p.points }));
+    .map((p) => ({ name: p.name, jersey: p.jersey, goals: p.goals, assists: p.assists ?? p.points - p.goals, points: p.points }));
 
   // レーダー: matchup と同じ7指標を、このチームとディビジョン平均で
   const axes: ProfileAxis[] = METRICS.map((m) => {
@@ -219,7 +219,7 @@ export function teamProfile(
   const wins = ordered.filter((g) => g.result === "W");
   const teamPlayers = d.players
     .filter((p) => p.divisionLabel === division && teamKey(p.team) === key)
-    .map((p) => ({ name: p.name, goals: p.goals, assists: p.assists ?? p.points - p.goals, points: p.points, pim: p.pim }))
+    .map((p) => ({ name: p.name, jersey: p.jersey, goals: p.goals, assists: p.assists ?? p.points - p.goals, points: p.points, pim: p.pim }))
     .sort((a, b) => b.points - a.points || b.goals - a.goals);
   const teamGoals = teamPlayers.reduce((n, p) => n + p.goals, 0);
   const teamAssists = teamPlayers.reduce((n, p) => n + p.assists, 0);
@@ -297,7 +297,7 @@ export function profileInput(p: TeamProfile): string {
   if (p.streak) lines.push(`直近: ${p.streak.count}${p.streak.result === "W" ? "連勝" : p.streak.result === "T" ? "試合連続引き分け" : "連敗"}`);
   if (p.recent.length)
     lines.push(`直近の試合: ${p.recent.map((g) => `${g.date.replace(/^\d{4}\//, "")} vs ${g.opponent} ${g.for}-${g.against}`).join(" / ")}`);
-  if (p.topPlayers.length) lines.push(`得点源: ${p.topPlayers.map((x) => `${x.name} ${x.goals}G ${x.assists}A`).join(" / ")}`);
+  if (p.topPlayers.length) lines.push(`得点源: ${p.topPlayers.map((x) => `${playerLabel(x)} ${x.goals}G ${x.assists}A`).join(" / ")}`);
   if (s.players) lines.push(`得点した選手 ${s.scorers}人（個人成績に載っている選手 ${s.players}人）`);
   const r3 = (r: Record3) => `${r.w}勝${r.l}敗${r.t}分`;
   if (p.axes.length) lines.push(`7指標（ディビジョン内の順位）: ${p.axes.filter((a) => a.rank).map((a) => `${a.label} ${a.raw}（${a.rank}位/${a.of}）`).join(" / ")}`);

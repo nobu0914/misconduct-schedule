@@ -38,21 +38,22 @@ async function recentSheets(): Promise<ScoreSheet[]> {
 
 /** サイトの API（公式に届かないときは保存データで返る）から材料を集めて、AI に記事を書かせて保存する */
 export async function generateNews(origin: string): Promise<{ edition: NewsEdition; digest: string }> {
-  const [scores, standings, players, schedule, events, sheets] = await Promise.all([
+  // 前シーズンの最終順位（注目カードの判定）。季番号なしの /api/past-standings は直近の過去シーズンを返すので並列で読める
+  const [scores, standings, players, schedule, events, sheets, prev] = await Promise.all([
     getJson<{ games?: [] }>(`${origin}/api/scores`),
     getJson<{ standings?: []; season?: string }>(`${origin}/api/standings`),
     getJson<{ players?: []; season?: string }>(`${origin}/api/player-stats`),
     getJson<{ matches?: [] }>(`${origin}/api/schedule`),
     getJson<{ items?: [] }>(`${origin}/api/events`),
     recentSheets(),
+    getJson<{ data?: []; season?: number }>(`${origin}/api/past-standings`),
   ]);
   const season = standings?.season ?? players?.season;
   const cur = parseSeasonNumber(season);
-  const prev = cur !== undefined ? await getJson<{ data?: [] }>(`${origin}/api/past-standings?season=${cur - 1}`) : null;
   const digest = buildNewsDigest({
     now: new Date(),
     season,
-    prevStandings: prev?.data ?? [],
+    prevStandings: cur !== undefined && prev?.season === cur - 1 ? prev.data ?? [] : [],
     scores: scores?.games ?? [],
     standings: standings?.standings ?? [],
     players: players?.players ?? [],

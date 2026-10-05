@@ -9,6 +9,7 @@ import { trackFeature } from "@/lib/trackEvent";
 import {
   buildDivisionStats,
   countAdvantages,
+  playerLabel,
   headToHead,
   radarAxes,
   type PlayerRow,
@@ -95,7 +96,8 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
 
   // どの2チームを比べたか（共有リンクで開いた場合も）。選び直しの途中を数えないよう少し待つ
   useEffect(() => {
-    if (!a || !b) return;
+    // 開いただけで自動で並ぶ上位2チームは数えない（選んだとき・リンクで指定されたときだけ）
+    if (!a || !b || (!teamA && !teamB)) return;
     const t = setTimeout(
       () => trackFeature(`相性 > 比較 > ${division} > ${season !== undefined ? seasonOrdinal(season) : ""} > ${a.team} vs ${b.team}`),
       1500
@@ -485,7 +487,7 @@ function TeamSummary({
       </div>
       {team.ace && (
         <div className="text-xs text-gray-500 mt-1 truncate">
-          エース {team.ace.name}（{team.ace.points}pt）
+          エース {playerLabel(team.ace)}（{team.ace.points}pt）
         </div>
       )}
     </div>

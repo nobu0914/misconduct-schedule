@@ -47,7 +47,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const review = await reviewScoreSheet(sheet);
-    await kv.set(key, { ...sheet, review }, { keepTtl: true });
+    // 作っている間に修正・削除されたら保存しない（修正前の数字で上書きしないため）
+    const latest = await kv.get<ScoreSheet>(key);
+    if (!latest || (latest.editedAt ?? "") !== (sheet.editedAt ?? "")) {
+      return NextResponse.json({ error: "changed", message: "試合のデータが修正されたので、開き直すと新しい総評を作ります。" }, { status: 409 });
+    }
+    await kv.set(key, { ...latest, review }, { keepTtl: true, xx: true });
     await logSheetEvent(req, { action: "review", code, game: gameLabel(sheet) });
     return NextResponse.json({ review });
   } catch (e) {
