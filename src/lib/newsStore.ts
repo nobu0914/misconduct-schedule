@@ -1,16 +1,19 @@
 // リーグニュースの作成と保存（KV）。cron（金曜の朝）と管理画面の「今すぐ作り直す」から呼ぶ。
 //
 //   news:latest   いま表示している号
-//   news:history  過去の号（新しい順・最大12号）
+//   news:history  過去の号（新しい順・最大520号＝10年分。期限なしで残す）
 
 import { kv } from "@vercel/kv";
 import type { ScoreSheet } from "./scoreSheet";
 import { SHEET_LOG_KEY, type SheetLogEntry } from "./scoreSheetLog";
 import { buildNewsDigest, writeNews, type NewsEdition } from "./leagueNews";
+import { parseSeasonNumber } from "./season";
 
 export const NEWS_LATEST_KEY = "news:latest";
 const HISTORY_KEY = "news:history";
-const HISTORY_MAX = 12;
+const HISTORY_MAX = 520;
+/** /news で一度に返す過去の号の数（「もっと見る」で続きを読む） */
+export const HISTORY_PAGE = 10;
 
 async function getJson<T>(url: string): Promise<T | null> {
   try {
@@ -43,9 +46,13 @@ export async function generateNews(origin: string): Promise<{ edition: NewsEditi
     getJson<{ items?: [] }>(`${origin}/api/events`),
     recentSheets(),
   ]);
+  const season = standings?.season ?? players?.season;
+  const cur = parseSeasonNumber(season);
+  const prev = cur !== undefined ? await getJson<{ data?: [] }>(`${origin}/api/past-standings?season=${cur - 1}`) : null;
   const digest = buildNewsDigest({
     now: new Date(),
-    season: standings?.season ?? players?.season,
+    season,
+    prevStandings: prev?.data ?? [],
     scores: scores?.games ?? [],
     standings: standings?.standings ?? [],
     players: players?.players ?? [],
@@ -61,10 +68,16 @@ export async function generateNews(origin: string): Promise<{ edition: NewsEditi
   return { edition, digest: digest.text };
 }
 
-export async function loadNews(): Promise<{ latest: NewsEdition | null; history: NewsEdition[] }> {
-  const [latest, history] = await Promise.all([
+/**
+ * いまの号と、過去の号（offset 番目から HISTORY_PAGE 号ぶん）。
+ * history の先頭はいまの号と同じなので、過去の号は1つずらして読む。
+ */
+export async function loadNews(offset = 0): Promise<{ latest: NewsEdition | null; history: NewsEdition[]; total: number }> {
+  const start = 1 + Math.max(0, offset);
+  const [latest, history, len] = await Promise.all([
     kv.get<NewsEdition>(NEWS_LATEST_KEY).catch(() => null),
-    kv.lrange<NewsEdition>(HISTORY_KEY, 0, HISTORY_MAX - 1).catch(() => []),
+    kv.lrange<NewsEdition>(HISTORY_KEY, start, start + HISTORY_PAGE - 1).catch(() => []),
+    kv.llen(HISTORY_KEY).catch(() => 0),
   ]);
-  return { latest: latest ?? null, history: history ?? [] };
+  return { latest: latest ?? null, history: history ?? [], total: Math.max(0, (len ?? 0) - 1) };
 }

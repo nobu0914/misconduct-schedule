@@ -7,6 +7,7 @@
 import { analyzeGame, playerName, type ScoreSheet, type Side } from "./scoreSheet";
 import { divisionAwards } from "./seasonAwards";
 import { parseSeasonNumber, seasonOrdinal } from "./season";
+import { teamKey } from "./teamName";
 
 export interface NewsScore {
   date: string;
@@ -64,6 +65,8 @@ export interface NewsInput {
   matches: NewsMatch[];
   events: NewsEvent[];
   sheets: ScoreSheet[];
+  /** 前シーズンの最終順位（レギュラーシーズン）。開幕直後の注目カードの判定に使う */
+  prevStandings?: { rank: number; team: string; divisionLabel: string }[];
 }
 
 export const NEWS_TAGS = ["試合結果", "注目カード", "選手", "順位", "イベント", "リーグ"] as const;
@@ -213,42 +216,35 @@ export function buildNewsDigest(input: NewsInput): { text: string; links: Record
     );
   }
 
-  // これからの試合（9日先まで）
+  // これからの試合（10日先まで＝金曜の朝に作ると、明日・明後日と次の週末が入る）
   const upcoming = input.matches.filter(
-    (m) => m.status !== "postponed" && (!input.season || m.season === input.season || m.round) && within(m.date, today, today + 9 * DAY)
+    (m) => m.status !== "postponed" && (!input.season || m.season === input.season || m.round) && within(m.date, today, today + 10 * DAY)
   );
   if (upcoming.length) {
-    lines.push("\n■ これからの試合（9日先まで）");
-    const rankOf = (div: string, name: string) =>
-      input.standings.find((s) => s.divisionLabel === div && team(s.team) === team(name))?.rank;
-    const byDay = new Map<string, NewsMatch[]>();
-    for (const m of upcoming) byDay.set(m.date, [...(byDay.get(m.date) ?? []), m]);
-    for (const [day, ms] of byDay) {
-      lines.push(`${md(day)}: ${ms.length}試合`);
-      for (const m of ms) {
-        const ra = rankOf(m.division, m.awayTeam);
-        const rb = rankOf(m.division, m.homeTeam);
-        const champ = cur !== undefined ? divisionAwards(cur - 1, m.division) : undefined;
-        const champGame = champ?.champion && [team(m.awayTeam), team(m.homeTeam)].includes(champ.champion);
-        const finalRematch =
-          champ?.champion && champ.runnerUp && [champ.champion, champ.runnerUp].every((t) => [team(m.awayTeam), team(m.homeTeam)].includes(t));
-        const notable = m.round || (ra && rb && ra <= 3 && rb <= 3) || champGame || finalRematch;
-        if (!notable) continue;
-        const why = [
-          m.round ? `プレイオフ ${m.round}` : "",
-          ra && rb && ra <= 3 && rb <= 3 ? `${ra}位と${rb}位の対戦` : "",
-          finalRematch ? "前シーズン決勝の再戦" : champGame ? "前シーズン王者の試合" : "",
-        ].filter(Boolean);
+    const byDay = new Map<string, number>();
+    for (const m of upcoming) byDay.set(m.date, (byDay.get(m.date) ?? 0) + 1);
+    lines.push(`\n■ これからの試合（10日先まで）: ${[...byDay].map(([d, c]) => `${md(d)} ${c}試合`).join("・")}`);
+    link("試合スケジュール", "/");
+
+    const notable = upcoming
+      .map((m) => ({ m, ...matchupReasons(m, input, cur) }))
+      .filter((x) => x.reasons.length > 0)
+      .sort((x, y) => y.weight - x.weight || (jstDay(x.m.date) ?? 0) - (jstDay(y.m.date) ?? 0))
+      .slice(0, 6);
+    if (notable.length) {
+      lines.push("注目カード候補（理由つき。記事にするのはここに挙がった試合だけ）:");
+      for (const { m, reasons } of notable) {
         const id = link(
           `${team(m.awayTeam)} vs ${team(m.homeTeam)} の相性`,
           `/player-ranking?${new URLSearchParams({ mode: "matchup", div: m.division, a: team(m.awayTeam), b: team(m.homeTeam) })}`
         );
-        lines.push(`  ${m.timeStart ?? ""} ${m.division}: ${team(m.awayTeam)} vs ${team(m.homeTeam)}（${why.join("・")}）リンク候補 ${id}`);
+        lines.push(`  ${md(m.date)} ${m.timeStart ?? ""} ${m.division}: ${team(m.awayTeam)} vs ${team(m.homeTeam)}（${reasons.join("・")}）リンク候補 ${id}`);
       }
+    } else {
+      lines.push("注目カード候補: なし（注目カードの記事は書かない）");
     }
-    link("試合スケジュール", "/");
   } else {
-    // 9日先まで試合が無いときは、次の試合日だけ
+    // 10日先まで試合が無いときは、次の試合日だけ
     const next = seasonMatches
       .filter((m) => (jstDay(m.date) ?? 0) >= today)
       .sort((x, y) => (jstDay(x.date) ?? 0) - (jstDay(y.date) ?? 0))[0];
@@ -272,6 +268,52 @@ export function buildNewsDigest(input: NewsInput): { text: string; links: Record
   lines.push("\n■ 記事に付けてよいリンク（id: 内容）");
   for (const [id, l] of Object.entries(links)) lines.push(`${id}: ${l.label}`);
   return { text: lines.join("\n"), links };
+}
+
+/**
+ * これからの試合が注目カードかどうかと、その理由。重みの大きい順に記事の候補にする。
+ * - 3: プレイオフ / 前シーズンのプレイオフ決勝と同じ顔合わせ
+ * - 2: 今シーズンの上位3チーム同士 / 前シーズンのレギュラーシーズン上位2チーム同士
+ * - 1: 前シーズン王者の試合
+ */
+function matchupReasons(m: NewsMatch, input: NewsInput, cur: number | undefined): { reasons: string[]; weight: number } {
+  const a = team(m.awayTeam);
+  const b = team(m.homeTeam);
+  const isTeam = (name: string | undefined, t: string) => !!name && teamKey(name) === teamKey(t);
+  const both = (x: string | undefined, y: string | undefined) =>
+    (isTeam(x, a) && isTeam(y, b)) || (isTeam(x, b) && isTeam(y, a));
+  const reasons: string[] = [];
+  let weight = 0;
+  const add = (w: number, r: string) => {
+    reasons.push(r);
+    weight = Math.max(weight, w);
+  };
+  if (m.round) add(3, `プレイオフ ${m.round}`);
+  const prev = cur !== undefined ? cur - 1 : undefined;
+  const aw = prev !== undefined ? divisionAwards(prev, m.division) : undefined;
+  if (aw?.champion && aw.runnerUp && both(aw.champion, aw.runnerUp))
+    add(3, `前シーズン（${seasonOrdinal(prev!)}）プレイオフ決勝と同じ顔合わせ（優勝 ${aw.champion}・準優勝 ${aw.runnerUp}）`);
+  const rankIn = (list: { rank: number; team: string; divisionLabel: string; gp?: number }[], t: string) =>
+    list.find((s) => s.divisionLabel === m.division && isTeam(s.team, t) && (s.gp === undefined || s.gp > 0))?.rank;
+  const ra = rankIn(input.standings, a);
+  const rb = rankIn(input.standings, b);
+  if (ra && rb && ra <= 3 && rb <= 3) add(2, `今シーズン${Math.min(ra, rb)}位と${Math.max(ra, rb)}位の対戦`);
+  const pa = rankIn(input.prevStandings ?? [], a);
+  const pb = rankIn(input.prevStandings ?? [], b);
+  if (pa && pb && pa <= 2 && pb <= 2) add(2, `前シーズンのレギュラーシーズン${Math.min(pa, pb)}位と${Math.max(pa, pb)}位`);
+  if (aw?.champion && (isTeam(aw.champion, a) || isTeam(aw.champion, b)) && !reasons.some((r) => r.includes("決勝"))) {
+    // 今シーズンの日程でこれより前（同じ日なら開始時刻が前）に試合が無ければ初戦
+    const when = (x: NewsMatch) => `${String(jstDay(x.date) ?? 0).padStart(15, "0")} ${(x.timeStart ?? "").padStart(5, "0")}`;
+    const first = !input.matches.some(
+      (x) =>
+        x.season === m.season &&
+        x.status !== "postponed" &&
+        when(x) < when(m) &&
+        (isTeam(aw.champion, team(x.awayTeam)) || isTeam(aw.champion, team(x.homeTeam)))
+    );
+    add(1, `前シーズン王者 ${aw.champion} の${first ? "今シーズン初戦" : "試合"}`);
+  }
+  return { reasons, weight };
 }
 
 /** スコア表1枚から、記事になりそうな事実だけを1行にする */
@@ -312,7 +354,8 @@ const PROMPT = `あなたは日本のアマチュアアイスホッケーリー�
 - データに書かれていないことは書かない（推測・誇張・架空のコメントは禁止）。数字・チーム名・選手名はデータのとおりに書く。
 - ネガティブな話題は書かない（連敗、大敗した側、反則、ケガ、ミス、批判、不調など）。勝った側・活躍した選手・楽しみな試合・イベントなど、前向きな話題だけ。
 - 負けたチームの名前を出すときも、責めたり見下したりしない（「〜を下した」程度にとどめる）。
-- 目立った出来事（ハットトリック、連勝、逆転勝ち、完封、首位、前シーズン王者、注目の対戦、イベント）を優先して選ぶ。同じ試合・同じ話題を2本書かない。
+- 目立った出来事（ハットトリック、連勝、逆転勝ち、完封、首位、前シーズン王者、イベント）を優先して選ぶ。同じ試合・同じ話題を2本書かない。
+- 注目カード（これからの試合）の記事は、データの「注目カード候補」に挙がった試合だけ、理由（例: 前シーズン決勝と同じ顔合わせ）を添えて最大1〜2本。候補が「なし」なら書かない。結果の予想はしない。
 - 見出し（title）は全角30文字以内、本文（body）は2〜3文・150文字程度。です・ます調。
 - tag は次のどれか: ${["試合結果", "注目カード", "選手", "順位", "イベント", "リーグ"].join(" / ")}
 - link はデータ末尾の「記事に付けてよいリンク」の id を1つ（例 "L3"）。合うものが無ければ ""。スコア表の試合の記事は ""。

@@ -30,6 +30,9 @@ function Article({ it, id }: { it: NewsItem; id?: string }) {
 export default function NewsPage() {
   const [latest, setLatest] = useState<NewsEdition | null>(null);
   const [history, setHistory] = useState<NewsEdition[]>([]);
+  // 過去の号の総数（「もっと見る」で続きを読む）
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [openPast, setOpenPast] = useState<string | null>(null);
 
@@ -39,6 +42,7 @@ export default function NewsPage() {
       .then((d) => {
         setLatest(d.latest ?? null);
         setHistory(d.history ?? []);
+        setTotal(d.total ?? 0);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -93,6 +97,23 @@ export default function NewsPage() {
               )}
             </div>
           ))}
+          {history.length < total && (
+            <button
+              disabled={loadingMore}
+              onClick={async () => {
+                setLoadingMore(true);
+                const d = await fetch(`/api/news?offset=${history.length}`)
+                  .then((r) => r.json())
+                  .catch(() => null);
+                if (d?.history) setHistory((cur) => [...cur, ...d.history]);
+                setLoadingMore(false);
+              }}
+              data-feature="過去のニュースをもっと見る"
+              className="w-full py-2 text-xs text-blue-400"
+            >
+              {loadingMore ? "読み込み中…" : `もっと見る（残り ${total - history.length} 号）`}
+            </button>
+          )}
         </section>
       )}
       <Link href="/" className="block text-center text-sm text-blue-400 py-2">
