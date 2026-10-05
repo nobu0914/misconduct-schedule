@@ -37,6 +37,24 @@ function loadLocal(): ScoreSheet[] {
   }
 }
 
+// 修正用の鍵（保存した端末だけが持つ）。コード → 鍵
+const TOKEN_KEY = "rinnavi_edit_tokens";
+function loadTokens(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(TOKEN_KEY) ?? "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+function saveToken(code: string, token: string) {
+  try {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ ...loadTokens(), [code]: token }));
+  } catch {
+    // 保存できない環境では、この端末でも修正できないだけ
+  }
+}
+
 function saveLocal(sheets: ScoreSheet[]) {
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(sheets));
@@ -182,6 +200,25 @@ export default function ScoreSheetApp({
   const [justLoaded, setJustLoaded] = useState<string | null>(null);
   // 保存した試合の修正中の内容（読み間違いを直す）
   const [fixing, setFixing] = useState<ScoreSheet | null>(null);
+  // 修正用の鍵（保存した端末だけ）。鍵のある試合だけ修正ボタンを出す
+  const [tokens, setTokens] = useState<Record<string, string>>({});
+  const claimed = useRef(new Set<string>());
+  useEffect(() => setTokens(loadTokens()), []);
+  // 鍵を入れる前に保存した試合は、保存した端末なら開いたときに鍵を受け取れる
+  useEffect(() => {
+    const code = opened?.continueCode;
+    if (!code || tokens[code] || claimed.current.has(code) || normalizeContinueCode(code) !== code) return;
+    claimed.current.add(code);
+    fetch(`/api/scoresheets?code=${encodeURIComponent(code)}`, { method: "PATCH", headers: { "x-visitor-id": getVisitorId() ?? "" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.editToken) {
+          saveToken(code, d.editToken);
+          setTokens(loadTokens());
+        }
+      })
+      .catch(() => {});
+  }, [opened, tokens]);
 
   useEffect(() => {
     setSheets(loadLocal());
@@ -378,6 +415,10 @@ export default function ScoreSheetApp({
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         trackFeature(`分析 > 保存 > ${issues ? "要確認あり" : "要確認なし"}`);
+        if (d.editToken) {
+          saveToken(d.continueCode, d.editToken);
+          setTokens(loadTokens());
+        }
         remember(d.sheet);
         rememberCode(d.continueCode);
         setOpened(d.sheet);
@@ -502,6 +543,7 @@ export default function ScoreSheetApp({
                   fixing && fixing.continueCode === s.continueCode ? (
                     <FixSheet
                       sheet={fixing}
+                      token={tokens[fixing.continueCode ?? ""] ?? ""}
                       onChange={setFixing}
                       onCancel={() => setFixing(null)}
                       onSaved={(updated) => {
@@ -515,7 +557,7 @@ export default function ScoreSheetApp({
                   ) : (
                   <div className="space-y-2 pb-2">
                     <GameDetail sheet={s} compact onUpdate={applyReview} />
-                    {s.continueCode && normalizeContinueCode(s.continueCode) === s.continueCode && (
+                    {s.continueCode && tokens[s.continueCode] && (
                       <button
                         onClick={() => {
                           setFixing(structuredClone(s));
@@ -944,11 +986,14 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
 /** 保存した試合の読み取り結果を直す（コンテニューコードはそのまま。修正前の版は管理者が戻せるよう残る） */
 function FixSheet({
   sheet,
+  token,
   onChange,
   onCancel,
   onSaved,
 }: {
   sheet: ScoreSheet;
+  /** 修正用の鍵（保存した端末だけが持つ） */
+  token: string;
   onChange: (s: ScoreSheet) => void;
   onCancel: () => void;
   onSaved: (s: ScoreSheet) => void;
@@ -962,7 +1007,7 @@ function FixSheet({
     try {
       const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(sheet.continueCode ?? "")}`, {
         method: "PUT",
-        headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "" },
+        headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "", "x-edit-token": token },
         body: JSON.stringify(sheet),
       });
       const d = await res.json().catch(() => ({}));
@@ -978,7 +1023,7 @@ function FixSheet({
       <div className="rounded-lg bg-sky-950/30 border border-sky-800/60 px-3 py-2">
         <p className="text-sm font-semibold text-sky-200">読み取り結果を修正</p>
         <p className="text-[11px] text-gray-400 leading-relaxed">
-          スコア表と見比べて、違うところを直してください。コンテニューコードはそのままです。
+          スコア表と見比べて、違うところを直してください。コンテニューコードはそのままです。修正できるのは保存したこの端末だけです。
           保存すると AI総評は直した内容で作り直します。
         </p>
       </div>

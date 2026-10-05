@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import ActivityLog from "@/components/ActivityLog";
 import AdminNews from "@/components/AdminNews";
+import AdminReport from "@/components/AdminReport";
 import { isTrackingExcluded, setTrackingExcluded } from "@/lib/analyticsClient";
 import { VISIT_BUCKETS } from "@/lib/analyticsConstants";
 
@@ -719,6 +720,8 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
             </div>
           ))}
         </div>
+
+        <AdminReport passcode={passcode} />
 
         <TrackingToggle />
 

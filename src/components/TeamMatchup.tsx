@@ -6,6 +6,7 @@ import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData
 import { teamKey } from "@/lib/teamName";
 import { playoffResult } from "@/lib/seasonAwards";
 import { trackFeature } from "@/lib/trackEvent";
+import type { MatchupReview } from "@/lib/matchupReviewAi";
 import {
   buildDivisionStats,
   countAdvantages,
@@ -224,9 +225,12 @@ export default function TeamMatchup({ divisions, division, onDivisionChange, div
 
           {/* 概要 */}
           <div className="grid grid-cols-2 gap-3">
-            <TeamSummary team={a} color={A_COLOR} result={playoffResult(season, division, a.team)} />
-            <TeamSummary team={b} color={B_COLOR} result={playoffResult(season, division, b.team)} />
+            <TeamSummary team={a} color={A_COLOR} result={playoffResult(season, division, a.team)} season={season} division={division} />
+            <TeamSummary team={b} color={B_COLOR} result={playoffResult(season, division, b.team)} season={season} division={division} />
           </div>
+
+          {/* AI: 対戦カードの総評 */}
+          {season !== undefined && <MatchupAi season={season} division={division} a={a.team} b={b.team} />}
 
           {/* 八角形 */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3">
@@ -448,15 +452,105 @@ function TeamSelect({
   );
 }
 
+/** 対戦カードの AI総評・見どころ・それぞれが勝つには（保存分を使い回し、今シーズン分は月1回更新） */
+function MatchupAi({ season, division, a, b }: { season: number; division: string; a: string; b: string }) {
+  const [review, setReview] = useState<MatchupReview | null>(null);
+  const [state, setState] = useState<"loading" | "done" | "error">("loading");
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    setState("loading");
+    setReview(null);
+    setMessage("");
+    const q = new URLSearchParams({ season: String(season), div: division, a, b });
+    fetch(`/api/matchup-review?${q}`, { method: "POST" })
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => ({})) }))
+      .then(({ ok, d }) => {
+        if (cancelled) return;
+        if (d.review) setReview(d.review);
+        if (!ok && !d.review) setMessage(d.message ?? "総評を作れませんでした。");
+        setState(d.review ? "done" : "error");
+      })
+      .catch(() => !cancelled && setState("error"));
+    return () => {
+      cancelled = true;
+    };
+  }, [season, division, a, b]);
+
+  const beat = (team: string) => review?.beat[teamKey(team)] ?? [];
+  return (
+    <>
+      <div className="rounded-xl bg-violet-950/30 border border-violet-800/50 px-3 py-2.5 space-y-2">
+        <p className="text-xs font-semibold text-violet-200">✨ 対戦カードの AI総評</p>
+        {state === "loading" && <p className="text-xs text-gray-400 animate-pulse">AI が総評を書いています…（初めて開いたときは20秒ほど）</p>}
+        {state === "error" && <p className="text-xs text-gray-400">{message || "総評を作れませんでした。"}</p>}
+        {review && (
+          <>
+            <p className="text-sm text-gray-100 leading-relaxed">{review.summary}</p>
+            {review.points.length > 0 && (
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">見どころ</p>
+                <ul className="space-y-0.5">
+                  {review.points.map((x) => (
+                    <li key={x} className="text-xs text-gray-200">▶ {x}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      {review && (beat(a).length > 0 || beat(b).length > 0) && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {[
+            { team: a, opp: b, color: A_COLOR },
+            { team: b, opp: a, color: B_COLOR },
+          ].map(({ team, opp, color }) =>
+            beat(team).length ? (
+              <div key={team} className={`rounded-xl bg-gray-900 border border-gray-800 border-l-4 ${color.border} px-3 py-2.5 space-y-1.5`}>
+                <p className="text-xs font-semibold text-gray-200">
+                  🎯 <span className={color.text}>{team}</span> が {opp} に勝つには
+                </p>
+                <ol className="space-y-1">
+                  {beat(team).map((x, i) => (
+                    <li key={x} className="flex gap-2 text-xs text-gray-100 leading-relaxed">
+                      <span className={`flex-shrink-0 w-4 h-4 rounded-full ${color.bg} text-[10px] text-white flex items-center justify-center`}>{i + 1}</span>
+                      <span>{x}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+      {review && (
+        <p className="text-[10px] text-gray-500 -mt-2">
+          公式の順位・スコア・個人成績と直接対決の数字だけから AI が書いたコメントです（{jstMonthLabel(review.createdAt)}作成・今シーズン分は月1回更新）。
+        </p>
+      )}
+    </>
+  );
+}
+
+const jstMonthLabel = (iso: string) => {
+  const d = new Date(Date.parse(iso) + 9 * 3600_000);
+  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`;
+};
+
 function TeamSummary({
   team,
   color,
   result,
+  season,
+  division,
 }: {
   team: TeamSeasonStats;
   color: typeof A_COLOR;
   /** プレイオフの公式結果（順位はレギュラーシーズンなので別に出す） */
   result?: "champion" | "runnerUp";
+  season?: number;
+  division: string;
 }) {
   return (
     <div className={`bg-gray-900 border border-gray-800 rounded-xl p-3 border-t-4 ${color.border}`}>
@@ -490,6 +584,13 @@ function TeamSummary({
           エース {playerLabel(team.ace)}（{team.ace.points}pt）
         </div>
       )}
+      <a
+        href={`/player-ranking?${new URLSearchParams({ mode: "team", div: division, ...(season !== undefined ? { season: String(season) } : {}), t: team.team })}`}
+        data-feature={`相性 > チーム総評へ > ${division} > ${team.team}`}
+        className={`inline-block mt-2 text-xs ${color.text}`}
+      >
+        チーム総評 →
+      </a>
     </div>
   );
 }

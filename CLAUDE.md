@@ -40,7 +40,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261005-2319`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261005-2333`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -255,6 +255,16 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   （画面側も総評だけを入れる）。バックアップは `src/lib/scoreSheetBackup.ts`（削除 `scoresheet:trash:index`／修正 `scoresheet:editbak:index`）、
   修正前に戻すのは保存日時が同じときだけで今の版もバックアップ。PUT は `xx` で削除後の復活を防ぐ。ニュースの cron は CRON_SECRET 無しなら金曜（JST）だけ、
   失敗時はロックを外す。チーム総評の回数制限キーは `teamreview:ip:{IP}`。
+- **AI の総評の使い回し**は共通の `src/lib/aiCache.ts`（今シーズンは JST の月が変わったら作り直し、終わったシーズンは終了後に1回だけ、
+  `format` が古ければ1回、失敗時は前の版）。チーム総評 `/api/team-review`、**対戦カードの総評** `/api/matchup-review`
+  （`src/lib/matchupReviewAi.ts`、キー `matchupreview:{season}:{division}:{teamKey}|{teamKey}` は2チームを並べ替えて共通、見どころ＋それぞれが勝つには）。
+  相性の各チームに「チーム総評 →」。
+- **スコア表の修正は保存した端末だけ**（ユーザー指示 10/6）: 保存時に修正用の鍵を発行して端末の localStorage `rinnavi_edit_tokens` にだけ渡し、
+  サーバーはハッシュ `ownerHash`（画面には返さない、`src/lib/scoreSheetOwner.ts`）。PUT は `x-edit-token` が合うときだけ。
+  鍵を入れる前に保存した試合は、操作ログの「保存」の端末IDと同じ端末が開いたときに PATCH で1回だけ鍵を受け取れる。削除は従来どおりコード入力。
+- **アクセス解析の週次レポート**（管理画面の一番上、`src/lib/analyticsReport.ts`）: 直近7日（昨日まで・UTC日付キー）と前週の数字・機能の利用・
+  スコア表の操作・行動ログから AI が総評（よかった点・気になる点・改善のアイデア）。毎週月曜 7:00 JST に `/api/cron/analytics-report`
+  （vercel.json `0 22 * * 0`、CRON_SECRET 無しなら月曜だけ）、管理画面から「今すぐ作り直す」。`analytics:report:latest` / `:history`（52号）。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。
   チーム総評は `REVIEW_FORMAT`（いま2）より古い書き方なら1回だけ作り直す。ゴーリー（The Wall Award）は個人成績に無いので背番号なし。
 

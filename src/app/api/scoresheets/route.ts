@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isRateLimited } from "@/lib/rateLimit";
 import { gameLabel, logSheetEvent } from "@/lib/scoreSheetLog";
 import { operator, saveBackup } from "@/lib/scoreSheetBackup";
+import { newEditToken, publicSheet, saverVisitorId, tokenMatches } from "@/lib/scoreSheetOwner";
 import {
   checkSheet,
   isBlankSheet,
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
       game: gameLabel(sheet),
       via: via === "link" || via === "input" || via === "recent" ? via : undefined,
     });
-    return NextResponse.json({ sheet: { ...sheet, continueCode: code } });
+    return NextResponse.json({ sheet: { ...publicSheet(sheet), continueCode: code } });
   } catch (e) {
     console.error("scoresheet lookup failed", e);
     return NextResponse.json({ error: "unavailable", message: "いまは呼び出せません。時間をおいてお試しください。" }, { status: 503 });
@@ -78,13 +79,16 @@ export async function POST(req: NextRequest) {
   const { errors } = checkSheet(sheet);
   if (errors.length > 0) sheet.issues = errors.slice(0, 20);
   sheet.savedAt = new Date().toISOString();
+  // 修正用の鍵は保存した端末にだけ渡す
+  const owner = newEditToken();
+  sheet.ownerHash = owner.hash;
 
   try {
     if (chosen) {
       sheet.continueCode = chosen;
       if (await kv.set(key(chosen), sheet, { nx: true, ex: KEEP_SECONDS })) {
         await logSheetEvent(req, { action: "save", code: chosen, game: gameLabel(sheet), note: sheet.issues?.length ? `要確認${sheet.issues.length}件` : undefined });
-        return NextResponse.json({ ok: true, continueCode: chosen, sheet });
+        return NextResponse.json({ ok: true, continueCode: chosen, sheet: publicSheet(sheet), editToken: owner.token });
       }
       return NextResponse.json(
         { error: "taken", message: `「${chosen}」はすでに使われています。別のコンテニューコードにしてください。` },
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
       sheet.continueCode = code;
       if (await kv.set(key(code), sheet, { nx: true, ex: KEEP_SECONDS })) {
         await logSheetEvent(req, { action: "save", code, game: gameLabel(sheet), note: "おまかせコード" });
-        return NextResponse.json({ ok: true, continueCode: code, sheet });
+        return NextResponse.json({ ok: true, continueCode: code, sheet: publicSheet(sheet), editToken: owner.token });
       }
     }
     return NextResponse.json({ error: "unavailable", message: "保存できませんでした。もう一度お試しください。" }, { status: 503 });
@@ -159,6 +163,10 @@ export async function PUT(req: NextRequest) {
   try {
     const before = await kv.get<ScoreSheet>(key(code));
     if (!before) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません（削除された可能性があります）。" }, { status: 404 });
+    // 修正できるのは保存した端末だけ（鍵が合うとき）
+    if (!tokenMatches(before, req.headers.get("x-edit-token"))) {
+      return NextResponse.json({ error: "not_owner", message: "この試合は、保存した端末でだけ修正できます。" }, { status: 403 });
+    }
     const next: ScoreSheet = {
       ...sheet,
       continueCode: code,
@@ -166,6 +174,7 @@ export async function PUT(req: NextRequest) {
       editedAt: new Date().toISOString(),
       issues: errors.length ? errors.slice(0, 20) : undefined,
       review: undefined,
+      ownerHash: before.ownerHash,
     };
     const id = await backup(req, code, before, "edit");
     // 読んでから書くまでの間に削除されていたら書かない（期限なしで復活させない）
@@ -180,9 +189,33 @@ export async function PUT(req: NextRequest) {
       game: gameLabel(next),
       note: [errors.length ? `要確認${errors.length}件` : "", `修正前 ${id}`].filter(Boolean).join("・"),
     });
-    return NextResponse.json({ ok: true, sheet: next });
+    return NextResponse.json({ ok: true, sheet: publicSheet(next) });
   } catch (e) {
     console.error("scoresheet edit failed", e);
     return NextResponse.json({ error: "unavailable", message: "修正を保存できませんでした。時間をおいてもう一度お試しください。" }, { status: 503 });
+  }
+}
+
+/**
+ * 鍵を入れる前（10/6 以前）に保存した試合の修正用の鍵を、保存した端末にだけ渡す（操作ログの端末IDと同じとき・1回だけ）。
+ * PATCH /api/scoresheets?code=  （x-visitor-id 必須）
+ */
+export async function PATCH(req: NextRequest) {
+  if (await isRateLimited(`scoresheet:claim:${clientIp(req)}`, 30, 3600)) return NextResponse.json({ error: "limit" }, { status: 429 });
+  const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
+  const vid = req.headers.get("x-visitor-id") ?? "";
+  if (!code || !/^[A-Za-z0-9-]{8,64}$/.test(vid)) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  try {
+    const sheet = await kv.get<ScoreSheet>(key(code));
+    if (!sheet) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (sheet.ownerHash || (await saverVisitorId(code)) !== vid) return NextResponse.json({ error: "not_owner" }, { status: 403 });
+    const owner = newEditToken();
+    if (!(await kv.set(key(code), { ...sheet, ownerHash: owner.hash }, { keepTtl: true, xx: true }))) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    return NextResponse.json({ editToken: owner.token });
+  } catch (e) {
+    console.error("scoresheet claim failed", e);
+    return NextResponse.json({ error: "unavailable" }, { status: 503 });
   }
 }

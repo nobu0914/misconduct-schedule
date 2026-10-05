@@ -62,6 +62,8 @@ export interface ScoreSheet {
   savedAt?: string;
   /** 保存後に修正した日時 */
   editedAt?: string;
+  /** 修正用の鍵のハッシュ（保存した端末だけが鍵を持つ。画面には返さない） */
+  ownerHash?: string;
   /** 登録時に残っていた食い違い（要確認）。エラーがあっても登録できるようにしたので記録しておく */
   issues?: string[];
   /** 呼び出し用のコンテニューコード（保存時に発行） */

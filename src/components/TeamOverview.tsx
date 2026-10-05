@@ -104,7 +104,7 @@ function AiReviewBox({ review, state, message }: ReturnType<typeof useTeamReview
             </div>
           )}
           <p className="text-[10px] text-gray-500">
-            公式の順位・スコア・個人成績の数字だけから AI が書いたコメントです（{newsMonth(review.createdAt)}作成・月1回更新）。
+            公式の順位・スコア・個人成績の数字だけから AI が書いたコメントです（{newsMonth(review.createdAt)}作成・今シーズン分は月1回更新）。
           </p>
         </>
       )}
