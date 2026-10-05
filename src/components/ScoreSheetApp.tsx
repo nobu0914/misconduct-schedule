@@ -463,6 +463,15 @@ export default function ScoreSheetApp({
           <p className="text-xs text-gray-500 mt-1">
             スコア表の写真から、セーブ率・決定率・得点の流れなどを分析します。会員登録は不要で、コンテニューコードでいつでも呼び出せます。
           </p>
+          {/* アップロードするメリット（公式サイトは最終スコアと順位だけ） */}
+          <div className="mt-2 rounded-lg bg-blue-950/30 border border-blue-900/60 px-3 py-2">
+            <p className="text-xs font-semibold text-blue-200">公式サイトには無い「1試合の中身」が分かります</p>
+            <ul className="mt-1 space-y-0.5 text-[11px] text-gray-300 leading-relaxed">
+              <li>📈 得点の流れ・時間帯・誰のアシストで誰が決めたか、シュート数・決定率・セーブ率、PP/SH の得点</li>
+              <li>✨ AI のコーチが、良かった点と次への改善点を両チームに書きます</li>
+              <li>🔗 コンテニューコードで保存して、チームメイトにリンクで共有。活躍がリーグニュースに載ることも</li>
+            </ul>
+          </div>
         </div>
 
         {/* 上の「チーム / スコア / … / 分析」と見分けやすいよう、こちらは下線のタブにする */}

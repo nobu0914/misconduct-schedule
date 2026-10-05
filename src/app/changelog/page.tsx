@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261005-2336",
+    date: "2026-10-05",
+    changes: ["スコア表分析: ページの上に、アップロードすると何が分かるか（公式サイトには無い1試合の中身・AI のコーチ・共有）を追加"],
+  },
+  {
     version: "Ver.1-261005-2333",
     date: "2026-10-05",
     changes: [
