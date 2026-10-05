@@ -183,7 +183,10 @@ export default function ScoreSheetApp({
     setLoading(false);
   }, []);
 
-  // 共有リンクで開いたとき: そのコードを呼び出して一覧に入れ、開く
+  // 共有リンクで開いたとき: そのコードを呼び出して表示する。
+  // 人から共有された試合は、この端末の一覧・前に使ったコードには自動で入れない（入れるのは「一覧に追加」を押したときだけ）。
+  // 自分の一覧にすでにある試合なら、一覧の行を開く
+  const [shared, setShared] = useState<ScoreSheet | null>(null);
   const [sharedError, setSharedError] = useState("");
   useEffect(() => {
     const code = initialCode ? normalizeContinueCode(initialCode) : null;
@@ -193,10 +196,14 @@ export default function ScoreSheetApp({
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && d.sheet) {
         trackFeature("分析 > 共有リンクから開いた");
-        remember(d.sheet);
-        rememberCode(code);
-        setOpened(d.sheet);
-        scrollToGame(code);
+        if (loadLocal().some((s) => s.continueCode === code)) {
+          replaceLocal(d.sheet);
+          setOpened(d.sheet);
+          scrollToGame(code);
+        } else {
+          setShared(d.sheet);
+          scrollToGame(`shared-${code}`);
+        }
       } else {
         setSharedError(d.message ?? "共有されたコンテニューコードの試合を呼び出せませんでした。");
       }
@@ -441,6 +448,21 @@ export default function ScoreSheetApp({
               }}
             />
             {sharedError && <p className="text-xs text-red-300 bg-red-900/30 border border-red-800/60 rounded px-3 py-2">{sharedError}</p>}
+            {shared && (
+              <SharedGame
+                sheet={shared}
+                onUpdate={setShared}
+                onKeep={() => {
+                  trackFeature("分析 > 共有された試合を一覧に追加");
+                  remember(shared);
+                  rememberCode(shared.continueCode ?? "");
+                  setJustLoaded(shared.continueCode ?? null);
+                  setShared(null);
+                  scrollToGame(shared.continueCode);
+                }}
+                onClose={() => setShared(null)}
+              />
+            )}
             {!loading && (
               <SheetList
                 sheets={sheets}
@@ -873,6 +895,43 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
 }
 
 /** 削除の確認。コンテニューコードを入力しないと削除できない。削除した人の情報が記録されることも伝える */
+/** 共有リンクで開いた試合（この端末には保存しない。一覧に入れるかは開いた人が決める） */
+function SharedGame({
+  sheet,
+  onUpdate,
+  onKeep,
+  onClose,
+}: {
+  sheet: ScoreSheet;
+  onUpdate: (s: ScoreSheet) => void;
+  onKeep: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <section
+      id={`row-shared-${sheet.continueCode}`}
+      className="scroll-mt-4 rounded-xl border border-sky-700/70 bg-sky-950/20 p-3 space-y-2"
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-sky-200">共有された試合</p>
+          <p className="text-[11px] text-gray-400">この端末には保存されていません。ページを閉じると表示は消えます。</p>
+        </div>
+        <button onClick={onClose} aria-label="閉じる" className="ml-auto text-gray-500 text-lg leading-none px-1">
+          ×
+        </button>
+      </div>
+      <GameDetail sheet={sheet} compact onUpdate={onUpdate} />
+      <button
+        onClick={onKeep}
+        className="w-full py-2.5 rounded-lg text-sm font-medium bg-gray-800 border border-gray-600 text-gray-100"
+      >
+        ＋ この端末の一覧に追加
+      </button>
+    </section>
+  );
+}
+
 function DeleteDialog({
   sheet,
   onCancel,
