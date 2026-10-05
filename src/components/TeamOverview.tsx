@@ -213,9 +213,15 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
   }, [teams, season, matches, division]);
   // ディビジョンを切り替えたら、前のディビジョンのチームの指定は外す（「見つからない」を出さない）
   const firstDivision = useRef(true);
+  // 「前シーズンの総評を見る」でディビジョンも切り替えるときは、チームの指定を残す
+  const keepTeamOnDivision = useRef(false);
   useEffect(() => {
     if (firstDivision.current) {
       firstDivision.current = false;
+      return;
+    }
+    if (keepTeamOnDivision.current) {
+      keepTeamOnDivision.current = false;
       return;
     }
     setSelectedTeam("");
@@ -225,6 +231,15 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
   const matched = selectedTeam ? closestTeam(teamOptions, selectedTeam) : undefined;
   const team = matched?.team ?? teamOptions[0]?.team;
   const missingTeam = selectedTeam && !matched && teamOptions.length > 0 ? selectedTeam : null;
+
+  // 今シーズンの総評がまだ無いとき、前シーズンのそのチーム（別のディビジョンだったかも）へ移る先
+  const prevTeam = useMemo(() => {
+    if (season === undefined || !team) return undefined;
+    const prev = data[season - 1];
+    if (!prev) return undefined;
+    const hit = closestTeam(prev.standings.map((s) => ({ team: s.team, division: s.divisionLabel })), team);
+    return hit ? { season: season - 1, division: hit.division, team: hit.team } : undefined;
+  }, [data, season, team]);
   const profile = useMemo(
     () => (season !== undefined && team ? teamProfile(data, season, division, team) : undefined),
     [data, season, division, team]
@@ -375,6 +390,23 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                 </p>
                 <h3 className="text-xl font-bold text-white">{team}</h3>
                 <p className="text-xs text-gray-500 mt-1">公式の成績はまだありません。公式サイトに載ると、順位・AI総評などが出ます。</p>
+                {prevTeam && (
+                  <button
+                    onClick={() => {
+                      if (prevTeam.division !== division) {
+                        keepTeamOnDivision.current = true;
+                        onDivisionChange(prevTeam.division);
+                      }
+                      setSelectedSeason(prevTeam.season);
+                      setSelectedTeam(prevTeam.team);
+                      trackFeature(`チーム > 前シーズンの総評を見る > ${prevTeam.division} > ${prevTeam.team}`);
+                    }}
+                    className="mt-3 w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium"
+                  >
+                    前シーズン（{seasonOrdinal(prevTeam.season)}
+                    {prevTeam.division !== division ? ` ${prevTeam.division}` : ""}）の総評を見る →
+                  </button>
+                )}
               </div>
               {team && season !== undefined && <SheetTeamStats division={division} team={team} season={season} />}
               {upcoming.length > 0 && (

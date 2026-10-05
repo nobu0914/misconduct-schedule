@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261006-0014",
+    date: "2026-10-06",
+    changes: ["チーム総評: 今シーズンの総評がまだ無いチームに「前シーズンの総評を見る」ボタンを追加（前シーズンに別のディビジョンだったチームはそのディビジョンを開く）"],
+  },
+  {
     version: "Ver.1-261006-0011",
     date: "2026-10-06",
     changes: [
