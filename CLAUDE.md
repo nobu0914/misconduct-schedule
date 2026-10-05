@@ -281,6 +281,8 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   `groupCode` に利用者のコード、KV の set `scoresheet:group:{CODE}` に内部コードを入れる。`GET ?code=` は本体＋まとまりを `sheets` で返す
   （`via=refresh` は1試合だけ）。修正・削除・AI総評・共有リンク・`x-continue-codes` は内部コードで動き、表示と削除の確認は `groupCode`。
   削除で set から外し、管理画面の復元で戻す。
+  保存のコード欄は、端末で前回保存に使ったコード（localStorage `rinnavi_saved_codes`、無ければ修正用の鍵がある試合から）を最初に入れる。
+  端末で使ったことのあるコードは確認なしで `join`（ユーザー指示 10/6「端末ごとに前回のコードを初期表示」）。
 - **AI には MHL のきまりを必ず渡す**（`src/lib/aiRules.ts` の `LEAGUE_RULES`、ユーザー指摘 10/6）: フィールド3人＋GK1人の4on4、反則で4on3、前半・後半（＋OT）。
   一般的なアイスホッケー（5on5・3ピリオド）の前提で書かせないため、AI の指示を足すときは必ず入れる。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。

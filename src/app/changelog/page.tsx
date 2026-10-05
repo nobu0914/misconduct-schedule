@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261006-0104",
+    date: "2026-10-06",
+    changes: ["スコア表の保存で、コンテニューコードの欄に「この端末で前回使ったコード」を最初から入れておく（初めての端末はおまかせ）。自分のコードなので確認なしで同じコードに追加"],
+  },
+  {
     version: "Ver.1-261006-0058",
     date: "2026-10-06",
     changes: [

@@ -80,6 +80,35 @@ function rememberCode(code: string) {
   }
 }
 
+// この端末で保存に使ったコンテニューコード（新しい順）。次の保存で最初に入れておく（ユーザー指示 10/6「端末ごとに前回のコードを初期表示」）
+const SAVED_CODES_KEY = "rinnavi_saved_codes";
+
+function savedCodes(): string[] {
+  let list: string[] = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVED_CODES_KEY) ?? "[]");
+    if (Array.isArray(raw)) list = raw.filter((c): c is string => typeof c === "string" && !!normalizeContinueCode(c));
+  } catch {
+    // 読めなければ下の一覧から
+  }
+  if (list.length) return list;
+  // これを入れる前に保存した端末: 修正用の鍵がある（＝この端末で保存した）試合のコード
+  const tokens = loadEditTokens();
+  const mine = loadLocal()
+    .filter((s) => s.continueCode && tokens[s.continueCode])
+    .sort((a, b) => (b.savedAt ?? "").localeCompare(a.savedAt ?? ""))
+    .map((s) => s.groupCode ?? s.continueCode!);
+  return [...new Set(mine)];
+}
+
+function addSavedCode(code: string) {
+  try {
+    localStorage.setItem(SAVED_CODES_KEY, JSON.stringify([code, ...savedCodes().filter((c) => c !== code)].slice(0, 10)));
+  } catch {
+    // 覚えられなくても保存はできる
+  }
+}
+
 /** 同じコードは1件にまとめて、新しい順に */
 function upsert(list: ScoreSheet[], sheet: ScoreSheet): ScoreSheet[] {
   return [sheet, ...list.filter((s) => s.continueCode !== sheet.continueCode)];
@@ -181,7 +210,7 @@ export default function ScoreSheetApp({
   const [issued, setIssued] = useState<ScoreSheet | null>(null);
   // すでに登録されているコードで保存しようとしたとき、そのコード（「追加して保存しますか？」を出す）
   const [joinAsk, setJoinAsk] = useState<string | null>(null);
-  // 保存するときのコンテニューコード（自由に決められる。最初はおまかせの候補を入れておく）
+  // 保存するときのコンテニューコード（自由に決められる。最初はこの端末で前回使ったコード、無ければおまかせの候補）
   const [newCode, setNewCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [justLoaded, setJustLoaded] = useState<string | null>(null);
@@ -408,13 +437,15 @@ export default function ScoreSheetApp({
     }
   }
 
-  async function save(join = false) {
+  async function save(confirmed = false) {
     if (!draft) return;
     const code = normalizeContinueCode(newCode);
     if (!code) {
       setCodeError(`コンテニューコードは半角の大文字と数字で${CONTINUE_MIN}〜8文字にしてください。`);
       return;
     }
+    // この端末で前に保存したコードなら、確認なしでそのコードに追加する（自分のコードなので）
+    const join = confirmed || savedCodes().includes(code);
     setCodeError("");
     setSaving(true);
     setMessage("");
@@ -434,6 +465,7 @@ export default function ScoreSheetApp({
         if (join) trackFeature("分析 > 保存 > 登録済みのコードに追加");
         remember(d.sheet);
         rememberCode(d.groupCode ?? d.continueCode);
+        addSavedCode(d.groupCode ?? d.continueCode);
         setOpened(d.sheet);
         setIssued(d.sheet);
         setJoinAsk(null);
@@ -454,7 +486,7 @@ export default function ScoreSheetApp({
     }
   }
 
-  // おまかせの候補は、入力欄が出たときに1回だけ入れる（消したあとに勝手に入れ直さない）
+  // 最初のコードは、入力欄が出たときに1回だけ入れる（消したあとに勝手に入れ直さない）
   const suggested = useRef(false);
   useEffect(() => {
     if (!draft) {
@@ -463,7 +495,7 @@ export default function ScoreSheetApp({
     }
     if (!suggested.current) {
       suggested.current = true;
-      setNewCode((cur) => cur || suggestContinueCode(browserRandom));
+      setNewCode((cur) => cur || savedCodes()[0] || suggestContinueCode(browserRandom));
     }
   }, [draft]);
   const codeOk = normalizeContinueCode(newCode) !== null;
@@ -804,6 +836,9 @@ export default function ScoreSheetApp({
                   <p className="text-[11px] leading-relaxed text-gray-400">
                     保存した試合の結果・得点者などは、このサイトの「リーグニュース」の記事の材料に使うことがあります（コンテニューコードは載せません）。
                   </p>
+                  {normalizeContinueCode(newCode) && savedCodes().includes(normalizeContinueCode(newCode)!) && (
+                    <p className="text-[11px] text-sky-300">この端末で前回使ったコードです。同じコードの試合として追加されます（呼び出すとまとめて出ます）。</p>
+                  )}
                   {codeError && <p className="text-xs text-red-300">{codeError}</p>}
                   {joinAsk && (
                     <div className="rounded-lg border border-sky-700/70 bg-sky-950/40 px-3 py-2.5 space-y-2">
