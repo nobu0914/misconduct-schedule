@@ -43,7 +43,7 @@ export function GameDetail({
       <div className="px-4 py-3 border-b border-gray-800">
         {!compact && sheet.continueCode && (
           <p className="text-[11px] text-gray-500 mb-1">
-            コンテニューコード <span className="text-gray-200 font-semibold tracking-wider select-all">{sheet.continueCode}</span>
+            コンテニューコード <span className="text-gray-200 font-semibold tracking-wider select-all">{sheet.groupCode ?? sheet.continueCode}</span>
           </p>
         )}
         {!compact && (
@@ -320,7 +320,7 @@ export function SheetList({
                     <span>{s.date || "日付なし"}</span>
                     {s.gameNo && <span>#{s.gameNo}</span>}
                     {s.issues?.length ? <span className="px-1.5 rounded bg-amber-700/60 text-amber-100">要確認</span> : null}
-                    <span className="ml-auto tracking-wider text-gray-300">{s.continueCode}</span>
+                    <span className="ml-auto tracking-wider text-gray-300">{s.groupCode ?? s.continueCode}</span>
                   </div>
                   <div className="px-3 py-2 space-y-1 text-sm">
                     {team(s.visitor.name, s.visitor.total, vWin, "bg-blue-400")}
@@ -339,7 +339,7 @@ export function SheetList({
                   <button
                     onClick={() => onDelete(s)}
                     className="flex-shrink-0 px-4 bg-red-600/80 text-white text-xs font-medium"
-                    aria-label={`${s.continueCode ?? ""} を削除`}
+                    aria-label={`${s.groupCode ?? s.continueCode ?? ""} の ${s.date} の試合を削除`}
                   >
                     削除
                   </button>

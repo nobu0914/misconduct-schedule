@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "taken", message: `コード ${entry.code} はすでに別のデータで使われています。` }, { status: 409 });
     }
     await indexSheet(entry.code);
+    // 同じコードに追加した試合なら、コードのまとまりにも戻す
+    if (entry.sheet.groupCode) await kv.sadd(`scoresheet:group:${entry.sheet.groupCode}`, entry.code).catch(() => {});
     await kv.del(backupKey(id));
     await Promise.all([kv.lrem(BACKUP_INDEX.delete, 0, id), kv.lrem(BACKUP_INDEX.edit, 0, id)]);
     await logSheetEvent(req, { action: "restore", code: entry.code, game: gameLabel(entry.sheet), note: edit ? "管理者が修正前に戻した" : "管理者が復元" });

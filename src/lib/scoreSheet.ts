@@ -68,6 +68,11 @@ export interface ScoreSheet {
   issues?: string[];
   /** 呼び出し用のコンテニューコード（保存時に発行） */
   continueCode?: string;
+  /**
+   * 利用者が決めたコードがすでに使われていて「同じコードに追加」したとき、そのコード（表示・呼び出しはこちら）。
+   * continueCode は試合ごとの内部のコード（修正・削除・AI総評・共有リンクはこちらで動く）
+   */
+  groupCode?: string;
   /** AI 総評（初めて分析を開いたときに作って保存する） */
   review?: {
     summary: string;

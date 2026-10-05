@@ -120,7 +120,8 @@ async function shareGame(code: string, sheet?: ScoreSheet | null): Promise<"shar
   const title = sheet
     ? `スコア表分析 ${sheet.date} ${sheet.visitor.name} ${sheet.visitor.total}-${sheet.home.total} ${sheet.home.name}`
     : "スコア表分析";
-  const text = `${title}\nコンテニューコード: ${code}`;
+  // 同じコードに追加した試合は、文面には利用者が決めたコード（呼び出すとまとめて出る）、リンクはこの試合
+  const text = `${title}\nコンテニューコード: ${sheet?.groupCode ?? code}`;
   const url = shareUrl(code);
   if (navigator.share) {
     try {
@@ -177,7 +178,9 @@ export default function ScoreSheetApp({
   const fileRef = useRef<HTMLInputElement>(null);
   const fileObj = useRef<File | null>(null);
 
-  const [issued, setIssued] = useState<string | null>(null);
+  const [issued, setIssued] = useState<ScoreSheet | null>(null);
+  // すでに登録されているコードで保存しようとしたとき、そのコード（「追加して保存しますか？」を出す）
+  const [joinAsk, setJoinAsk] = useState<string | null>(null);
   // 保存するときのコンテニューコード（自由に決められる。最初はおまかせの候補を入れておく）
   const [newCode, setNewCode] = useState("");
   const [codeError, setCodeError] = useState("");
@@ -292,7 +295,8 @@ export default function ScoreSheetApp({
       } catch {
         return "いまは削除できませんでした。通信状況を確かめてもう一度お試しください。";
       }
-      forgetCode(code);
+      // 同じコードのほかの試合が残っているかもしれないので、まとめたコードは覚えたままにする
+      if (!sheet.groupCode) forgetCode(code);
     }
     trackFeature("分析 > 削除した");
     forget(code);
@@ -404,7 +408,7 @@ export default function ScoreSheetApp({
     }
   }
 
-  async function save() {
+  async function save(join = false) {
     if (!draft) return;
     const code = normalizeContinueCode(newCode);
     if (!code) {
@@ -418,7 +422,7 @@ export default function ScoreSheetApp({
       const res = await fetch("/api/scoresheets", {
         method: "POST",
         headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "" },
-        body: JSON.stringify({ ...draft, continueCode: code }),
+        body: JSON.stringify({ ...draft, continueCode: code, join }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
@@ -427,15 +431,19 @@ export default function ScoreSheetApp({
           saveEditToken(d.continueCode, d.editToken);
           setTokens(loadEditTokens());
         }
+        if (join) trackFeature("分析 > 保存 > 登録済みのコードに追加");
         remember(d.sheet);
-        rememberCode(d.continueCode);
+        rememberCode(d.groupCode ?? d.continueCode);
         setOpened(d.sheet);
-        setIssued(d.continueCode);
+        setIssued(d.sheet);
+        setJoinAsk(null);
         setDraft(null);
         setNewCode("");
         setPhoto(null);
         fileObj.current = null;
         setTab("analysis");
+      } else if (d.error === "taken" && d.canJoin) {
+        setJoinAsk(code);
       } else if (d.error === "taken" || d.error === "bad_code") {
         setCodeError(d.message);
       } else {
@@ -508,9 +516,9 @@ export default function ScoreSheetApp({
 
         {issued && (
           <ContinueCodeModal
-            code={issued}
+            sheet={issued}
             onClose={() => {
-              scrollToGame(issued);
+              scrollToGame(issued.continueCode);
               setIssued(null);
             }}
           />
@@ -519,10 +527,10 @@ export default function ScoreSheetApp({
         {tab === "analysis" && (
           <>
             <ContinueCodeInput
-              onLoaded={(s) => {
-                // 呼び出したデータは一覧に入れる（分析は一覧の行をタップして開く）
-                remember(s);
-                setJustLoaded(s.continueCode ?? null);
+              onLoaded={(list) => {
+                // 呼び出したデータは一覧に入れる（分析は一覧の行をタップして開く）。1つのコードに何試合もあれば全部
+                for (const s of [...list].reverse()) remember(s);
+                setJustLoaded(list[0]?.continueCode ?? null);
                 setOpened(null);
               }}
             />
@@ -536,7 +544,7 @@ export default function ScoreSheetApp({
                 onKeep={() => {
                   trackFeature("分析 > 共有された試合を一覧に追加");
                   remember(shared);
-                  rememberCode(shared.continueCode ?? "");
+                  rememberCode(shared.groupCode ?? shared.continueCode ?? "");
                   setJustLoaded(shared.continueCode ?? null);
                   setShared(null);
                   scrollToGame(shared.continueCode);
@@ -769,6 +777,7 @@ export default function ScoreSheetApp({
                       onChange={(e) => {
                         setNewCode(continueCodeInput(e.target.value));
                         setCodeError("");
+                        setJoinAsk(null);
                       }}
                       autoCapitalize="characters"
                       autoCorrect="off"
@@ -780,6 +789,7 @@ export default function ScoreSheetApp({
                       onClick={() => {
                         setNewCode(suggestContinueCode(browserRandom));
                         setCodeError("");
+                        setJoinAsk(null);
                       }}
                       data-feature="分析 > 保存 > おまかせコード"
                       className="px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300"
@@ -795,9 +805,37 @@ export default function ScoreSheetApp({
                     保存した試合の結果・得点者などは、このサイトの「リーグニュース」の記事の材料に使うことがあります（コンテニューコードは載せません）。
                   </p>
                   {codeError && <p className="text-xs text-red-300">{codeError}</p>}
+                  {joinAsk && (
+                    <div className="rounded-lg border border-sky-700/70 bg-sky-950/40 px-3 py-2.5 space-y-2">
+                      <p className="text-sm font-semibold text-sky-100">「{joinAsk}」はすでに登録されています。このコードに追加して保存しますか？</p>
+                      <p className="text-[11px] leading-relaxed text-gray-300">
+                        追加すると、「{joinAsk}」で呼び出したときに、すでにある試合とこの試合がまとめて出ます。
+                        チームで同じコードを使っているときなどにどうぞ。心当たりの無いコードなら、ほかの人のコードかもしれないので別のコードにしてください。
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setJoinAsk(null);
+                            document.getElementById("new-continue-code")?.focus();
+                          }}
+                          className="py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-200"
+                        >
+                          別のコードにする
+                        </button>
+                        <button
+                          onClick={() => save(true)}
+                          disabled={saving}
+                          data-feature="分析 > 保存 > 登録済みのコードに追加（確認）"
+                          className="py-2 rounded-lg bg-sky-600 text-xs font-medium text-white disabled:opacity-40"
+                        >
+                          {saving ? "保存中…" : "追加して保存する"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
                 <button
-                  onClick={save}
+                  onClick={() => save()}
                   disabled={saving || reading || blank || !codeOk}
                   data-track="スコア表 登録"
                   className={`w-full py-3 rounded-lg text-white font-medium disabled:opacity-40 ${issues ? "bg-amber-600" : "bg-green-600"}`}
@@ -853,7 +891,7 @@ function ReadingOverlay({ elapsed }: { elapsed: number }) {
 }
 
 /** コンテニューコードで呼び出す（前に使ったコードはクッキーから入れておく） */
-function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) {
+function ContinueCodeInput({ onLoaded }: { onLoaded: (list: ScoreSheet[]) => void }) {
   const [code, setCode] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -874,7 +912,7 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.sheet) {
         trackFeature("分析 > コードで呼び出し");
-        onLoaded(d.sheet);
+        onLoaded(Array.isArray(d.sheets) && d.sheets.length ? d.sheets : [d.sheet]);
         rememberCode(c);
         setRecent(rememberedCodes());
       } else {
@@ -928,8 +966,9 @@ function ContinueCodeInput({ onLoaded }: { onLoaded: (s: ScoreSheet) => void }) 
 }
 
 /** 保存直後にコンテニューコードを見せる */
-function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => void }) {
+function ContinueCodeModal({ sheet, onClose }: { sheet: ScoreSheet; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const code = sheet.groupCode ?? sheet.continueCode ?? "";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6" onClick={onClose}>
       <div
@@ -938,13 +977,13 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
         className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4 text-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-base font-bold text-white">保存しました</p>
+        <p className="text-base font-bold text-white">{sheet.groupCode ? "コードに追加して保存しました" : "保存しました"}</p>
         <div>
           <p className="text-xs text-gray-400">コンテニューコード</p>
           <p className="text-3xl font-bold text-white tracking-[0.2em] mt-1 select-all">{code}</p>
         </div>
         <p className="text-xs text-gray-400 leading-relaxed">
-          このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。コードが分かれば誰でも呼び出せるので、人に教えるときは気をつけてください。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
+          {sheet.groupCode ? "このコードで呼び出すと、同じコードの試合がまとめて出ます。" : "このコードを入れると、別の端末からでもこの試合のデータを呼び出せます。"}コードが分かれば誰でも呼び出せるので、人に教えるときは気をつけてください。この端末ではクッキーに覚えておくので次回は入力不要ですが、会員登録が無いので、別の端末で使うときやクッキーを消したときのためにメモかスクリーンショットで残してください。
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -961,7 +1000,7 @@ function ContinueCodeModal({ code, onClose }: { code: string; onClose: () => voi
             {copied ? "コピーしました" : "コードをコピー"}
           </button>
           <button
-            onClick={() => shareGame(code)}
+            onClick={() => shareGame(sheet.continueCode ?? code, sheet)}
             data-feature="分析 > 保存直後に共有"
             className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm font-medium text-gray-200"
           >
@@ -1117,7 +1156,8 @@ function DeleteDialog({
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const code = sheet.continueCode ?? "";
+  // 確認に入れてもらうのは利用者が決めたコード（同じコードに追加した試合でも）
+  const code = sheet.groupCode ?? sheet.continueCode ?? "";
   const plain = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const matches = code !== "" && plain(typed) === plain(code);
   return (
@@ -1133,7 +1173,11 @@ function DeleteDialog({
           {sheet.date || "日付なし"} {sheet.division} ／ {sheet.visitor.name || "?"} {sheet.visitor.total} − {sheet.home.total} {sheet.home.name || "?"}
         </p>
         <div className="text-[11px] leading-relaxed text-amber-200 bg-amber-900/20 border border-amber-800/50 rounded px-2 py-1.5 space-y-1">
-          <p>削除すると、このコンテニューコードでは呼び出せなくなります。</p>
+          <p>
+            {sheet.groupCode
+              ? "削除すると、この試合はこのコンテニューコードで呼び出せなくなります（同じコードのほかの試合は残ります）。"
+              : "削除すると、このコンテニューコードでは呼び出せなくなります。"}
+          </p>
           <p>
             <b>削除した人の情報（日時・IPアドレス・ブラウザ・端末ID）を記録します。</b>
             誤って削除したときやいたずらに備えて、管理者がデータを一定期間保管し、復元できるようにしています。
