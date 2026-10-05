@@ -310,7 +310,7 @@ const FLOOR = 10;
 const EVEN = 55;
 
 /** ディビジョン内での相対値（最高=100、最低=10、全員同じなら55、データなし=0） */
-function relative(value: number | null, all: number[], lowerIsBetter = false): number {
+export function relative(value: number | null, all: number[], lowerIsBetter = false): number {
   if (value === null || all.length === 0) return 0;
   const min = Math.min(...all);
   const max = Math.max(...all);

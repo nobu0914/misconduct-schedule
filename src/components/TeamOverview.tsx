@@ -9,6 +9,7 @@ import { hasPlayedGame, loadAllSeasons, type SeasonData } from "@/lib/seasonData
 import { teamProfile, type ProfileUpcoming } from "@/lib/teamProfile";
 import { trackFeature } from "@/lib/trackEvent";
 import type { TeamReview } from "@/lib/teamReviewAi";
+import { HistoryRanks, PlayerPoints, RecordBar, SeasonFlow, TeamRadar } from "@/components/TeamCharts";
 
 export interface TeamSelection {
   season?: number;
@@ -40,14 +41,21 @@ const RESULT_LABEL = { W: "勝", L: "負", T: "分" };
 const md = (date: string) => date.replace(/^\d{4}\//, "");
 const benchless = (name: string) => name.replace(/\s*[(（][A-Z][)）]\s*$/, "");
 
-function AiReviewBox({ season, division, team }: { season: number; division: string; team: string }) {
+/** チーム総評の AI（総評・持ち味・注目・勝つためのポイント）。保存分があればそれを使う（サーバー側で月1回更新） */
+function useTeamReview(season: number | undefined, division: string, team: string | undefined, enabled: boolean) {
   const [review, setReview] = useState<TeamReview | null>(null);
-  const [state, setState] = useState<"loading" | "done" | "error">("loading");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
   useEffect(() => {
+    if (!enabled || season === undefined || !team) {
+      setState("idle");
+      setReview(null);
+      return;
+    }
     let cancelled = false;
     setState("loading");
     setReview(null);
+    setMessage("");
     const q = new URLSearchParams({ season: String(season), div: division, team });
     fetch(`/api/team-review?${q}`, { method: "POST" })
       .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => ({})) }))
@@ -61,8 +69,12 @@ function AiReviewBox({ season, division, team }: { season: number; division: str
     return () => {
       cancelled = true;
     };
-  }, [season, division, team]);
+  }, [season, division, team, enabled]);
+  return { review, state, message };
+}
 
+function AiReviewBox({ review, state, message }: ReturnType<typeof useTeamReview>) {
+  if (state === "idle") return null;
   return (
     <div className="rounded-lg bg-violet-950/30 border border-violet-800/50 px-3 py-2.5 space-y-2">
       <p className="text-xs font-semibold text-violet-200">✨ AI総評</p>
@@ -75,8 +87,8 @@ function AiReviewBox({ season, division, team }: { season: number; division: str
             <div>
               <p className="text-[11px] text-gray-400 mb-0.5">持ち味</p>
               <ul className="space-y-0.5">
-                {review.strengths.map((s) => (
-                  <li key={s} className="text-xs text-gray-200">◎ {s}</li>
+                {review.strengths.map((x) => (
+                  <li key={x} className="text-xs text-gray-200">◎ {x}</li>
                 ))}
               </ul>
             </div>
@@ -85,16 +97,63 @@ function AiReviewBox({ season, division, team }: { season: number; division: str
             <div>
               <p className="text-[11px] text-gray-400 mb-0.5">これからの注目ポイント</p>
               <ul className="space-y-0.5">
-                {review.watch.map((s) => (
-                  <li key={s} className="text-xs text-gray-200">▶ {s}</li>
+                {review.watch.map((x) => (
+                  <li key={x} className="text-xs text-gray-200">▶ {x}</li>
                 ))}
               </ul>
             </div>
           )}
-          <p className="text-[10px] text-gray-500">公式の順位・スコア・個人成績の数字だけから AI が書いたコメントです。</p>
+          <p className="text-[10px] text-gray-500">
+            公式の順位・スコア・個人成績の数字だけから AI が書いたコメントです（{newsMonth(review.createdAt)}作成・月1回更新）。
+          </p>
         </>
       )}
     </div>
+  );
+}
+
+function HowToBeatBox({ team, review }: { team: string; review: TeamReview | null }) {
+  if (!review?.howToBeat?.length) return null;
+  return (
+    <div className="rounded-lg bg-orange-950/30 border border-orange-800/50 px-3 py-2.5 space-y-1.5">
+      <p className="text-xs font-semibold text-orange-200">🎯 {team} に勝つためには？</p>
+      <ol className="space-y-1">
+        {review.howToBeat.map((x, i) => (
+          <li key={x} className="flex gap-2 text-xs text-gray-100 leading-relaxed">
+            <span className="flex-shrink-0 w-4 h-4 rounded-full bg-orange-600/70 text-[10px] flex items-center justify-center">{i + 1}</span>
+            <span>{x}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[10px] text-gray-500">データ（勝てなかった試合・接戦の成績・得点の偏りなど）から AI が考えた戦い方のヒントです。</p>
+    </div>
+  );
+}
+
+const newsMonth = (iso: string) => {
+  const d = new Date(Date.parse(iso) + 9 * 3600_000);
+  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`;
+};
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg bg-gray-800/60 px-2.5 py-2">
+      <p className="text-[10px] text-gray-500">{label}</p>
+      <p className="text-base font-bold text-white leading-tight">{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 truncate">{sub}</p>}
+    </div>
+  );
+}
+
+function Section({ title, children, note }: { title: string; children: React.ReactNode; note?: string }) {
+  return (
+    <section>
+      <p className="text-xs text-gray-400 mb-1.5">
+        {title}
+        {note && <span className="ml-2 text-[10px] text-gray-500">{note}</span>}
+      </p>
+      {children}
+    </section>
   );
 }
 
@@ -142,6 +201,9 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
     () => (season !== undefined && team ? teamProfile(data, season, division, team) : undefined),
     [data, season, division, team]
   );
+
+  const ai = useTeamReview(profile?.season, division, profile?.stats.team, (profile?.stats.gp ?? 0) > 0);
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
 
   // これからの試合（今シーズンを見ているときだけ）
   const upcoming: ProfileUpcoming[] = useMemo(() => {
@@ -306,13 +368,20 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
               </button>
             </div>
 
-            <div className="px-4 py-3 space-y-5">
-              {s.gp > 0 && <AiReviewBox season={profile.season} division={profile.division} team={s.team} />}
+            <div className="px-4 py-3 space-y-6">
+              {/* ── 前半: ひと目で分かる大事なこと ── */}
+              <AiReviewBox {...ai} />
 
-              {/* ディビジョンの中での位置 */}
+              {profile.axes.some((x) => x.value > 0) && (
+                <Section title="ディビジョンの中での力関係" note="7つの指標">
+                  <TeamRadar axes={profile.axes} />
+                </Section>
+              )}
+
+              <HowToBeatBox team={s.team} review={ai.review} />
+
               {profile.metrics.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">ディビジョンの中での位置</p>
+                <Section title="ディビジョンの中での位置">
                   <div className="grid grid-cols-2 gap-2">
                     {profile.metrics.map((m) => (
                       <div key={m.key} className="rounded-lg bg-gray-800/60 px-2.5 py-2">
@@ -330,54 +399,37 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
 
-              {/* 直近の試合 */}
-              {profile.recent.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">
-                    直近の試合
-                    {profile.streak?.result === "W" && <span className="ml-2 text-green-400 font-semibold">{profile.streak.count}連勝中</span>}
-                  </p>
-                  <div className="space-y-1">
-                    {profile.recent.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${RESULT_STYLE[g.result]}`}>{RESULT_LABEL[g.result]}</span>
-                        <span className="text-gray-500 w-11">{md(g.date)}</span>
-                        <span className="text-gray-200 flex-1 truncate">vs {g.opponent}</span>
-                        <span className="text-white font-semibold tabular-nums">
-                          {g.for} - {g.against}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {profile.games.length > 0 && (
+                <Section
+                  title="シーズンの流れ"
+                  note={profile.streak?.result === "W" ? `${profile.streak.count}連勝中` : undefined}
+                >
+                  <SeasonFlow games={profile.games} />
+                </Section>
               )}
 
-              {/* 得点源 */}
               {profile.topPlayers.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">得点源（ポイント上位）</p>
-                  <div className="space-y-1">
+                <Section title="得点源（ポイント上位）">
+                  <div className="grid grid-cols-3 gap-2">
                     {profile.topPlayers.map((p, i) => (
-                      <div key={p.name} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-500 w-4">{i + 1}</span>
-                        <span className="text-gray-100 flex-1 truncate">{p.name}</span>
-                        <span className="text-gray-300 tabular-nums">
+                      <div key={p.name} className="rounded-lg bg-gray-800/60 px-2 py-2 text-center">
+                        <p className="text-[10px] text-gray-500">{["🥇", "🥈", "🥉"][i]}</p>
+                        <p className="text-xs text-gray-100 font-medium truncate">{p.name}</p>
+                        <p className="text-lg font-bold text-white leading-tight">{p.points}<span className="text-[10px] text-gray-400 font-normal">pt</span></p>
+                        <p className="text-[10px] text-gray-400">
                           {p.goals}G {p.assists}A
-                        </span>
-                        <span className="text-white font-semibold w-10 text-right tabular-nums">{p.points}P</span>
+                        </p>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
 
-              {/* これからの試合 */}
               {upcoming.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">これからの試合</p>
+                <Section title="これからの試合">
                   <div className="space-y-1">
                     {upcoming.map((m, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs">
@@ -395,14 +447,121 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                       </div>
                     ))}
                   </div>
+                </Section>
+              )}
+
+              {/* ── 後半: 細かいデータ ── */}
+              {profile.games.length > 0 && (
+                <div className="pt-2 border-t border-gray-800">
+                  <p className="text-[11px] font-semibold text-gray-500 tracking-wider">くわしいデータ</p>
                 </div>
               )}
 
-              {/* これまでのシーズン */}
-              {profile.history.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1.5">これまでのシーズン</p>
+              {profile.games.length > 0 && (
+                <Section title="試合の傾向">
+                  <div className="space-y-2">
+                    <RecordBar label="接戦（1点差）" rec={profile.close} />
+                    <RecordBar label="大差（3点差以上）" rec={profile.blowout} />
+                    <RecordBar label="上位チーム相手" note="順位が上半分" rec={profile.vsUpper} />
+                    <RecordBar label="下位チーム相手" rec={profile.vsLower} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                    <Stat label="完封勝ち" value={`${profile.shutoutWins}試合`} />
+                    <Stat label="無得点の試合" value={`${profile.scoreless}試合`} />
+                    {profile.biggestWin && (
+                      <Stat
+                        label="最大得点差の勝利"
+                        value={`${profile.biggestWin.for}-${profile.biggestWin.against}`}
+                        sub={`${md(profile.biggestWin.date)} vs ${profile.biggestWin.opponent}`}
+                      />
+                    )}
+                    {profile.mostGoals && (
+                      <Stat
+                        label="1試合の最多得点"
+                        value={`${profile.mostGoals.for}点`}
+                        sub={`${md(profile.mostGoals.date)} vs ${profile.mostGoals.opponent}`}
+                      />
+                    )}
+                  </div>
+                </Section>
+              )}
+
+              {profile.players.length > 0 && (
+                <Section
+                  title="選手のポイント"
+                  note={[
+                    profile.topScorerShare !== undefined ? `得点王の得点割合 ${Math.round(profile.topScorerShare * 100)}%` : "",
+                    profile.assistsPerGoal !== undefined ? `1ゴールあたりアシスト ${profile.assistsPerGoal.toFixed(1)}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join("・")}
+                >
+                  <PlayerPoints players={showAllPlayers ? profile.players : profile.players.slice(0, 8)} />
+                  {profile.players.length > 8 && (
+                    <button onClick={() => setShowAllPlayers((v) => !v)} className="mt-1 text-xs text-blue-400">
+                      {showAllPlayers ? "閉じる" : `全員を見る（${profile.players.length}人）`}
+                    </button>
+                  )}
+                </Section>
+              )}
+
+              {profile.opponents.length > 0 && (
+                <Section title="対戦相手別の成績">
                   <div className="divide-y divide-gray-800 rounded-lg border border-gray-800">
+                    {profile.opponents.map((o) => (
+                      <div key={o.opponent} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                        <span className="text-gray-500 w-7">{o.rank ? `${o.rank}位` : ""}</span>
+                        <span className="text-gray-200 flex-1 truncate">{o.opponent}</span>
+                        <span className="text-gray-300 tabular-nums w-16 text-right">
+                          {o.w}勝{o.l}敗{o.t}分
+                        </span>
+                        <span className="text-white tabular-nums w-12 text-right">
+                          {o.gf}-{o.ga}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {profile.recent.length > 0 && (
+                <Section title="直近の試合">
+                  <div className="space-y-1">
+                    {profile.recent.map((g, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${RESULT_STYLE[g.result]}`}>{RESULT_LABEL[g.result]}</span>
+                        <span className="text-gray-500 w-11">{md(g.date)}</span>
+                        <span className="text-gray-200 flex-1 truncate">vs {g.opponent}</span>
+                        <span className="text-white font-semibold tabular-nums">
+                          {g.for} - {g.against}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {profile.pim && (
+                <Section title="反則">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <Stat label="ペナルティ時間（合計）" value={`${profile.pim.total}分`} />
+                    <Stat label="1試合あたり" value={`${profile.pim.perGame.toFixed(1)}分`} sub={`少ない順 ${profile.pim.rank}位 / ${profile.pim.of}チーム`} />
+                  </div>
+                </Section>
+              )}
+
+              {profile.history.length > 0 && (
+                <Section title="これまでのシーズン">
+                  <HistoryRanks
+                    history={profile.history.map((h) => ({
+                      season: h.season,
+                      label: seasonOrdinal(h.season),
+                      rank: h.rank,
+                      totalTeams: h.totalTeams,
+                      champion: h.playoff === "champion",
+                    }))}
+                  />
+                  <div className="divide-y divide-gray-800 rounded-lg border border-gray-800 mt-2">
                     {profile.history.map((h) => (
                       <div key={`${h.season}-${h.division}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
                         <span className="text-gray-400 w-10">{seasonOrdinal(h.season)}</span>
@@ -416,7 +575,7 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
             </div>
           </div>

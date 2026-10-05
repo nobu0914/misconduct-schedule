@@ -4,6 +4,8 @@ export interface TeamReview {
   summary: string;
   strengths: string[];
   watch: string[];
+  /** このチームに勝つためのポイント（対戦するチーム向け） */
+  howToBeat: string[];
   createdAt: string;
 }
 
@@ -17,9 +19,13 @@ const PROMPT = `あなたは日本のアマチュアアイスホッケーリー�
 - 前向きな書き方にする。弱点の指摘や批判、負けの強調はしない。伸びしろは「これから注目したいところ」として前向きに書く。
 - ディビジョン内の順位（平均得点◯位など）を根拠に、チームの持ち味を具体的に書く。
 - summary は2〜3文（120文字程度）。strengths は持ち味を2〜3個、watch はこれからの注目ポイントを1〜2個。各40文字以内。です・ます調。
+- howToBeat は「このチームと対戦するチームが勝つためのポイント」を2〜3個（各60文字以内）。
+  データ（勝てなかった試合の相手とスコア、接戦・上位相手の成績、得点王への依存度、失点の多さ、反則など）を根拠に、
+  具体的な戦い方として書く（例: 「得点の◯%を◯◯選手が挙げているので、マークを集中させたい」）。
+  相手チームを見下したり批判したりしない。根拠が薄ければ1個でよい。
 
 出力は次の JSON だけ（前後に文章を付けない）:
-{"summary":"...","strengths":["..."],"watch":["..."]}`;
+{"summary":"...","strengths":["..."],"watch":["..."],"howToBeat":["..."]}`;
 
 function jsonFromText(content: { type: string; text?: string }[] | undefined): Record<string, unknown> | undefined {
   const text = (content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
@@ -38,7 +44,13 @@ export function normalizeTeamReview(raw: unknown): TeamReview | undefined {
   if (typeof r?.summary !== "string" || !r.summary.trim()) return undefined;
   const list = (v: unknown, n: number) =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.trim().slice(0, 80)).slice(0, n) : [];
-  return { summary: r.summary.trim().slice(0, 300), strengths: list(r.strengths, 3), watch: list(r.watch, 2), createdAt: new Date().toISOString() };
+  return {
+    summary: r.summary.trim().slice(0, 300),
+    strengths: list(r.strengths, 3),
+    watch: list(r.watch, 2),
+    howToBeat: list(r.howToBeat, 3),
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export async function writeTeamReview(input: string): Promise<TeamReview> {

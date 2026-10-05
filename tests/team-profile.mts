@@ -52,3 +52,15 @@ assert(eb.metrics.find((x) => x.key === "win")!.rank === 2 && eb.streak === unde
 assert(teamProfile(data, 54, "Brass", "いないチーム") === undefined && teamProfile(data, 52, "Brass", "サイコ") === undefined, "成績が無ければ undefined");
 const input = profileInput(p);
 assert(input.includes("1試合の平均得点: 4.0（ディビジョン1位 / 3チーム）") && input.includes("53rd Brass 2位 8勝2敗0分 優勝"), "AI の材料");
+
+// くわしいデータ
+assert(p.axes.length === 7 && p.axes.find((a) => a.key === "attack")!.value === 100 && p.axes.find((a) => a.key === "attack")!.rank === 1, "レーダー: 平均得点はディビジョン最高=100・1位");
+assert(p.close.w === 1 && p.blowout.w === 2, "接戦（1点差）1勝・大差（3点差以上）2勝");
+assert(p.vsUpper.w === 2 && p.vsLower.w === 1, "上位（上半分=1〜2位）の Early Bird に2勝・下位の NASDAQ に1勝");
+assert(p.shutoutWins === 1 && p.scoreless === 0, "完封勝ち1");
+assert(p.biggestWin!.for - p.biggestWin!.against === 4 && p.mostGoals?.for === 5, "最大得点差の勝利は4点差・最多得点 5");
+const vsEb = p.opponents.find((o) => o.opponent === "Early Bird")!;
+assert(vsEb.w === 2 && vsEb.gf === 7 && vsEb.ga === 2 && vsEb.rank === 2, "対戦相手別（ベンチ表記は外して1行に）");
+assert(p.players.length === 2 && Math.abs(p.topScorerShare! - 5 / 7) < 1e-9 && p.assistsPerGoal === 6 / 7, "選手のポイント・得点王の割合・アシスト率");
+assert(p.pim?.total === 2 && p.pim.rank === 2, "反則（少ない順）");
+assert(profileInput(p).includes("勝てなかった試合") === false && profileInput(eb).includes("勝てなかった試合: vs サイコ 2-3"), "AI の材料に勝てなかった試合");
