@@ -177,6 +177,8 @@ export default function ScoreSheetApp({
   const [newCode, setNewCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [justLoaded, setJustLoaded] = useState<string | null>(null);
+  // 保存した試合の修正中の内容（読み間違いを直す）
+  const [fixing, setFixing] = useState<ScoreSheet | null>(null);
 
   useEffect(() => {
     setSheets(loadLocal());
@@ -471,11 +473,26 @@ export default function ScoreSheetApp({
                 openCode={opened?.continueCode ?? null}
                 onToggle={(s) => {
                   setJustLoaded(null);
+                  setFixing(null);
                   const closing = opened?.continueCode === s.continueCode;
                   setOpened(closing ? null : s);
                   if (!closing) scrollToGame(s.continueCode);
                 }}
-                renderDetail={(s) => (
+                renderDetail={(s) =>
+                  fixing && fixing.continueCode === s.continueCode ? (
+                    <FixSheet
+                      sheet={fixing}
+                      onChange={setFixing}
+                      onCancel={() => setFixing(null)}
+                      onSaved={(updated) => {
+                        trackFeature(`分析 > 修正を保存 > ${checkSheet(updated).errors.length ? "要確認あり" : "要確認なし"}`);
+                        replaceLocal(updated);
+                        setOpened(updated);
+                        setFixing(null);
+                        scrollToGame(updated.continueCode);
+                      }}
+                    />
+                  ) : (
                   <div className="space-y-2 pb-2">
                     <GameDetail
                       sheet={s}
@@ -485,6 +502,18 @@ export default function ScoreSheetApp({
                         setOpened(updated);
                       }}
                     />
+                    {s.continueCode && (
+                      <button
+                        onClick={() => {
+                          setFixing(structuredClone(s));
+                          scrollToGame(s.continueCode);
+                        }}
+                        data-feature="分析 > 修正する"
+                        className="w-full py-2.5 rounded-lg text-sm font-medium bg-gray-800 border border-gray-600 text-gray-100"
+                      >
+                        ✏️ 読み取り結果を修正する
+                      </button>
+                    )}
                     {s.continueCode && (
                       <button
                         onClick={async () => {
@@ -520,7 +549,8 @@ export default function ScoreSheetApp({
                       </button>
                     </div>
                   </div>
-                )}
+                  )
+                }
               />
             )}
             {!loading && sheets.length === 0 && (
@@ -895,6 +925,68 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
 }
 
 /** 削除の確認。コンテニューコードを入力しないと削除できない。削除した人の情報が記録されることも伝える */
+/** 保存した試合の読み取り結果を直す（コンテニューコードはそのまま。修正前の版は管理者が戻せるよう残る） */
+function FixSheet({
+  sheet,
+  onChange,
+  onCancel,
+  onSaved,
+}: {
+  sheet: ScoreSheet;
+  onChange: (s: ScoreSheet) => void;
+  onCancel: () => void;
+  onSaved: (s: ScoreSheet) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const issues = checkSheet(sheet).errors.length;
+  async function save() {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/scoresheets?code=${encodeURIComponent(sheet.continueCode ?? "")}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", "x-visitor-id": getVisitorId() ?? "" },
+        body: JSON.stringify(sheet),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.sheet) onSaved(d.sheet);
+      else setError(d.message ?? "修正を保存できませんでした。時間をおいてもう一度お試しください。");
+    } catch {
+      setError("修正を保存できませんでした。通信状況を確かめてもう一度お試しください。");
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="space-y-2 pb-2">
+      <div className="rounded-lg bg-sky-950/30 border border-sky-800/60 px-3 py-2">
+        <p className="text-sm font-semibold text-sky-200">読み取り結果を修正</p>
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          スコア表と見比べて、違うところを直してください。コンテニューコードはそのままです。
+          保存すると AI総評は直した内容で作り直します。
+        </p>
+      </div>
+      <ScoreSheetEditor sheet={sheet} onChange={onChange} />
+      {issues > 0 && (
+        <p className="text-xs text-amber-300">要確認が {issues}件 あります（このまま保存できます）。</p>
+      )}
+      {error && <p className="text-xs text-red-300">{error}</p>}
+      <div className="grid grid-cols-[1fr_2fr] gap-2">
+        <button onClick={onCancel} disabled={busy} className="py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200">
+          やめる
+        </button>
+        <button
+          onClick={() => void save()}
+          disabled={busy}
+          className={`py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-50 ${issues ? "bg-amber-600" : "bg-green-600"}`}
+        >
+          {busy ? "保存中…" : "修正を保存"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 共有リンクで開いた試合（この端末には保存しない。一覧に入れるかは開いた人が決める） */
 function SharedGame({
   sheet,

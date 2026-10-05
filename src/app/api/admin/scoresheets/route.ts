@@ -19,6 +19,7 @@ interface TrashEntry {
   sheet: ScoreSheet;
   deletedAt: string;
   deletedBy: { ip: string; userAgent: string; visitorId: string | null };
+  kind?: "delete" | "edit";
 }
 
 async function auth(req: NextRequest) {
@@ -50,13 +51,19 @@ export async function POST(req: NextRequest) {
   try {
     const entry = await kv.get<TrashEntry>(trashKey(id));
     if (!entry) return NextResponse.json({ error: "not_found", message: "バックアップが見つかりません（期限切れの可能性）。" }, { status: 404 });
-    const restored = await kv.set(`scoresheet:cc:${entry.code}`, { ...entry.sheet, continueCode: entry.code }, { nx: true, ex: KEEP_SECONDS });
+    // 修正前の版は今のデータに上書きして戻す。削除されたものは、その間に同じコードが使われていなければ戻す
+    const edit = entry.kind === "edit";
+    const restored = await kv.set(
+      `scoresheet:cc:${entry.code}`,
+      { ...entry.sheet, continueCode: entry.code },
+      edit ? { ex: KEEP_SECONDS } : { nx: true, ex: KEEP_SECONDS }
+    );
     if (!restored) {
       return NextResponse.json({ error: "taken", message: `コード ${entry.code} はすでに別のデータで使われています。` }, { status: 409 });
     }
     await kv.del(trashKey(id));
     await kv.lrem(TRASH_INDEX, 0, id);
-    await logSheetEvent(req, { action: "restore", code: entry.code, game: gameLabel(entry.sheet), note: "管理者が復元" });
+    await logSheetEvent(req, { action: "restore", code: entry.code, game: gameLabel(entry.sheet), note: edit ? "管理者が修正前に戻した" : "管理者が復元" });
     return NextResponse.json({ ok: true, code: entry.code });
   } catch (e) {
     console.error("trash restore failed", e);

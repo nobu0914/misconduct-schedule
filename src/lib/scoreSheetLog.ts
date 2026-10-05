@@ -5,7 +5,7 @@
 import { kv } from "@vercel/kv";
 import { clientIp } from "./rateLimit";
 
-export type SheetLogAction = "read" | "read_failed" | "save" | "lookup" | "delete" | "restore" | "review";
+export type SheetLogAction = "read" | "read_failed" | "save" | "lookup" | "edit" | "delete" | "restore" | "review";
 
 export interface SheetLogEntry {
   at: string;

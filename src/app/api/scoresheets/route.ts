@@ -30,6 +30,29 @@ interface TrashEntry {
   sheet: ScoreSheet;
   deletedAt: string;
   deletedBy: { ip: string; userAgent: string; visitorId: string | null };
+  /** edit: 修正したときの修正前の版（無ければ削除） */
+  kind?: "delete" | "edit";
+}
+
+/** 削除・修正の前の版をバックアップに残す（管理者が戻せるように、誰が操作したかも残す） */
+async function backup(req: NextRequest, code: string, sheet: ScoreSheet, kind: "delete" | "edit"): Promise<string> {
+  const vid = req.headers.get("x-visitor-id") ?? "";
+  const entry: TrashEntry = {
+    id: `${code}_${Date.now().toString(36)}`,
+    code,
+    sheet,
+    deletedAt: new Date().toISOString(),
+    deletedBy: {
+      ip: clientIp(req),
+      userAgent: (req.headers.get("user-agent") ?? "").slice(0, 300),
+      visitorId: /^[A-Za-z0-9-]{8,64}$/.test(vid) ? vid : null,
+    },
+    kind,
+  };
+  await kv.set(trashKey(entry.id), entry, { ex: TRASH_SECONDS });
+  await kv.lpush(TRASH_INDEX, entry.id);
+  await kv.ltrim(TRASH_INDEX, 0, 499);
+  return entry.id;
 }
 
 const newCode = () => suggestContinueCode(randomInt);
@@ -129,26 +152,57 @@ export async function DELETE(req: NextRequest) {
   try {
     const sheet = await kv.get<ScoreSheet>(key(code));
     if (!sheet) return NextResponse.json({ ok: true, missing: true });
-    const vid = req.headers.get("x-visitor-id") ?? "";
-    const entry: TrashEntry = {
-      id: `${code}_${Date.now().toString(36)}`,
-      code,
-      sheet,
-      deletedAt: new Date().toISOString(),
-      deletedBy: {
-        ip: clientIp(req),
-        userAgent: (req.headers.get("user-agent") ?? "").slice(0, 300),
-        visitorId: /^[A-Za-z0-9-]{8,64}$/.test(vid) ? vid : null,
-      },
-    };
-    await kv.set(trashKey(entry.id), entry, { ex: TRASH_SECONDS });
-    await kv.lpush(TRASH_INDEX, entry.id);
-    await kv.ltrim(TRASH_INDEX, 0, 499);
+    const id = await backup(req, code, sheet, "delete");
     await kv.del(key(code));
-    await logSheetEvent(req, { action: "delete", code, game: gameLabel(sheet), note: `バックアップ ${entry.id}` });
+    await logSheetEvent(req, { action: "delete", code, game: gameLabel(sheet), note: `バックアップ ${id}` });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("scoresheet delete failed", e);
     return NextResponse.json({ error: "unavailable" }, { status: 503 });
+  }
+}
+
+/**
+ * 読み間違いなどを直す（コンテニューコードはそのまま）。修正前の版はバックアップに残し、管理者が戻せる。
+ * 数字が変わると AI総評が合わなくなるので消す（次に開いたときに作り直す）。
+ */
+export async function PUT(req: NextRequest) {
+  if (await isRateLimited(`scoresheet:edit:${clientIp(req)}`, 60, 86400)) {
+    return NextResponse.json({ error: "limit", message: "今日の修正回数の上限です。" }, { status: 429 });
+  }
+  const code = normalizeContinueCode(req.nextUrl.searchParams.get("code") ?? "");
+  if (!code) return NextResponse.json({ error: "bad_code" }, { status: 400 });
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  }
+  const sheet = sanitizeSheet(raw);
+  if (isBlankSheet(sheet)) return NextResponse.json({ error: "blank", message: "内容が入っていません。" }, { status: 400 });
+  const { errors } = checkSheet(sheet);
+  try {
+    const before = await kv.get<ScoreSheet>(key(code));
+    if (!before) return NextResponse.json({ error: "not_found", message: "このコンテニューコードのデータは見つかりません（削除された可能性があります）。" }, { status: 404 });
+    const next: ScoreSheet = {
+      ...sheet,
+      continueCode: code,
+      savedAt: before.savedAt,
+      editedAt: new Date().toISOString(),
+      issues: errors.length ? errors.slice(0, 20) : undefined,
+      review: undefined,
+    };
+    const id = await backup(req, code, before, "edit");
+    await kv.set(key(code), next, { keepTtl: true });
+    await logSheetEvent(req, {
+      action: "edit",
+      code,
+      game: gameLabel(next),
+      note: [errors.length ? `要確認${errors.length}件` : "", `修正前 ${id}`].filter(Boolean).join("・"),
+    });
+    return NextResponse.json({ ok: true, sheet: next });
+  } catch (e) {
+    console.error("scoresheet edit failed", e);
+    return NextResponse.json({ error: "unavailable", message: "修正を保存できませんでした。時間をおいてもう一度お試しください。" }, { status: 503 });
   }
 }

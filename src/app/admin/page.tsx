@@ -443,6 +443,7 @@ interface TrashEntry {
   };
   deletedAt: string;
   deletedBy: { ip: string; userAgent: string; visitorId: string | null };
+  kind?: "delete" | "edit";
 }
 
 interface SheetLog {
@@ -477,6 +478,7 @@ const LOG_LABEL: Record<string, { label: string; cls: string }> = {
   read_failed: { label: "読取失敗", cls: "bg-gray-700 text-gray-200" },
   save: { label: "保存", cls: "bg-green-700/60 text-green-100" },
   lookup: { label: "呼び出し", cls: "bg-gray-700 text-gray-200" },
+  edit: { label: "修正", cls: "bg-sky-700/60 text-sky-100" },
   review: { label: "AI総評", cls: "bg-violet-700/60 text-violet-100" },
   delete: { label: "削除", cls: "bg-red-700/70 text-red-100" },
   restore: { label: "復元", cls: "bg-amber-700/60 text-amber-100" },
@@ -574,7 +576,7 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
   }, [passcode]);
 
   async function restore(e: TrashEntry) {
-    if (!confirm(`コード ${e.code} の試合を復元しますか？`)) return;
+    if (!confirm(e.kind === "edit" ? `コード ${e.code} を修正前の内容に戻しますか？（今の内容は上書きされます）` : `コード ${e.code} の試合を復元しますか？`)) return;
     const res = await fetch("/api/admin/scoresheets", {
       method: "POST",
       headers: { "x-admin-passcode": passcode, "content-type": "application/json" },
@@ -593,12 +595,12 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
     <ScoreSheetLog log={log} />
     <section className="space-y-2">
       <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-300">削除されたスコア表（{entries?.length ?? "…"}）</h2>
+        <h2 className="text-sm font-semibold text-gray-300">削除・修正前のスコア表（{entries?.length ?? "…"}）</h2>
         <span className="text-xs text-blue-400">{open ? "閉じる ▲" : "開く ▼"}</span>
       </button>
       {open && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
-          <p className="text-[11px] text-gray-500">利用者が削除したデータは180日間ここに残ります。復元すると元のコンテニューコードで呼び出せるようになります。</p>
+          <p className="text-[11px] text-gray-500">利用者が削除したデータと、修正する前の内容は180日間ここに残ります。戻すと元のコンテニューコードで呼び出せます（修正前の版は今の内容に上書き）。</p>
           {msg && <p className="text-xs text-green-300">{msg}</p>}
           {entries && entries.length === 0 && <p className="text-xs text-gray-500">削除されたデータはありません。</p>}
           {entries?.map((e) => (
@@ -611,12 +613,12 @@ function ScoreSheetTrash({ passcode }: { passcode: string }) {
                 {e.sheet.visitor.name} {e.sheet.visitor.total} − {e.sheet.home.total} {e.sheet.home.name}
               </p>
               <p className="text-[11px] text-gray-500 break-all">
-                削除 {fmt(e.deletedAt)} ／ IP {e.deletedBy.ip} ／ 端末ID {e.deletedBy.visitorId ?? "—"}
+                {e.kind === "edit" ? "修正" : "削除"} {fmt(e.deletedAt)} ／ IP {e.deletedBy.ip} ／ 端末ID {e.deletedBy.visitorId ?? "—"}
                 <br />
                 {e.deletedBy.userAgent}
               </p>
               <button onClick={() => restore(e)} className="px-3 py-1 rounded bg-blue-600 text-white text-xs">
-                復元する
+                {e.kind === "edit" ? "この内容に戻す" : "復元する"}
               </button>
             </div>
           ))}
