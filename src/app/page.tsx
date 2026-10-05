@@ -12,6 +12,7 @@ type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
 import { trackFeature, trackFeatureDebounced } from "@/lib/trackEvent";
+import LeagueNewsBox from "@/components/LeagueNewsBox";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { findTeam } from "@/lib/teamName";
@@ -609,6 +610,8 @@ function ScheduleContent() {
           )}
         </div>
       )}
+
+      <LeagueNewsBox />
 
       {/* Filters */}
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">

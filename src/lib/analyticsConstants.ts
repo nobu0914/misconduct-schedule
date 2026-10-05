@@ -7,6 +7,7 @@ export const TRACKED_PAGES = [
   "/contact",
   "/disclaimer",
   "/changelog",
+  "/news",
 ] as const;
 
 // click: ボタン・リンクのタップ（値は「ページ｜要素の文言」）
@@ -45,6 +46,7 @@ export function pageLabelOf(path: string): string {
   if (path.startsWith("/rental")) return "リンク予定";
   if (path.startsWith("/events")) return "イベント";
   if (path.startsWith("/contact")) return "お問い合わせ";
+  if (path.startsWith("/news")) return "ニュース";
   return path;
 }
 

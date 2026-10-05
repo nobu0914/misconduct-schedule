@@ -717,6 +717,9 @@ export default function ScoreSheetApp({
                     ⚠ コンテニューコードが分かれば、<b>誰でもこのデータを呼び出せます</b>（削除もできます）。
                     「1234」「AAAA」やチーム名のような簡単なコード、ほかの人と重なりやすいコードは使わないでください。迷ったら「おまかせ」がおすすめです。
                   </p>
+                  <p className="text-[11px] leading-relaxed text-gray-400">
+                    保存した試合の結果・得点者などは、このサイトの「リーグニュース」の記事の材料に使うことがあります（コンテニューコードは載せません）。
+                  </p>
                   {codeError && <p className="text-xs text-red-300">{codeError}</p>}
                 </section>
                 <button

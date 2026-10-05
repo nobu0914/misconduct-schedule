@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import ActivityLog from "@/components/ActivityLog";
+import AdminNews from "@/components/AdminNews";
 import { isTrackingExcluded, setTrackingExcluded } from "@/lib/analyticsClient";
 import { VISIT_BUCKETS } from "@/lib/analyticsConstants";
 
@@ -11,6 +12,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/rental": "リンク予定",
   "/events": "イベント",
   "/contact": "お問い合わせ",
+  "/news": "ニュース",
   "/disclaimer": "免責事項",
   "/changelog": "バージョン履歴",
 };
@@ -722,6 +724,7 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
         {visitors && <VisitorsSection v={visitors} days={data} todayStr={todayStr} />}
 
         <ScoreSheetTrash passcode={passcode} />
+        <AdminNews passcode={passcode} />
 
         {/* 月別PV（アコーディオン） */}
         <section className="space-y-2">
