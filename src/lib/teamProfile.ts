@@ -14,6 +14,10 @@ export interface ProfileMetric {
   /** ディビジョン内の順位（良い方から）と、比べたチーム数 */
   rank: number;
   of: number;
+  /** 何の順で並べた順位か（例「多い順」） */
+  order: string;
+  /** 値の横に添える比較（例「ディビジョン平均 3.1」） */
+  compare: string;
 }
 
 export interface ProfileGame {
@@ -138,21 +142,49 @@ export function teamProfile(
     const myGf = avg(stats.goalsFor, stats.games);
     const myGa = avg(stats.goalsAgainst, stats.games);
     const myDiff = stats.goalsFor - stats.goalsAgainst;
+    const mean = (xs: number[]) => avg(xs.reduce((n, x) => n + x, 0), xs.length);
     metrics.push(
-      { key: "gf", label: "1試合の平均得点", value: myGf.toFixed(1), rank: rankOf(gf, myGf, true), of: withGames.length },
-      { key: "ga", label: "1試合の平均失点", value: myGa.toFixed(1), rank: rankOf(ga, myGa, false), of: withGames.length },
-      { key: "diff", label: "得失点差", value: `${myDiff > 0 ? "+" : ""}${myDiff}`, rank: rankOf(diff, myDiff, true), of: withGames.length }
+      {
+        key: "gf",
+        label: "1試合の平均得点",
+        value: myGf.toFixed(1),
+        rank: rankOf(gf, myGf, true),
+        of: withGames.length,
+        order: "得点が多い順",
+        compare: `ディビジョン平均 ${mean(gf).toFixed(1)}`,
+      },
+      {
+        key: "ga",
+        label: "1試合の平均失点",
+        value: myGa.toFixed(1),
+        rank: rankOf(ga, myGa, false),
+        of: withGames.length,
+        order: "失点が少ない順",
+        compare: `ディビジョン平均 ${mean(ga).toFixed(1)}`,
+      },
+      {
+        key: "diff",
+        label: "得失点差",
+        value: `${myDiff > 0 ? "+" : ""}${myDiff}`,
+        rank: rankOf(diff, myDiff, true),
+        of: withGames.length,
+        order: "差が大きい順",
+        compare: `総得点 ${stats.goalsFor} − 総失点 ${stats.goalsAgainst}`,
+      }
     );
   }
   const withRecord = all.filter((t) => t.gp > 0);
   if (stats.gp > 0) {
     const pct = (t: TeamSeasonStats) => avg(t.wins + t.ties * 0.5, t.gp);
+    const pcts = withRecord.map(pct);
     metrics.push({
       key: "win",
       label: "勝率（引き分けは0.5勝）",
       value: `${Math.round(pct(stats) * 100)}%`,
-      rank: rankOf(withRecord.map(pct), pct(stats), true),
+      rank: rankOf(pcts, pct(stats), true),
       of: withRecord.length,
+      order: "勝率が高い順",
+      compare: `${stats.wins}勝${stats.losses}敗${stats.ties}分`,
     });
   }
 

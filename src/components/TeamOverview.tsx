@@ -472,21 +472,30 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
               <HowToBeatBox team={s.team} review={ai.review} />
 
               {profile.metrics.length > 0 && (
-                <Section title="ディビジョンの中での位置">
+                <Section title="ディビジョンの中での位置" note="目盛りは左が1位">
                   <div className="grid grid-cols-2 gap-2">
                     {profile.metrics.map((m) => (
                       <div key={m.key} className="rounded-lg bg-gray-800/60 px-2.5 py-2">
                         <p className="text-[10px] text-gray-500">{m.label}</p>
-                        <p className="text-lg font-bold text-white leading-tight">{m.value}</p>
-                        <div className="mt-1 h-1.5 rounded bg-gray-700 overflow-hidden">
-                          <div
-                            className={`h-full ${m.rank === 1 ? "bg-yellow-400" : "bg-blue-500"}`}
-                            style={{ width: `${m.of > 1 ? ((m.of - m.rank) / (m.of - 1)) * 90 + 10 : 100}%` }}
-                          />
+                        <div className="flex items-baseline justify-between gap-1">
+                          <p className="text-lg font-bold text-white leading-tight">{m.value}</p>
+                          <p className={`text-sm font-bold ${m.rank === 1 ? "text-yellow-300" : m.rank <= 3 ? "text-sky-300" : "text-gray-300"}`}>
+                            {m.rank}位<span className="text-[10px] font-normal text-gray-500">/{m.of}</span>
+                          </p>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {m.of}チーム中 <span className={m.rank === 1 ? "text-yellow-300 font-semibold" : "text-gray-200"}>{m.rank}位</span>
-                        </p>
+                        <p className="text-[10px] text-gray-400">{m.compare}</p>
+                        {/* 順位の目盛り: 1マス1チーム、左が1位。このチームのマスだけ色を付ける */}
+                        <div className="mt-1.5 flex gap-0.5" aria-hidden>
+                          {Array.from({ length: m.of }, (_, i) => (
+                            <div
+                              key={i}
+                              className={`h-2 flex-1 rounded-sm ${
+                                i === m.rank - 1 ? (m.rank === 1 ? "bg-yellow-400" : "bg-sky-400") : "bg-gray-700"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{m.order}</p>
                       </div>
                     ))}
                   </div>
