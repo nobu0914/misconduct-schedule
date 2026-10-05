@@ -13,6 +13,10 @@ type TimelineItem =
   | { kind: "rental"; date: string; time: string; data: RentalEntry };
 import { trackFeature, trackFeatureDebounced } from "@/lib/trackEvent";
 import LeagueNewsBox from "@/components/LeagueNewsBox";
+import ProgramModal from "@/components/ProgramModal";
+import WednesdayVoteModal from "@/components/WednesdayVoteModal";
+import { findMatchingProgram, programsFromEvents } from "@/lib/programMatch";
+import type { ProgramEntry } from "@/lib/events";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { findTeam } from "@/lib/teamName";
@@ -69,6 +73,12 @@ function isUpcoming(dateStr: string): boolean {
   const [year, month, day] = dateStr.split("/").map(Number);
   const d = new Date(year, month - 1, day);
   return d >= today;
+}
+
+/** 水曜練習会のモーダルの見出し "2026年10月7日 (水)" */
+function wednesdayLabel(date: string): string {
+  const [y, m, d] = date.split("/").map(Number);
+  return `${y}年${m}月${d}日 (${"日月火水木金土"[new Date(y, m - 1, d).getDay()]})`;
 }
 
 /** 機能ログ用: 日程表のベンチ表記 "(A)" を外したチーム名 */
@@ -143,6 +153,11 @@ function ScheduleContent() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [rentals, setRentals] = useState<RentalEntry[]>([]);
+  // 公式のイベント・プログラム紹介（リンク予定と日時が合えば、概要をモーダルで出す）
+  const [programs, setPrograms] = useState<ProgramEntry[]>([]);
+  const [selectedProgram, setSelectedProgram] = useState<{ program: ProgramEntry; scheduleUrl: string } | null>(null);
+  // 水曜練習会は出欠・投票の画面（リンク予定ページと同じ）を開く
+  const [wednesday, setWednesday] = useState<RentalEntry | null>(null);
   const [standings, setStandings] = useState<TeamStanding[]>([]);
   // 順位表が実際にどのシーズンのものか（"53rd" など）。開幕直後は前シーズンにフォールバックする
   const [standingsSeason, setStandingsSeason] = useState<string>("");
@@ -247,13 +262,15 @@ function ScheduleContent() {
   }
 
   const refresh = useCallback(async () => {
-    const [schedData, stData, rentData] = await Promise.all([
+    const [schedData, stData, rentData, evData] = await Promise.all([
       fetch("/api/schedule").then((r) => r.json()),
       fetch("/api/standings").then((r) => r.json()).catch(() => ({ standings: [] })),
       fetch("/api/rental").then((r) => r.json()).catch(() => ({ entries: [] })),
+      fetch("/api/events").then((r) => r.json()).catch(() => ({ items: [] })),
     ]);
     setMatches(schedData.matches ?? []);
     setRentals(rentData.entries ?? []);
+    setPrograms(programsFromEvents(evData.items));
     setLastUpdated(schedData.lastUpdated ?? "");
     setSourceIssue(describeSourceIssue(schedData));
     setArchivedAt(restoredAt(schedData));
@@ -281,10 +298,12 @@ function ScheduleContent() {
       fetch("/api/prev-season").then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/weather").then((r) => r.json()).catch(() => ({ forecasts: [] })),
       fetch("/api/rental").then((r) => r.json()).catch(() => ({ entries: [] })),
+      fetch("/api/events").then((r) => r.json()).catch(() => ({ items: [] })),
     ])
-      .then(([schedData, stData, prevData, weatherData, rentData]) => {
+      .then(([schedData, stData, prevData, weatherData, rentData, evData]) => {
         setMatches(schedData.matches ?? []);
         setRentals(rentData.entries ?? []);
+        setPrograms(programsFromEvents(evData.items));
         setLastUpdated(schedData.lastUpdated ?? "");
         setSourceIssue(describeSourceIssue(schedData));
         setArchivedAt(restoredAt(schedData));
@@ -611,6 +630,19 @@ function ScheduleContent() {
         </div>
       )}
 
+      {selectedProgram && (
+        <ProgramModal program={selectedProgram.program} scheduleUrl={selectedProgram.scheduleUrl} onClose={() => setSelectedProgram(null)} />
+      )}
+
+      {wednesday && (
+        <WednesdayVoteModal
+          date={wednesday.date}
+          dateLabel={wednesdayLabel(wednesday.date)}
+          officialUrl={wednesday.sourceUrl}
+          onClose={() => setWednesday(null)}
+        />
+      )}
+
       <LeagueNewsBox />
 
       {/* Filters */}
@@ -841,13 +873,23 @@ function ScheduleContent() {
                 {dateItems.map((item, i) => {
                   if (item.kind === "rental") {
                     const r = item.data;
+                    // 概要が分かるもの（公式のプログラム紹介に載っている）はモーダル、それ以外は公式サイトへ直接
+                    const isWed = r.label.includes("水曜練習会");
+                    const program = isWed ? undefined : findMatchingProgram(r, programs);
+                    const Card = program || isWed ? "button" : "a";
                     return (
-                      <a
+                      <Card
                         key={`${date}-r-${i}`}
-                        href={r.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`block border-l-4 ${r.isOfficial ? "border-blue-500" : "border-emerald-500"} bg-gray-900/40 border-y border-r border-gray-800 rounded-r-xl px-4 py-2.5 hover:bg-gray-900 transition-colors`}
+                        {...(isWed
+                          ? { type: "button" as const, onClick: () => setWednesday(r), "data-feature": `水曜練習会を開く > ${r.date}` }
+                          : program
+                          ? {
+                              type: "button" as const,
+                              onClick: () => setSelectedProgram({ program, scheduleUrl: r.sourceUrl }),
+                              "data-feature": `イベント概要を開く > ${program.name}`,
+                            }
+                          : { href: r.sourceUrl, target: "_blank", rel: "noopener noreferrer" })}
+                        className={`block w-full text-left border-l-4 ${r.isOfficial ? "border-blue-500" : "border-emerald-500"} bg-gray-900/40 border-y border-r border-gray-800 rounded-r-xl px-4 py-2.5 hover:bg-gray-900 transition-colors`}
                       >
                         <div className="flex items-center gap-3 flex-wrap">
                           <div className="text-emerald-400 font-mono text-sm font-semibold">
@@ -858,11 +900,17 @@ function ScheduleContent() {
                             {r.isOfficial ? "MHL枠" : "リンク予定"}
                           </span>
                           <span className="text-gray-300 text-sm flex-1 min-w-0 truncate">{r.label || "─"}</span>
-                          <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
+                          {isWed ? (
+                            <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border border-green-600 bg-green-700/40 text-green-200">出欠・投票</span>
+                          ) : program ? (
+                            <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border border-blue-600 bg-blue-700/40 text-blue-200">概要</span>
+                          ) : (
+                            <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          )}
                         </div>
-                      </a>
+                      </Card>
                     );
                   }
 

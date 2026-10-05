@@ -14,6 +14,8 @@ interface Props {
   date: string;        // "2026/4/2"
   dateLabel: string;   // "2026年4月2日 (水)"
   onClose: () => void;
+  /** 公式のリンク予定表（あれば一番下に公式サイトを開く動線を出す） */
+  officialUrl?: string;
 }
 
 function getVoterId(): string {
@@ -54,7 +56,7 @@ const MANGA_BY_DATE: Record<string, { src: string; alt: string }> = {
   },
 };
 
-export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) {
+export default function WednesdayVoteModal({ date, dateLabel, onClose, officialUrl }: Props) {
   const [result, setResult] = useState<VoteResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -362,6 +364,20 @@ export default function WednesdayVoteModal({ date, dateLabel, onClose }: Props) 
                 </div>
               )}
             </>
+          )}
+          {officialUrl && (
+            <a
+              href={officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-feature="水曜練習会 > 公式のリンク予定表を開く"
+              className="mt-4 flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-200"
+            >
+              公式のリンク予定表を開く
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
           )}
         </div>
       </div>

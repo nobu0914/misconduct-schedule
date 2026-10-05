@@ -105,6 +105,7 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
   const [selectedSeason, setSelectedSeason] = useState<number | undefined>(initial.season);
   const [selectedTeam, setSelectedTeam] = useState(initial.team ?? "");
   const [matches, setMatches] = useState<Match[]>([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +173,29 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
     onChange({ season: selectedSeason, team });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSeason, team]);
+
+  /** 開いた人にも同じチーム・シーズンの総評が出るリンクを共有する */
+  async function handleShare() {
+    if (!team || season === undefined) return;
+    const params = new URLSearchParams({ mode: "team", div: division, season: String(season), t: team });
+    const url = `${window.location.origin}/player-ranking?${params}`;
+    const title = `チーム総評 ${team}（${seasonOrdinal(season)} ${division}）`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url });
+      } catch {
+        // 共有シートを閉じただけ
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("このリンクをコピーしてください", url);
+    }
+  }
 
   if (loading) {
     return (
@@ -271,6 +295,15 @@ export default function TeamOverview({ divisions, division, onDivisionChange, di
                   勝点 <span className="text-white font-bold">{s.points}</span>
                 </span>
               </div>
+              <button
+                onClick={handleShare}
+                data-feature={`チーム > 共有 > ${division} > ${s.team}`}
+                className={`mt-2 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                  copied ? "bg-green-600 text-white" : "bg-gray-800 text-gray-300 border border-gray-700 hover:text-white"
+                }`}
+              >
+                {copied ? "リンクをコピーしました" : "🔗 このチーム総評を共有"}
+              </button>
             </div>
 
             <div className="px-4 py-3 space-y-5">

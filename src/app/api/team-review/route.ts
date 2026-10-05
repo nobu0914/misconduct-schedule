@@ -8,8 +8,9 @@ import { teamKey } from "@/lib/teamName";
 import { writeTeamReview, type TeamReview } from "@/lib/teamReviewAi";
 
 // チーム総評の AI コメント。材料はサーバーで組み立てる（画面から送られた数字は使わない）。
-// 材料が同じあいだは保存分を返し、試合が増えて材料が変わったら作り直す。
-// 料金がかかるので、作り直しは全体で1日60件・同じ回線から1日20件まで。
+// 一度作ったら保存分を使い回す（ユーザー指示 2026-10-05: 毎回 AI に作らせない・更新はシーズンごと）。
+// キーにシーズンが入っているので、新しいシーズンになったら最初に開かれたときに作る。期限なしで残す。
+// 料金がかかるので、新しく作るのは全体で1日60件・同じ回線から1日20件まで。
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -30,43 +31,44 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(season) || !division || !team || team.length > 60 || division.length > 30) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
+  const key = `teamreview:${season}:${division}:${teamKey(team)}`;
+  const stored = await kv.get<Stored>(key).catch(() => null);
+  if (stored) return NextResponse.json({ review: stored.review });
+
   const { data } = await loadAllSeasons(new URL(req.url).origin);
   const profile = teamProfile(data, season, division, team);
   if (!profile || profile.stats.gp === 0) {
     return NextResponse.json({ error: "no_data", message: "このシーズンの成績がまだ無いので、総評は作れません。" }, { status: 404 });
   }
   const input = profileInput(profile);
+  // どの材料で書いたかの記録（作り直しの判定には使わない）
   const hash = createHash("sha1").update(input).digest("hex").slice(0, 16);
-  const key = `teamreview:${season}:${division}:${teamKey(team)}`;
-
-  const stored = await kv.get<Stored>(key).catch(() => null);
-  if (stored?.hash === hash) return NextResponse.json({ review: stored.review });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "no_key", message: "AI総評は準備中です。" }, { status: 503 });
 
   // 同じチームを同時に作らない／料金の上限
   if (!(await kv.set(`${key}:lock`, 1, { nx: true, ex: 90 }).catch(() => "OK"))) {
-    return NextResponse.json({ error: "busy", message: "作成中です。少し待ってから開き直してください。", review: stored?.review }, { status: 409 });
+    return NextResponse.json({ error: "busy", message: "作成中です。少し待ってから開き直してください。" }, { status: 409 });
   }
   const counter = `teamreview:count:${today()}`;
   const release = () => kv.del(`${key}:lock`).catch(() => {});
   try {
     if (await isRateLimited(`teamreview:${clientIp(req)}`, 20, 86400)) {
       await release();
-      return NextResponse.json({ error: "limit", message: "今日はこれ以上作れません。", review: stored?.review }, { status: 429 });
+      return NextResponse.json({ error: "limit", message: "今日はこれ以上作れません。" }, { status: 429 });
     }
     const used = await kv.incr(counter);
     if (used === 1) await kv.expire(counter, 2 * 86400);
     if (used > DAILY_LIMIT) {
       await Promise.all([kv.decr(counter), release()]);
-      return NextResponse.json({ error: "limit", message: "今日の AI総評の上限に達しました。明日また開いてください。", review: stored?.review }, { status: 429 });
+      return NextResponse.json({ error: "limit", message: "今日の AI総評の上限に達しました。明日また開いてください。" }, { status: 429 });
     }
     const review = await writeTeamReview(input);
-    await kv.set(key, { hash, review } satisfies Stored, { ex: 400 * 86400 });
+    await kv.set(key, { hash, review } satisfies Stored);
     await release();
     return NextResponse.json({ review });
   } catch (e) {
     console.error("team review error", e);
     await Promise.all([kv.decr(counter).catch(() => {}), release()]);
-    return NextResponse.json({ error: "failed", message: "総評を作れませんでした。時間をおいて開き直してください。", review: stored?.review }, { status: 503 });
+    return NextResponse.json({ error: "failed", message: "総評を作れませんでした。時間をおいて開き直してください。" }, { status: 503 });
   }
 }
