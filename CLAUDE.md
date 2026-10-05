@@ -40,7 +40,7 @@ MHL（Metro Hockey League）および CxC のスケジュール・レンタル�
 
 ## 現在のバージョン表記
 
-`Ver.1-261005-2343`（Nav.tsx の h1 タグ内に表示）
+`Ver.1-261005-2354`（Nav.tsx の h1 タグ内に表示）
 
 ---
 
@@ -269,6 +269,9 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   `src/lib/sheetStats.ts`（試合ごとの行 `rowsOfSheet`、同じ試合は最新の1枚 `rowsOfSheets`、まとめ `summarize`）、`/api/sheet-stats?div=`（コードは出さない）、
   チーム総評の `SheetTeamStats`。保存中のコード一覧は KV の set `scoresheet:index`（保存・復元で追加、削除で外す、期限切れは読むときに外す。`src/lib/scoreSheetIndex.ts`）。
   チーム名は AI の読み取りのままなので、読み間違い（例「名無レBoyz II」）は修正で直さないと別チーム扱い。
+  **見られるのはスコア表を表示したことがある端末だけ**（ユーザー指示 10/6「アップロード・共有している人に恩恵がある構図で」）: 端末の一覧・クッキーのコード・
+  共有リンクで開いたコード（localStorage `rinnavi_viewed_codes`）を `x-continue-codes` で送り、どれかが保存されていれば返す（`src/lib/editTokens.ts`）。
+  API は `private, no-store`、IP ごと120回/時。それ以外の人には欄ごと出さない。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。
   チーム総評は `REVIEW_FORMAT`（いま2）より古い書き方なら1回だけ作り直す。ゴーリー（The Wall Award）は個人成績に無いので背番号なし。
 

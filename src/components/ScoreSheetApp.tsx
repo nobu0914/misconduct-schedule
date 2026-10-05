@@ -5,6 +5,7 @@ import ScoreSheetEditor from "@/components/ScoreSheetEditor";
 import { GameDetail, SheetList } from "@/components/ScoreSheetAnalysis";
 import { getVisitorId } from "@/lib/analyticsClient";
 import { trackFeature } from "@/lib/trackEvent";
+import { loadEditTokens, rememberViewedCode, saveEditToken } from "@/lib/editTokens";
 import {
   checkSheet,
   CONTINUE_MIN,
@@ -34,24 +35,6 @@ function loadLocal(): ScoreSheet[] {
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
-  }
-}
-
-// 修正用の鍵（保存した端末だけが持つ）。コード → 鍵
-const TOKEN_KEY = "rinnavi_edit_tokens";
-function loadTokens(): Record<string, string> {
-  try {
-    const v = JSON.parse(localStorage.getItem(TOKEN_KEY) ?? "{}");
-    return v && typeof v === "object" ? v : {};
-  } catch {
-    return {};
-  }
-}
-function saveToken(code: string, token: string) {
-  try {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({ ...loadTokens(), [code]: token }));
-  } catch {
-    // 保存できない環境では、この端末でも修正できないだけ
   }
 }
 
@@ -203,7 +186,7 @@ export default function ScoreSheetApp({
   // 修正用の鍵（保存した端末だけ）。鍵のある試合だけ修正ボタンを出す
   const [tokens, setTokens] = useState<Record<string, string>>({});
   const claimed = useRef(new Set<string>());
-  useEffect(() => setTokens(loadTokens()), []);
+  useEffect(() => setTokens(loadEditTokens()), []);
   // 鍵を入れる前に保存した試合は、保存した端末なら開いたときに鍵を受け取れる
   useEffect(() => {
     const code = opened?.continueCode;
@@ -213,8 +196,8 @@ export default function ScoreSheetApp({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.editToken) {
-          saveToken(code, d.editToken);
-          setTokens(loadTokens());
+          saveEditToken(code, d.editToken);
+          setTokens(loadEditTokens());
         }
       })
       .catch(() => {});
@@ -239,6 +222,7 @@ export default function ScoreSheetApp({
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && d.sheet) {
         trackFeature("分析 > 共有リンクから開いた");
+        rememberViewedCode(code);
         if (loadLocal().some((s) => s.continueCode === code)) {
           replaceLocal(d.sheet);
           setOpened(d.sheet);
@@ -416,8 +400,8 @@ export default function ScoreSheetApp({
       if (res.ok && d.sheet) {
         trackFeature(`分析 > 保存 > ${issues ? "要確認あり" : "要確認なし"}`);
         if (d.editToken) {
-          saveToken(d.continueCode, d.editToken);
-          setTokens(loadTokens());
+          saveEditToken(d.continueCode, d.editToken);
+          setTokens(loadEditTokens());
         }
         remember(d.sheet);
         rememberCode(d.continueCode);
@@ -470,6 +454,7 @@ export default function ScoreSheetApp({
               <li>📈 得点の流れ・時間帯・誰のアシストで誰が決めたか、シュート数・決定率・セーブ率、PP/SH の得点</li>
               <li>✨ AI のコーチが、良かった点と次への改善点を両チームに書きます</li>
               <li>🔗 コンテニューコードで保存して、チームメイトにリンクで共有。活躍がリーグニュースに載ることも</li>
+              <li>📋 アップロードや共有で見た人は、「データ → チーム」で各チームのスコア表の通算（後半失点率・時間帯ごとの得失点など）も見られます</li>
             </ul>
           </div>
         </div>

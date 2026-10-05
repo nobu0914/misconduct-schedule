@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { seasonOrdinal } from "@/lib/season";
 import { rowsByTeam, summarize, type SheetGameRow } from "@/lib/sheetStats";
 import { teamKey } from "@/lib/teamName";
+import { deviceContinueCodes } from "@/lib/editTokens";
 
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const md = (date: string) => date.replace(/^\d{4}\//, "");
@@ -76,8 +77,11 @@ export default function SheetTeamStats({ division, team, season }: { division: s
   useEffect(() => {
     let cancelled = false;
     setRows(null);
-    fetch(`/api/sheet-stats?div=${encodeURIComponent(division)}`)
-      .then((r) => r.json())
+    // コンテニューコード・共有リンクでスコア表を表示したことがある端末だけが見られる
+    const codes = deviceContinueCodes();
+    if (!codes.length) return;
+    fetch(`/api/sheet-stats?div=${encodeURIComponent(division)}`, { headers: { "x-continue-codes": codes.join(",") } })
+      .then((r) => (r.ok ? r.json() : { rows: [] }))
       .then((d) => !cancelled && setRows(d.rows ?? []))
       .catch(() => !cancelled && setRows([]));
     return () => {
@@ -102,17 +106,8 @@ export default function SheetTeamStats({ division, team, season }: { division: s
   const myRank = compare.findIndex((x) => x.k === key);
 
   if (rows === null) return null;
-  if (!sum) {
-    return (
-      <div className="rounded-lg border border-dashed border-gray-700 px-3 py-2.5 text-xs text-gray-400">
-        📋 このチームのスコア表はまだアップロードされていません。
-        <a href="/player-ranking?mode=analysis" className="ml-1 text-blue-400 underline">
-          分析からアップロード
-        </a>
-        すると、後半失点率・時間帯ごとの得失点などがここに出ます。
-      </div>
-    );
-  }
+  // スコア表を表示したことがない人、またはこのチームのスコア表が無いときは何も出さない
+  if (!sum) return null;
 
   return (
     <section className="rounded-xl border border-sky-900/60 bg-sky-950/20 px-3 py-3 space-y-3">
@@ -218,6 +213,7 @@ export default function SheetTeamStats({ division, team, season }: { division: s
       </div>
       <p className="text-[10px] text-gray-500">
         利用者がアップロードしたスコア表から集計しています（同じ試合は最新の1枚だけ）。アップロードされた試合だけなので、公式の成績とは試合数が違います。
+        この欄は、コンテニューコードや共有リンクでスコア表を表示したことがある端末だけに出ます。
       </p>
     </section>
   );

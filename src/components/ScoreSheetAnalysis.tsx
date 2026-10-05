@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getVisitorId } from "@/lib/analyticsClient";
 import { trackFeature } from "@/lib/trackEvent";
+import { seasonOfDate } from "@/lib/sheetStats";
 import { GoalieDonuts, PlayerBars, ScoreFlow, TimeBandChart, VersusBars } from "@/components/ScoreSheetCharts";
 import {
   aggregate,
@@ -113,6 +114,24 @@ export function GameDetail({
         <h3 className="text-sm font-semibold text-gray-200">選手</h3>
         <PlayerBars sheet={sheet} />
         <Combos sheet={sheet} />
+        {/* 両チームのチーム総評へ（アップロード・共有で見た人は、スコア表の通算の集計も見られる） */}
+        {sheet.division && seasonOfDate(sheet.date) !== undefined && (
+          <div className="grid grid-cols-2 gap-2">
+            {(["visitor", "home"] as const).map((side) =>
+              sheet[side].name ? (
+                <a
+                  key={side}
+                  href={`/player-ranking?${new URLSearchParams({ mode: "team", div: sheet.division, season: String(seasonOfDate(sheet.date)), t: sheet[side].name })}`}
+                  data-feature={`分析 > チーム総評へ > ${sheet.division} > ${sheet[side].name}`}
+                  className={`block rounded-lg border px-2.5 py-2 text-xs ${side === "visitor" ? "border-blue-800/70 text-blue-300" : "border-orange-800/70 text-orange-300"}`}
+                >
+                  <span className="block truncate font-medium">{sheet[side].name}</span>
+                  <span className="text-[10px] text-gray-400">チーム総評・スコア表の通算 →</span>
+                </a>
+              ) : null
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-gray-600">
           ※ このスコア表1枚から出した数字です。
           <button onClick={() => setShowBasis(true)} data-feature="分析 > 数値の根拠" className="ml-1 text-blue-400 underline underline-offset-2">
