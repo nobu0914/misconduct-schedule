@@ -437,15 +437,13 @@ export default function ScoreSheetApp({
     }
   }
 
-  async function save(confirmed = false) {
+  async function save(join = false) {
     if (!draft) return;
     const code = normalizeContinueCode(newCode);
     if (!code) {
       setCodeError(`コンテニューコードは半角の大文字と数字で${CONTINUE_MIN}〜8文字にしてください。`);
       return;
     }
-    // この端末で前に保存したコードなら、確認なしでそのコードに追加する（自分のコードなので）
-    const join = confirmed || savedCodes().includes(code);
     setCodeError("");
     setSaving(true);
     setMessage("");
@@ -837,7 +835,7 @@ export default function ScoreSheetApp({
                     保存した試合の結果・得点者などは、このサイトの「リーグニュース」の記事の材料に使うことがあります（コンテニューコードは載せません）。
                   </p>
                   {normalizeContinueCode(newCode) && savedCodes().includes(normalizeContinueCode(newCode)!) && (
-                    <p className="text-[11px] text-sky-300">この端末で前回使ったコードです。同じコードの試合として追加されます（呼び出すとまとめて出ます）。</p>
+                    <p className="text-[11px] text-sky-300">この端末で前回使ったコードです。</p>
                   )}
                   {codeError && <p className="text-xs text-red-300">{codeError}</p>}
                   {joinAsk && (
