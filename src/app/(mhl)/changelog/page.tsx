@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261007-0040",
+    date: "2026-10-07",
+    changes: ["events.rinnavi.com（練習会・イベントの告知サイト）を公開。メニューに「ほかのイベント」を追加"],
+  },
+  {
     version: "Ver.1-261007-0013",
     date: "2026-10-07",
     changes: [

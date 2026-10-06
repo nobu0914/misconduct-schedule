@@ -293,6 +293,10 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
     `/api/admin/site-events`（一覧・登録/修正・削除）。下書き（published=false）はサイトに出さない。
   - OGP: `src/components/events/ogImage.tsx`。日本語は Google Fonts から使う文字だけ取る（`src/lib/ogFont.ts`、取れなければ英字）。
   - アクセス解析は `/ev` を付けて送る（`PageTracker prefix`）。
+  - ドメイン: Vercel プロジェクトに `events.rinnavi.com` を追加（CLI `vercel domains add`、scope kijiatoraregi-3833s-projects）、
+    DNS はお名前.com（dnsv.jp）に CNAME `events` → `1e5b367cd7259437.vercel-dns-017.com`（10/7）。
+    **お名前.com の DNS 設定の確認画面で「ドメインプロテクション」（有料 1,353円）が勝手に付いた**。
+    「ネームサーバーに変更する」のチェックを外すと消えた。DNS を触るときは確認画面の料金欄を必ず見る。
 - **AI には MHL のきまりを必ず渡す**（`src/lib/aiRules.ts` の `LEAGUE_RULES`、ユーザー指摘 10/6）: フィールド3人＋GK1人の4on4、反則で4on3、前半・後半（＋OT）。
   一般的なアイスホッケー（5on5・3ピリオド）の前提で書かせないため、AI の指示を足すときは必ず入れる。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。
