@@ -186,7 +186,7 @@ export default function Nav() {
                 </Link>
 
                 <div className="border-t border-gray-700" />
-                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-261007-0040</div>
+                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-261007-0719</div>
               </div>
             )}
           </div>

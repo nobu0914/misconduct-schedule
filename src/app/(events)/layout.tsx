@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "../globals.css";
 import PageTracker from "@/components/PageTracker";
+import SiteSwitcher from "@/components/SiteSwitcher";
 
 // events.rinnavi.com: MHL 以外のイベント・練習会の告知サイト（ユーザー指示 10/7）。
 // MHL のサイトとはヘッダー・色・OGP を分ける（中身のコード・KV・管理画面は共有）。
@@ -23,6 +24,7 @@ export default function EventsLayout({ children }: { children: React.ReactNode }
   return (
     <html lang="ja">
       <body className="bg-gray-950 text-white min-h-screen flex flex-col">
+        <SiteSwitcher current="events" />
         <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <Link href="/" className="flex items-center gap-3" data-feature="events > ヘッダー > トップ">

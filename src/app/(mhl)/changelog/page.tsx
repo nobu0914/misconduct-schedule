@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261007-0719",
+    date: "2026-10-07",
+    changes: ["MHL / CxC と 練習会・イベント（events.rinnavi.com）の両方で、全ページの一番上に「サイトの切り替え」を追加。告知中のイベントがあれば件数を表示"],
+  },
+  {
     version: "Ver.1-261007-0040",
     date: "2026-10-07",
     changes: ["events.rinnavi.com（練習会・イベントの告知サイト）を公開。メニューに「ほかのイベント」を追加"],

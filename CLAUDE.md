@@ -293,6 +293,8 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
     `/api/admin/site-events`（一覧・登録/修正・削除）。下書き（published=false）はサイトに出さない。
   - OGP: `src/components/events/ogImage.tsx`。日本語は Google Fonts から使う文字だけ取る（`src/lib/ogFont.ts`、取れなければ英字）。
   - アクセス解析は `/ev` を付けて送る（`PageTracker prefix`）。
+  - 両サイトの行き来（ユーザー指示 10/7「それぞれの画面で動線が認知できる場所で」）: 両方のルートレイアウトの一番上に `SiteSwitcher`
+    （MHL / CxC ｜ 練習会・イベント、今いる方に下線）。events 側には告知中の件数（公開 `/api/site-events`）。MHL のメニューにも「ほかのイベント」。
   - ドメイン: Vercel プロジェクトに `events.rinnavi.com` を追加（CLI `vercel domains add`、scope kijiatoraregi-3833s-projects）、
     DNS はお名前.com（dnsv.jp）に CNAME `events` → `1e5b367cd7259437.vercel-dns-017.com`（10/7）。
     **お名前.com の DNS 設定の確認画面で「ドメインプロテクション」（有料 1,353円）が勝手に付いた**。

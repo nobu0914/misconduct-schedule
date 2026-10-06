@@ -3,6 +3,7 @@ import "../globals.css";
 import Nav from "@/components/Nav";
 import PageTracker from "@/components/PageTracker";
 import ScrollToTop from "@/components/ScrollToTop";
+import SiteSwitcher from "@/components/SiteSwitcher";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mhlcxc.rinnavi.com"),
@@ -25,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="bg-gray-950 text-white min-h-screen">
+        <SiteSwitcher current="mhl" />
         <Nav />
         <PageTracker />
         <ScrollToTop />
