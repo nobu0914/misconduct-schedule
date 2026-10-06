@@ -2,11 +2,11 @@ import Link from "next/link";
 import { SPORT_SHORT, closed, dateLabel, timeLabel, type SiteEvent } from "@/lib/siteEvents";
 
 /** 一覧の1件（日付・種類・タイトル・会場・料金） */
-export default function EventCard({ event: e, past = false }: { event: SiteEvent; past?: boolean }) {
+export default function EventCard({ event: e, past = false, base = "" }: { event: SiteEvent; past?: boolean; base?: string }) {
   const [m, d] = e.date.slice(5).split("-").map(Number);
   return (
     <Link
-      href={`/e/${e.id}`}
+      href={`${base}/e/${e.id}`}
       data-feature={`events > 一覧 > ${e.date} ${e.title}`}
       className={`flex gap-3 rounded-xl border px-3 py-3 transition-colors ${
         past ? "border-gray-800 bg-gray-900/40 opacity-70" : "border-gray-800 bg-gray-900 hover:border-emerald-700"

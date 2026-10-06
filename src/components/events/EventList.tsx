@@ -5,7 +5,7 @@ import EventCard from "@/components/events/EventCard";
 import { SPORT_SHORT, type SiteEvent, type Sport } from "@/lib/siteEvents";
 
 /** これからのイベント（月ごと）と、終わったイベント。競技が2つ以上あるときだけ絞り込みを出す */
-export default function EventList({ upcoming, past }: { upcoming: SiteEvent[]; past: SiteEvent[] }) {
+export default function EventList({ upcoming, past, base = "" }: { upcoming: SiteEvent[]; past: SiteEvent[]; base?: string }) {
   const [sport, setSport] = useState<Sport | "all">("all");
   const [showPast, setShowPast] = useState(false);
   const sports = [...new Set([...upcoming, ...past].map((e) => e.sport))];
@@ -44,7 +44,7 @@ export default function EventList({ upcoming, past }: { upcoming: SiteEvent[]; p
         <section key={month} className="space-y-2">
           <h2 className="text-xs font-semibold text-gray-400">{month}</h2>
           {list.map((e) => (
-            <EventCard key={e.id} event={e} />
+            <EventCard key={e.id} event={e} base={base} />
           ))}
         </section>
       ))}
@@ -58,7 +58,7 @@ export default function EventList({ upcoming, past }: { upcoming: SiteEvent[]; p
           >
             終わったイベント（{pastShown.length}）{showPast ? "を閉じる" : "を見る"}
           </button>
-          {showPast && pastShown.map((e) => <EventCard key={e.id} event={e} past />)}
+          {showPast && pastShown.map((e) => <EventCard key={e.id} event={e} past base={base} />)}
         </section>
       )}
     </div>

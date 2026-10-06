@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261007-0728",
+    date: "2026-10-07",
+    changes: ["iPhone のホーム画面から開いた MHL で「練習会・イベント」に移ると、OS のブラウザ画面（×・アドレス・下のバー）がかぶさっていたのを修正。同じアドレスのままイベントのページを開く"],
+  },
+  {
     version: "Ver.1-261007-0719",
     date: "2026-10-07",
     changes: ["MHL / CxC と 練習会・イベント（events.rinnavi.com）の両方で、全ページの一番上に「サイトの切り替え」を追加。告知中のイベントがあれば件数を表示"],

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import ShareButton from "@/components/events/ShareButton";
 import { SPORT_LABEL, closed, dateLabel, googleCalendarUrl, mapUrl, timeLabel, todayJst } from "@/lib/siteEvents";
 import { loadEvent } from "@/lib/siteEventsStore";
+import { EVENTS_ORIGIN, eventsBase } from "@/lib/eventsBase";
 
 // events.rinnavi.com/e/{id}: イベント1件。申込は主催者の外部フォームへ（サイトの中では受けない）
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${e.title} - Rinnavi Events`,
     description: desc,
-    openGraph: { title: e.title, description: desc, url: `https://events.rinnavi.com/e/${e.id}`, siteName: "Rinnavi Events", type: "article" },
+    openGraph: { title: e.title, description: desc, url: `${EVENTS_ORIGIN}/e/${e.id}`, siteName: "Rinnavi Events", type: "article" },
+    alternates: { canonical: `${EVENTS_ORIGIN}/e/${e.id}` },
   };
 }
 
@@ -56,13 +58,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default async function EventPage({ params }: Props) {
   const e = await published((await params).id);
   if (!e) notFound();
-  const pageUrl = `https://events.rinnavi.com/e/${e.id}`;
+  const pageUrl = `${EVENTS_ORIGIN}/e/${e.id}`;
+  const base = await eventsBase();
   const over = e.date < todayJst();
   const isClosed = closed(e);
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
-      <Link href="/" className="text-xs text-gray-400" data-feature="events > 詳細 > 一覧へ">
+      <Link href={base || "/"} className="text-xs text-gray-400" data-feature="events > 詳細 > 一覧へ">
         ← イベント一覧
       </Link>
 
@@ -133,7 +136,7 @@ export default async function EventPage({ params }: Props) {
             📅 Google カレンダーに追加
           </a>
         )}
-        <ShareButton title={e.title} />
+        <ShareButton title={e.title} url={pageUrl} />
       </div>
     </main>
   );

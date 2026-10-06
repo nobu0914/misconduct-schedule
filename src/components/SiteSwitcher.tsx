@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EVENTS_URL, MHL_URL, eventsHref, mhlHref } from "@/lib/siteLinks";
 
 // 2つのサイト（MHL / CxC と 練習会・イベント）を行き来する切り替えバー。どちらのサイトでも全ページの一番上に出す（ユーザー指示 10/7）
 const SITES = [
-  { key: "mhl", label: "MHL / CxC", href: "https://mhlcxc.rinnavi.com/", on: "text-white border-blue-500" },
-  { key: "events", label: "練習会・イベント", href: "https://events.rinnavi.com/", on: "text-white border-emerald-500" },
+  { key: "mhl", label: "MHL / CxC", on: "text-white border-blue-500" },
+  { key: "events", label: "練習会・イベント", on: "text-white border-emerald-500" },
 ] as const;
 
 export default function SiteSwitcher({ current }: { current: "mhl" | "events" }) {
@@ -13,6 +14,11 @@ export default function SiteSwitcher({ current }: { current: "mhl" | "events" })
   const width = current === "mhl" ? "max-w-5xl" : "max-w-3xl";
   // これからのイベントの件数（MHL 側から見たときに、告知があることが分かるように）
   const [upcoming, setUpcoming] = useState(0);
+  // リンク先はブラウザで決める（ホーム画面の Web アプリなら同じドメインのまま。src/lib/siteLinks.ts）
+  const [hrefs, setHrefs] = useState<Record<string, string>>({ mhl: MHL_URL, events: EVENTS_URL });
+  useEffect(() => {
+    setHrefs({ mhl: mhlHref(), events: eventsHref() });
+  }, []);
   useEffect(() => {
     fetch("/api/site-events")
       .then((r) => r.json())
@@ -32,7 +38,7 @@ export default function SiteSwitcher({ current }: { current: "mhl" | "events" })
           ) : (
             <a
               key={s.key}
-              href={s.href}
+              href={hrefs[s.key]}
               data-feature={`サイト切り替え > ${current === "mhl" ? "MHL" : "events"} → ${s.label}`}
               className="px-3 py-2 border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-1.5"
             >

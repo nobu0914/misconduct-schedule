@@ -286,7 +286,10 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
 - **events.rinnavi.com（MHL 以外のイベント・練習会の告知サイト）**（ユーザー指示 10/7）: MHL と混ぜず、サブドメインを分けて同じプロジェクトで出す。
   - 構成: `src/app/(mhl)/`（今までのページ・MHL のルートレイアウト）と `src/app/(events)/ev/`（イベントのサイト・別のルートレイアウト）。
     `src/middleware.ts` が host を見て、`events.` で始まれば `/x` を `/ev/x` に読み替える（ローカルは `events.localhost:3123`）。
-    MHL のアドレスで `/ev` を開くと 404。API（`/api`）は共通。
+    MHL のアドレスの `/ev` でもイベントのページを出す（canonical は events 側）。API（`/api`）は共通。
+    **iPhone のホーム画面から開いた Web アプリは、別ドメインへ移ると OS のブラウザ画面（×・アドレス・下のバー）がかぶさる**（10/7 ユーザー指摘）。
+    Web アプリの範囲は同じドメインだけなので、Web アプリのとき（`display-mode: standalone`）は MHL のドメインのまま `/ev` へ（`src/lib/siteLinks.ts`）。
+    イベントのページのリンクは `eventsBase()`（events のドメインなら ""、MHL のドメインなら "/ev"）を頭に付ける。共有は常に events のアドレス。
   - 方針: 今はインラインホッケーだけ・アイスホッケーも載せられるよう `sport`（inline/ice）を持つ。書くのは管理者だけ（管理画面「イベント告知」）。
     申込はサイトで受けず、外部フォームへのリンク（`formUrl`、http(s) だけ）。
   - データ: KV hash `siteevents:items`（id → イベント）。`src/lib/siteEvents.ts`（きまり・表示）、`siteEventsStore.ts`（読み書き）、

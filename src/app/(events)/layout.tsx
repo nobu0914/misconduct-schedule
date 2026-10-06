@@ -3,6 +3,7 @@ import Link from "next/link";
 import "../globals.css";
 import PageTracker from "@/components/PageTracker";
 import SiteSwitcher from "@/components/SiteSwitcher";
+import { eventsBase } from "@/lib/eventsBase";
 
 // events.rinnavi.com: MHL 以外のイベント・練習会の告知サイト（ユーザー指示 10/7）。
 // MHL のサイトとはヘッダー・色・OGP を分ける（中身のコード・KV・管理画面は共有）。
@@ -18,16 +19,18 @@ export const metadata: Metadata = {
     siteName: "Rinnavi Events",
     type: "website",
   },
+  alternates: { canonical: "https://events.rinnavi.com/" },
 };
 
-export default function EventsLayout({ children }: { children: React.ReactNode }) {
+export default async function EventsLayout({ children }: { children: React.ReactNode }) {
+  const base = await eventsBase();
   return (
     <html lang="ja">
       <body className="bg-gray-950 text-white min-h-screen flex flex-col">
         <SiteSwitcher current="events" />
         <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
           <div className="max-w-3xl mx-auto px-4 py-3">
-            <Link href="/" className="flex items-center gap-3" data-feature="events > ヘッダー > トップ">
+            <Link href={base || "/"} className="flex items-center gap-3" data-feature="events > ヘッダー > トップ">
               <span className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center flex-shrink-0" aria-hidden>
                 <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
                   <path d="M10 4 L10 22 Q10 26 14 26 L21 26" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />

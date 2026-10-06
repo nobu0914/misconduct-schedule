@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 
-/** このイベントのページを共有（共有シートが無ければリンクをコピー） */
-export default function ShareButton({ title }: { title: string }) {
+/** このイベントのページを共有（共有シートが無ければリンクをコピー）。どこで見ていても events.rinnavi.com のアドレスを渡す */
+export default function ShareButton({ title, url }: { title: string; url: string }) {
   const [copied, setCopied] = useState(false);
   async function share() {
-    const url = location.href.split("#")[0];
     if (navigator.share) {
       await navigator.share({ title, url }).catch(() => {});
       return;

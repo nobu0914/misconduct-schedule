@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { EVENTS_URL, eventsHref } from "@/lib/siteLinks";
 
 export default function Nav() {
   const pathname = usePathname();
@@ -87,8 +88,16 @@ export default function Nav() {
 
                 {/* MHL 以外の練習会・イベントの告知（別サイト events.rinnavi.com） */}
                 <a
-                  href="https://events.rinnavi.com/"
-                  onClick={() => setMenuOpen(false)}
+                  href={EVENTS_URL}
+                  onClick={(e) => {
+                    setMenuOpen(false);
+                    // ホーム画面の Web アプリでは同じドメインの /ev で開く（OS のブラウザ画面を出さない）
+                    const to = eventsHref();
+                    if (to !== EVENTS_URL) {
+                      e.preventDefault();
+                      location.href = to;
+                    }
+                  }}
                   data-feature="メニュー > ほかのイベント"
                   className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                 >
@@ -186,7 +195,7 @@ export default function Nav() {
                 </Link>
 
                 <div className="border-t border-gray-700" />
-                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-261007-0719</div>
+                <div className="px-4 py-2 text-xs text-gray-600 text-center">Ver.1-261007-0728</div>
               </div>
             )}
           </div>
