@@ -2,11 +2,11 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import type { PlayerStat } from "../api/player-stats/route";
-import type { PrevPlayerStat } from "../api/prev-season-players/route";
-import type { PrevSeasonEntry } from "../api/prev-season/route";
-import type { TeamStanding } from "../api/standings/route";
-import type { GameScore } from "../api/scores/route";
+import type { PlayerStat } from "@/app/api/player-stats/route";
+import type { PrevPlayerStat } from "@/app/api/prev-season-players/route";
+import type { PrevSeasonEntry } from "@/app/api/prev-season/route";
+import type { TeamStanding } from "@/app/api/standings/route";
+import type { GameScore } from "@/app/api/scores/route";
 import { seasonOrdinal, parseSeasonNumber } from "@/lib/season";
 import { normalizeName, teamKey } from "@/lib/teamName";
 import { playerLabel } from "@/lib/matchup";

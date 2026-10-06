@@ -8,6 +8,7 @@ export const TRACKED_PAGES = [
   "/disclaimer",
   "/changelog",
   "/news",
+  "/ev",
 ] as const;
 
 // click: ボタン・リンクのタップ（値は「ページ｜要素の文言」）
@@ -42,6 +43,7 @@ export function normalizeQuery(raw: unknown): string {
 /** 機能ログのページ名（パスから） */
 export function pageLabelOf(path: string): string {
   if (path === "/") return "ゲーム情報";
+  if (path === "/ev" || path.startsWith("/ev/")) return "events（告知）";
   if (path.startsWith("/player-ranking")) return "データ";
   if (path.startsWith("/rental")) return "リンク予定";
   if (path.startsWith("/events")) return "イベント";

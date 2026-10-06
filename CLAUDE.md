@@ -283,6 +283,16 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   削除で set から外し、管理画面の復元で戻す。
   保存のコード欄は、端末で前回保存に使ったコード（localStorage `rinnavi_saved_codes`、無ければ修正用の鍵がある試合から）を最初に入れる。
   （ユーザー指示 10/6「端末ごとに前回のコードを初期表示」）。自分のコードでも追加の確認は必ず出す（ユーザー指示「確認だして」）。
+- **events.rinnavi.com（MHL 以外のイベント・練習会の告知サイト）**（ユーザー指示 10/7）: MHL と混ぜず、サブドメインを分けて同じプロジェクトで出す。
+  - 構成: `src/app/(mhl)/`（今までのページ・MHL のルートレイアウト）と `src/app/(events)/ev/`（イベントのサイト・別のルートレイアウト）。
+    `src/middleware.ts` が host を見て、`events.` で始まれば `/x` を `/ev/x` に読み替える（ローカルは `events.localhost:3123`）。
+    MHL のアドレスで `/ev` を開くと 404。API（`/api`）は共通。
+  - 方針: 今はインラインホッケーだけ・アイスホッケーも載せられるよう `sport`（inline/ice）を持つ。書くのは管理者だけ（管理画面「イベント告知」）。
+    申込はサイトで受けず、外部フォームへのリンク（`formUrl`、http(s) だけ）。
+  - データ: KV hash `siteevents:items`（id → イベント）。`src/lib/siteEvents.ts`（きまり・表示）、`siteEventsStore.ts`（読み書き）、
+    `/api/admin/site-events`（一覧・登録/修正・削除）。下書き（published=false）はサイトに出さない。
+  - OGP: `src/components/events/ogImage.tsx`。日本語は Google Fonts から使う文字だけ取る（`src/lib/ogFont.ts`、取れなければ英字）。
+  - アクセス解析は `/ev` を付けて送る（`PageTracker prefix`）。
 - **AI には MHL のきまりを必ず渡す**（`src/lib/aiRules.ts` の `LEAGUE_RULES`、ユーザー指摘 10/6）: フィールド3人＋GK1人の4on4、反則で4on3、前半・後半（＋OT）。
   一般的なアイスホッケー（5on5・3ピリオド）の前提で書かせないため、AI の指示を足すときは必ず入れる。
 - **選手名には背番号**（ユーザー指示）: 表示は `playerLabel()`（`#10 久保田一誠`）。AI の文章は「#背番号 苗字」（区切れない名前はそのまま）。

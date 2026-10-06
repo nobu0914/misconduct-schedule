@@ -22,8 +22,10 @@ const isAdmin = (path: string) => path.startsWith("/admin");
  * アクセス解析の計測。PV・訪問者・端末・流入元・滞在時間・クリックを /api/track に送る。
  * 集計から除外した端末（管理画面にログインした端末など）では何も送らない（sendAnalytics 側で判定）。
  */
-export default function PageTracker() {
-  const pathname = usePathname();
+/** prefix: イベントのサイト（events.rinnavi.com）は "/ev" を付けて送り、MHL のページと分けて数える */
+export default function PageTracker({ prefix = "" }: { prefix?: string } = {}) {
+  const raw = usePathname();
+  const pathname = prefix && raw !== prefix && !raw.startsWith(`${prefix}/`) ? `${prefix}${raw === "/" ? "" : raw}` : raw;
   const lastPath = useRef("");
   // 滞在時間は画面が見えている間だけ数える
   const visibleSince = useRef<number | null>(null);

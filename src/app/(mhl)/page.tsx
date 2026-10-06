@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Match, SourceStatus } from "./api/schedule/route";
-import type { TeamStanding } from "./api/standings/route";
-import type { PrevSeasonEntry } from "./api/prev-season/route";
-import type { DayForecast } from "./api/weather/route";
-import type { RentalEntry } from "./api/rental/route";
+import type { Match, SourceStatus } from "@/app/api/schedule/route";
+import type { TeamStanding } from "@/app/api/standings/route";
+import type { PrevSeasonEntry } from "@/app/api/prev-season/route";
+import type { DayForecast } from "@/app/api/weather/route";
+import type { RentalEntry } from "@/app/api/rental/route";
 
 type TimelineItem =
   | { kind: "match"; date: string; time: string; data: Match }

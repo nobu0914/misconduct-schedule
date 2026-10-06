@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import ActivityLog from "@/components/ActivityLog";
+import AdminEvents from "@/components/AdminEvents";
 import AdminNews from "@/components/AdminNews";
 import AdminReport from "@/components/AdminReport";
 import { isTrackingExcluded, setTrackingExcluded } from "@/lib/analyticsClient";
@@ -729,6 +730,7 @@ function AnalyticsDashboard({ passcode }: { passcode: string }) {
 
         <ScoreSheetTrash passcode={passcode} />
         <AdminNews passcode={passcode} />
+        <AdminEvents passcode={passcode} />
 
         {/* 月別PV（アコーディオン） */}
         <section className="space-y-2">

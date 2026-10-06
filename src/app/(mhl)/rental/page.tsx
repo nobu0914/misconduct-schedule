@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { RentalEntry } from "../api/rental/route";
-import type { EventItem, ProgramEntry } from "../api/events/route";
+import type { RentalEntry } from "@/app/api/rental/route";
+import type { EventItem, ProgramEntry } from "@/app/api/events/route";
 import ProgramModal from "@/components/ProgramModal";
 import { findMatchingProgram, programsFromEvents } from "@/lib/programMatch";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
