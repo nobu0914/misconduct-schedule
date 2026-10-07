@@ -1,6 +1,6 @@
 "use client";
 
-// 管理画面: events.rinnavi.com（MHL 以外の練習会・イベントの告知）の登録・修正・削除。書くのは管理者だけ
+// 管理画面: ジャンプインホッケー（events.rinnavi.com。MHL 以外の練習会・イベントの告知）の登録・修正・削除。書くのは管理者だけ
 import { useState } from "react";
 import { KINDS, SPORT_LABEL, dateLabel, timeLabel, todayJst, type SiteEvent } from "@/lib/siteEvents";
 
@@ -79,7 +79,7 @@ export default function AdminEvents({ passcode }: { passcode: string }) {
         }}
         className="w-full flex items-center justify-between"
       >
-        <h2 className="text-sm font-semibold text-gray-300">イベント告知（events.rinnavi.com）</h2>
+        <h2 className="text-sm font-semibold text-gray-300">ジャンプインホッケー（events.rinnavi.com）</h2>
         <span className="text-xs text-blue-400">{open ? "閉じる ▲" : "開く ▼"}</span>
       </button>
       {open && (

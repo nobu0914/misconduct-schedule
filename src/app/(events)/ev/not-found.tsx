@@ -8,7 +8,7 @@ export default async function EventNotFound() {
       <p className="text-base font-semibold">このイベントは見つかりません</p>
       <p className="text-xs text-gray-500">掲載が終わったか、アドレスが違う可能性があります。</p>
       <Link href={base || "/"} className="inline-block text-sm text-emerald-300 underline underline-offset-2">
-        イベント一覧へ
+        一覧へ
       </Link>
     </main>
   );

@@ -2,7 +2,7 @@ import { OG_SIZE, eventsOgImage } from "@/components/events/ogImage";
 import { SPORT_SHORT, dateLabel, timeLabel } from "@/lib/siteEvents";
 import { loadEvent } from "@/lib/siteEventsStore";
 
-export const alt = "Rinnavi Events";
+export const alt = "ジャンプインホッケー - Rinnavi";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 

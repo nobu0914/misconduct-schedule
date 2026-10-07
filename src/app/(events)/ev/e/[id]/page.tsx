@@ -18,12 +18,12 @@ async function published(id: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const e = await published((await params).id);
-  if (!e) return { title: "Rinnavi Events" };
+  if (!e) return { title: "ジャンプインホッケー - Rinnavi" };
   const desc = `${dateLabel(e.date)} ${timeLabel(e)} ${e.place}${e.fee ? ` ／ 参加費 ${e.fee}` : ""}`.replace(/\s+/g, " ").trim();
   return {
-    title: `${e.title} - Rinnavi Events`,
+    title: `${e.title} - ジャンプインホッケー`,
     description: desc,
-    openGraph: { title: e.title, description: desc, url: `${EVENTS_ORIGIN}/e/${e.id}`, siteName: "Rinnavi Events", type: "article" },
+    openGraph: { title: e.title, description: desc, url: `${EVENTS_ORIGIN}/e/${e.id}`, siteName: "Rinnavi ジャンプインホッケー", type: "article" },
     alternates: { canonical: `${EVENTS_ORIGIN}/e/${e.id}` },
   };
 }
@@ -66,7 +66,7 @@ export default async function EventPage({ params }: Props) {
   return (
     <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
       <Link href={base || "/"} className="text-xs text-gray-400" data-feature="events > 詳細 > 一覧へ">
-        ← イベント一覧
+        ← 一覧へ
       </Link>
 
       <div className="space-y-2">

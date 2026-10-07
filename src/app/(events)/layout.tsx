@@ -5,18 +5,18 @@ import PageTracker from "@/components/PageTracker";
 import SiteSwitcher from "@/components/SiteSwitcher";
 import { eventsBase } from "@/lib/eventsBase";
 
-// events.rinnavi.com: MHL 以外のイベント・練習会の告知サイト（ユーザー指示 10/7）。
+// events.rinnavi.com:「ジャンプインホッケー」。MHL 以外の練習会・イベントの告知サイト（ユーザー指示 10/7。名前はドメインと別に改名）。
 // MHL のサイトとはヘッダー・色・OGP を分ける（中身のコード・KV・管理画面は共有）。
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://events.rinnavi.com"),
-  title: "Rinnavi Events - ホッケーの練習会・イベント",
-  description: "インラインホッケーの練習会・体験会・大会などのお知らせ。申込は各イベントのフォームから。",
+  title: "ジャンプインホッケー - Rinnavi",
+  description: "ホッケーの練習会・体験会・大会などのお知らせ。申込は各イベントのフォームから。",
   openGraph: {
-    title: "Rinnavi Events - ホッケーの練習会・イベント",
-    description: "インラインホッケーの練習会・体験会・大会などのお知らせ。",
+    title: "ジャンプインホッケー - Rinnavi",
+    description: "ホッケーの練習会・体験会・大会などのお知らせ。",
     url: "https://events.rinnavi.com",
-    siteName: "Rinnavi Events",
+    siteName: "Rinnavi ジャンプインホッケー",
     type: "website",
   },
   alternates: { canonical: "https://events.rinnavi.com/" },
@@ -38,8 +38,8 @@ export default async function EventsLayout({ children }: { children: React.React
                 </svg>
               </span>
               <span>
-                <span className="block text-lg font-bold leading-tight">Rinnavi Events</span>
-                <span className="block text-[11px] text-gray-400">ホッケーの練習会・体験会・大会のお知らせ</span>
+                <span className="block text-lg font-bold leading-tight">ジャンプインホッケー</span>
+                <span className="block text-[11px] text-gray-400">Rinnavi ・ ホッケーの練習会・体験会・大会のお知らせ</span>
               </span>
             </Link>
           </div>

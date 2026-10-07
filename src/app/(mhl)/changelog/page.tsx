@@ -6,6 +6,11 @@ export const metadata: Metadata = {
 
 const VERSIONS = [
   {
+    version: "Ver.1-261007-2349",
+    date: "2026-10-07",
+    changes: ["events.rinnavi.com の名前を「ジャンプインホッケー」に変更（切り替えバー・メニュー・ページの見出し・共有したときの画像・管理画面）。アドレスはそのまま"],
+  },
+  {
     version: "Ver.1-261007-0728",
     date: "2026-10-07",
     changes: ["iPhone のホーム画面から開いた MHL で「練習会・イベント」に移ると、OS のブラウザ画面（×・アドレス・下のバー）がかぶさっていたのを修正。同じアドレスのままイベントのページを開く"],

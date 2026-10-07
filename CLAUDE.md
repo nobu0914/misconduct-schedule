@@ -284,6 +284,7 @@ npx tsx tests/scoresheet.mts    # スコア表の入力チェック・PP/SH・�
   保存のコード欄は、端末で前回保存に使ったコード（localStorage `rinnavi_saved_codes`、無ければ修正用の鍵がある試合から）を最初に入れる。
   （ユーザー指示 10/6「端末ごとに前回のコードを初期表示」）。自分のコードでも追加の確認は必ず出す（ユーザー指示「確認だして」）。
 - **events.rinnavi.com（MHL 以外のイベント・練習会の告知サイト）**（ユーザー指示 10/7）: MHL と混ぜず、サブドメインを分けて同じプロジェクトで出す。
+  - **名前は「ジャンプインホッケー」**（10/7 改名。ドメインは events のまま）。切り替えバー・メニュー・見出し・OGP・管理画面の表記。
   - 構成: `src/app/(mhl)/`（今までのページ・MHL のルートレイアウト）と `src/app/(events)/ev/`（イベントのサイト・別のルートレイアウト）。
     `src/middleware.ts` が host を見て、`events.` で始まれば `/x` を `/ev/x` に読み替える（ローカルは `events.localhost:3123`）。
     MHL のアドレスの `/ev` でもイベントのページを出す（canonical は events 側）。API（`/api`）は共通。

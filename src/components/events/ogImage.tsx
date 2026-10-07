@@ -1,12 +1,14 @@
 import { ImageResponse } from "next/og";
 import { japaneseFont } from "@/lib/ogFont";
 
-// events.rinnavi.com の OGP 画像（LINE などで共有したときのサムネイル）。日本語はフォントを取れたときだけ
+// events.rinnavi.com（ジャンプインホッケー）の OGP 画像（LINE などで共有したときのサムネイル）。日本語はフォントを取れたときだけ
 export const OG_SIZE = { width: 1200, height: 630 };
 
-export async function eventsOgImage(lines: { title?: string; sub?: string; badge?: string }) {
+/** brand: 左上の名前（トップは "Rinnavi"、イベントは "Rinnavi ジャンプインホッケー"） */
+export async function eventsOgImage(lines: { title?: string; sub?: string; badge?: string; brand?: string }) {
+  const brand = lines.brand ?? "Rinnavi ジャンプインホッケー";
   const jp = [lines.title, lines.sub, lines.badge].filter(Boolean).join("");
-  const font = jp ? await japaneseFont(`${jp}Rinnavi Events`) : undefined;
+  const font = jp ? await japaneseFont(`${jp}${brand}events.rinnavi.com`) : undefined;
   const useJp = !!font;
   return new ImageResponse(
     (
@@ -18,7 +20,7 @@ export async function eventsOgImage(lines: { title?: string; sub?: string; badge
               <circle cx="24" cy="11" r="4" fill="white" />
             </svg>
           </div>
-          <div style={{ display: "flex", fontSize: 48, fontWeight: 700 }}>Rinnavi Events</div>
+          <div style={{ display: "flex", fontSize: 48, fontWeight: 700 }}>{useJp ? brand : "Rinnavi"}</div>
         </div>
         {useJp && lines.title ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -32,7 +34,7 @@ export async function eventsOgImage(lines: { title?: string; sub?: string; badge
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", fontSize: 72, fontWeight: 700 }}>Hockey Events</div>
+            <div style={{ display: "flex", fontSize: 72, fontWeight: 700 }}>Jump-in Hockey</div>
             <div style={{ display: "flex", fontSize: 36, color: "#9ca3af" }}>Practice · Clinics · Tournaments</div>
           </div>
         )}

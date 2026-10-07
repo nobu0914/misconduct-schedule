@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { EVENTS_URL, MHL_URL, eventsHref, mhlHref } from "@/lib/siteLinks";
 
-// 2つのサイト（MHL / CxC と 練習会・イベント）を行き来する切り替えバー。どちらのサイトでも全ページの一番上に出す（ユーザー指示 10/7）
+// 2つのサイト（MHL / CxC と ジャンプインホッケー）を行き来する切り替えバー。どちらのサイトでも全ページの一番上に出す（ユーザー指示 10/7）
 const SITES = [
   { key: "mhl", label: "MHL / CxC", on: "text-white border-blue-500" },
-  { key: "events", label: "練習会・イベント", on: "text-white border-emerald-500" },
+  { key: "events", label: "ジャンプインホッケー", on: "text-white border-emerald-500" },
 ] as const;
 
 export default function SiteSwitcher({ current }: { current: "mhl" | "events" }) {
